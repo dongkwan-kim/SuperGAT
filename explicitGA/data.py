@@ -107,6 +107,12 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
         for batch in dataset_or_loader:
             print("\t- 1st batch: {}".format(batch))
             break
+        if "train_mask" in dataset[0].__dict__:  # Cora, Citeseer, Pubmed
+            print("\t- #train: {} / #val: {} / #test: {}".format(
+                int(dataset[0].train_mask.sum()),
+                int(dataset[0].val_mask.sum()),
+                int(dataset[0].test_mask.sum()),
+            ))
 
     train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, root, *args, **kwargs)
     print_d(train_d, "[Train]")
