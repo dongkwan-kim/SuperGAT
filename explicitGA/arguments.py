@@ -47,7 +47,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
 
     # Experiment specific parameters loaded from .yamls
     with open(yaml_path) as args_file:
-        args_key = "-".join([model_name, dataset_name, custom_key])
+        args_key = "-".join([model_name, dataset_name or dataset_class, custom_key])
         try:
             parser.set_defaults(**dict(YAML().load(args_file)[args_key].items()))
         except KeyError:
@@ -61,7 +61,8 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "lr",
         "l1_lambda",
         "l2_lambda",
-        "attention_type",
+        "is_explicit",
+        "head",
     ]
     ret = {}
     for ia_key in important_args:
