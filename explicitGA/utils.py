@@ -39,28 +39,6 @@ def get_roc_auc(probs, y):
     return _roc, _auc
 
 
-def get_perf(outputs_total, ys_total, model,
-             number_to_print=8, with_print=True) -> Tuple[float, Tuple[float, list]]:
-    acc = get_accuracy(outputs_total, ys_total)
-    mean_auc, auc_list = get_mean_roc_auc_per_class(outputs_total, ys_total)
-
-    if with_print:
-        cprint("\nTest: {}".format(model.__class__.__name__), "yellow")
-        cprint("\t- Accuracy: {}".format(acc), "yellow")
-        cprint("\t- Mean AUC: {}".format(mean_auc), "yellow")
-        half_number_to_print = int(number_to_print / 2)
-        for rank, idx in enumerate(reversed(np.argsort(auc_list))):
-            if rank < half_number_to_print:
-                print("\t Class of task_id: %s, test perf: %.4f" % (str(idx + 1), auc_list[idx]))
-            elif rank >= len(auc_list) - half_number_to_print:
-                print("\t Class of task_id: %s, test perf: %.4f" % (str(idx + 1), auc_list[idx]))
-
-            if rank == half_number_to_print and len(auc_list) > 2 * half_number_to_print:
-                print("\t ...")
-
-    return acc, (mean_auc, auc_list)
-
-
 # GPU
 
 def get_gpu_utility(gpu_id_or_ids: int or list) -> List[int]:
