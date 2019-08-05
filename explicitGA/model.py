@@ -44,16 +44,12 @@ class GATNet(torch.nn.Module):
             args.num_hidden_features * args.head, args.num_hidden_features,
             heads=args.head, dropout=0., is_explicit=args.is_explicit,
         )
-        self.conv3 = ExplicitGAT(
-            args.num_hidden_features * args.head, args.num_hidden_features,
-            heads=1, dropout=0., is_explicit=args.is_explicit,
-        )
 
         if args.pool_name is not None:
             self.pool = _to_pool_cls(args.pool_name)
 
         self.fc = nn.Sequential(
-            nn.Linear(args.num_hidden_features, args.num_hidden_features),
+            nn.Linear(args.head * args.num_hidden_features, args.num_hidden_features),
             nn.ReLU(inplace=True),
             nn.Dropout(),
             nn.Linear(args.num_hidden_features, num_classes),
@@ -62,12 +58,10 @@ class GATNet(torch.nn.Module):
     def forward(self, x, edge_index, batch=None):
 
         x, att1 = self.conv1(x, edge_index)
-        x = F.relu(x)
+        x = F.elu(x)
 
         x, att2 = self.conv2(x, edge_index)
-        x = F.relu(x)
-
-        x, att3 = self.conv3(x, edge_index)
+        x = F.elu(x)
 
         if self.args.pool_name is not None:
             x = self.pool(x, batch)
