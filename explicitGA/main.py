@@ -91,8 +91,15 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
     for batch in dataset_or_loader:
         batch = batch.to(device)
         optimizer.zero_grad()
-        outputs = model(batch.x, batch.edge_index, batch.batch)
-        loss = criterion(outputs, batch.y)
+
+        # Forward
+        outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+
+        # Loss
+        if "train_mask" in batch.__dict__:
+            loss = criterion(outputs[batch.train_mask], batch.y[batch.train_mask])
+        else:
+            loss = criterion(outputs, batch.y)
         loss += get_l1_l2_regularizer(model.parameters(), _args.l1_lambda, _args.l2_lambda)
 
         loss.backward()
@@ -113,11 +120,20 @@ def test_model(device, model, dataset_or_loader, criterion, _args):
     with torch.no_grad():
         for batch in dataset_or_loader:
             batch = batch.to(device)
-            outputs = model(batch.x, batch.edge_index, batch.batch)
-            loss = criterion(outputs, batch.y)
+
+            # Forward
+            outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+
+            # Loss
+            if "train_mask" in batch.__dict__:
+                loss = criterion(outputs[batch.test_mask], batch.y[batch.test_mask])
+                outputs_ndarray = outputs[batch.test_mask].cpu().numpy()
+                ys_ndarray = to_one_hot(batch.y[batch.test_mask], num_classes)
+            else:
+                loss = criterion(outputs, batch.y)
+                outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), to_one_hot(batch.y, num_classes)
             total_loss += loss.item()
 
-            outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), to_one_hot(batch.y, num_classes)
             outputs_list.append(outputs_ndarray)
             ys_list.append(ys_ndarray)
 
@@ -166,7 +182,7 @@ def run(args):
         # Validation.
         if epoch % args.val_interval == 0 and epoch >= args.val_interval * 0:
 
-            acc = test_model(dev, net, val_d, cross_entropy, _args=args)
+            acc = test_model(dev, net, val_d or train_d, cross_entropy, _args=args)
 
             # Update best_acc
             if acc > best_acc:
@@ -189,8 +205,6 @@ def run(args):
                     cprint("Early stopped: recent_prev_acc_mean is {}% < {}/2 (at epoch {} > {}/2)".format(
                         recent_prev_acc_mean, best_acc, current_iter, args.epochs), "red")
                     break
-                else:
-                    print("Not stopped")
 
             prev_acc_deque.append(acc)
 
@@ -201,7 +215,7 @@ def run(args):
 
 
 if __name__ == '__main__':
-    main_args = get_args("GATNet", "PPI", None, custom_key="EXPLICIT")
+    main_args = get_args("GATNet", "Planetoid", "Cora", custom_key="EXPLICIT")
     pprint_args(main_args)
     # noinspection PyTypeChecker
     run(main_args)
