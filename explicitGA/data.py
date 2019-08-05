@@ -81,6 +81,13 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         raise ValueError
 
 
+def getattr_d(dataset_or_loader, name):
+    if isinstance(dataset_or_loader, DataLoader):
+        return getattr(dataset_or_loader.dataset, name)
+    else:
+        return getattr(dataset_or_loader, name)
+
+
 def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, **kwargs):
 
     def print_d(dataset_or_loader, prefix: str):
