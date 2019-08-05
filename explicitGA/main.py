@@ -124,6 +124,9 @@ def test_model(device, model, dataset_or_loader, criterion, _args):
     outputs_total, ys_total = np.concatenate(outputs_list), np.concatenate(ys_list)
     accuracy = get_accuracy(outputs_total, ys_total)
 
+    cprint("\nTest: {}".format(model.__class__.__name__), "yellow")
+    cprint("\t- Accuracy: {}".format(accuracy), "yellow")
+
     return accuracy
 
 
@@ -198,7 +201,7 @@ def run(args):
 
 
 if __name__ == '__main__':
-    main_args = get_args("GATNet", "TUDataset", "DD", custom_key="EXPLICIT")
+    main_args = get_args("GATNet", "PPI", None, custom_key="EXPLICIT")
     pprint_args(main_args)
     # noinspection PyTypeChecker
     run(main_args)
