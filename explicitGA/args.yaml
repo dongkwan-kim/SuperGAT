@@ -1,2 +1,15 @@
-explictGA-ENZYME-TEST:
-  none: -1
+GATNet-DD-EXPLICIT:
+  model_name: GATNet
+  epochs: 50
+  batch_size: 2
+  l1_lambda: 0.0
+  l2_lambda: 0.0
+
+  save_model: False
+  val_interval: 1
+
+  head: 4
+  dropout: 0.2
+  num_hidden_features: 50
+  is_explicit: True
+  pool_name: global_mean_pool  # None, global_mean_pool

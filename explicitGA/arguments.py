@@ -11,7 +11,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--num-gpus-total", default=0)
     parser.add_argument("--num-gpus-to-use", default=0)
     parser.add_argument("--checkpoint-dir", default="../checkpoints")
-    parser.add_argument('--data-root', default="~/data", metavar='DIR', help='path to dataset')
+    parser.add_argument('--data-root', default="~/graph-data", metavar='DIR', help='path to dataset')
     parser.add_argument("--model-name", default=model_name)
     parser.add_argument("--dataset-class", default=dataset_class)
     parser.add_argument("--dataset-name", default=dataset_name)
@@ -36,8 +36,11 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--early-stop", default=True, type=bool)
     parser.add_argument("--early-stop-threshold", default=1e-04, type=float)
 
-    # Attention
-    parser.add_argument("--attention-type", default="GAT", type=str)
+    # Graph (w/ Attention)
+    parser.add_argument("--num-hidden-features", default=64, type=int)
+    parser.add_argument("--head", default=4, type=int)
+    parser.add_argument("--pool-name", default=None)
+    parser.add_argument("--is-explicit", default=True, type=bool)
 
     # Test
     parser.add_argument("--val-interval", default=10)
