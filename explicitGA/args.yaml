@@ -1,15 +1,32 @@
 GATNet-DD-EXPLICIT:
   model_name: GATNet
-  epochs: 50
+  task_type: Graph
+  epochs: 100
   batch_size: 2
   l1_lambda: 0.0
   l2_lambda: 0.0
 
   save_model: False
-  val_interval: 1
+  val_interval: 2
 
-  head: 4
-  dropout: 0.2
-  num_hidden_features: 50
+  head: 8
+  dropout: 0.4
+  num_hidden_features: 64
   is_explicit: True
   pool_name: global_mean_pool  # None, global_mean_pool
+
+GATNet-Cora-EXPLICIT:
+  model_name: GATNet
+  task_type: Node
+  epochs: 500
+  batch_size: 64
+  l1_lambda: 0.0
+  l2_lambda: 0.0
+
+  save_model: False
+  val_interval: 4
+
+  head: 8
+  dropout: 0.6
+  num_hidden_features: 256
+  is_explicit: True
