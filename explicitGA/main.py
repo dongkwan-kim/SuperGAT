@@ -215,7 +215,7 @@ def run(args):
 
 
 if __name__ == '__main__':
-    main_args = get_args("GATNet", "Planetoid", "Cora", custom_key="EXPLICIT")
+    main_args = get_args("GATNet", "Planetoid", "Cora", custom_key="E")
     pprint_args(main_args)
     # noinspection PyTypeChecker
     run(main_args)
