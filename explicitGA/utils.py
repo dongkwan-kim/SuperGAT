@@ -9,6 +9,10 @@ from sklearn.metrics import roc_curve, auc
 from termcolor import cprint
 
 
+def get_cartesian(x, y):
+    return np.transpose([np.tile(x, len(y)), np.repeat(y, len(x))])
+
+
 def to_one_hot(labels_integer_tensor: torch.Tensor, n_classes: int) -> np.ndarray:
     labels = labels_integer_tensor.cpu().numpy()
     return np.eye(n_classes)[labels]
@@ -119,7 +123,3 @@ def debug_with_exit(func):
         cprint("=====   END  =====", "red", "on_yellow")
         exit()
     return wrapped
-
-
-if __name__ == '__main__':
-    print(get_free_gpu_ids_safe(4))
