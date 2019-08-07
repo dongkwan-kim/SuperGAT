@@ -27,9 +27,11 @@ def _to_pool_cls(pool_name):
         raise ValueError("{} is not in {} or {}".format(pool_name, tgnn.glob.__all__, tgnn.pool.__all__))
 
 
-def _inspect_attention_tensor(x, edge_index, att, target_num_pos_samples=13264):
+def _inspect_attention_tensor(x, edge_index, att) -> bool:
     num_pos_samples = edge_index.size(1) + x.size(0)
-    if att is not None and num_pos_samples == target_num_pos_samples:
+    if att is not None and (num_pos_samples == 143264 or
+                            num_pos_samples == 12431 or
+                            num_pos_samples == 0):
         att_cloned = att.clone()
 
         if len(att.size()) == 2:
@@ -44,6 +46,9 @@ def _inspect_attention_tensor(x, edge_index, att, target_num_pos_samples=13264):
         cprint("Pos: {} +- {}".format(pos_m, pos_s), "blue")
         neg_m, neg_s = float(neg_samples.mean()), float(neg_samples.std())
         cprint("Neg: {} +- {}".format(neg_m, neg_s), "blue")
+        return True
+    else:
+        return False
 
 
 class GATNet(torch.nn.Module):
@@ -87,7 +92,9 @@ class GATNet(torch.nn.Module):
         x, att1 = self.conv1(x, edge_index, batch=batch)
         x = F.elu(x)
 
-        _inspect_attention_tensor(x, edge_index, att1)
+        if _inspect_attention_tensor(x, edge_index, att1):
+            # print(self.conv1.att_scaling, self.conv1.att_bias)
+            pass
 
         x, att2 = self.conv2(x, edge_index, batch=batch)
         x = F.elu(x)
