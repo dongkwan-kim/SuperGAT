@@ -42,6 +42,8 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--head", default=4, type=int)
     parser.add_argument("--pool-name", default=None)
     parser.add_argument("--is-explicit", default=True, type=bool)
+    parser.add_argument("--possible-edges-factor", default=0, type=int)
+    parser.add_argument("--att-criterion", default=None)
 
     # Test
     parser.add_argument("--val-interval", default=10)
@@ -64,6 +66,9 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "l2_lambda",
         "is_explicit",
         "head",
+        "dropout",
+        "att_lambda",
+        "att_criterion",
     ]
     ret = {}
     for ia_key in important_args:
