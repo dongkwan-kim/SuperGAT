@@ -1,4 +1,4 @@
-from typing import Tuple, Any
+from typing import Tuple, Any, List
 
 import numpy as np
 import os
@@ -83,6 +83,32 @@ def get_l1_l2_regularizer(params, l1_lambda=0., l2_lambda=0.) -> torch.Tensor:
     return loss_reg
 
 
+def get_explicit_attention_loss(explicit_attention_list: List[torch.Tensor],
+                                num_pos_samples: int,
+                                criterion_cls,
+                                att_lambda: float) -> torch.Tensor:
+
+    criterion = eval(criterion_cls)
+
+    loss_list = []
+    for att in explicit_attention_list:
+
+        link_as_y = torch.zeros(att.size(0))
+
+        if "CrossEntropyLoss" in criterion_cls:
+            link_as_y[:num_pos_samples] = 1
+            link_as_y = link_as_y.long()
+        else:
+            link_as_y[:num_pos_samples] = 1
+            link_as_y = link_as_y.float()
+
+        loss = criterion(att, link_as_y)
+        loss_list.append(loss)
+
+    total_loss = att_lambda * sum(loss_list)
+    return total_loss
+
+
 def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
 
     model.train()
@@ -93,13 +119,20 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
         optimizer.zero_grad()
 
         # Forward
-        outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+        outputs, exp_att_list = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
 
         # Loss
         if "train_mask" in batch.__dict__:
             loss = criterion(outputs[batch.train_mask], batch.y[batch.train_mask])
         else:
             loss = criterion(outputs, batch.y)
+
+        if _args.is_explicit:
+            num_pos_samples = batch.edge_index.size(1) + batch.x.size(0)
+            loss += get_explicit_attention_loss(exp_att_list, num_pos_samples,
+                                                criterion_cls=_args.att_criterion,
+                                                att_lambda=_args.att_lambda)
+
         loss += get_l1_l2_regularizer(model.parameters(), _args.l1_lambda, _args.l2_lambda)
 
         loss.backward()
@@ -122,7 +155,7 @@ def test_model(device, model, dataset_or_loader, criterion, _args):
             batch = batch.to(device)
 
             # Forward
-            outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+            outputs, exp_att = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
 
             # Loss
             if "train_mask" in batch.__dict__:
@@ -215,7 +248,7 @@ def run(args):
 
 
 if __name__ == '__main__':
-    main_args = get_args("GATNet", "Planetoid", "Cora", custom_key="E")
+    main_args = get_args("GATNet", "Planetoid", "Cora", custom_key="EV3")
     pprint_args(main_args)
     # noinspection PyTypeChecker
     run(main_args)

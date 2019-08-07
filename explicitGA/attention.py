@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph
 
-from torch_geometric.nn.inits import glorot, zeros
+from torch_geometric.nn.inits import glorot, zeros, ones
 
 from utils import get_cartesian, create_hash
 
@@ -18,7 +18,7 @@ class ExplicitGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
                  is_explicit=True, hash_to_neg_possible_edges: dict = None, possible_edges_factor: int = None,
-                 **kwargs):
+                 att_criterion: str = None, **kwargs):
         super(ExplicitGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
@@ -33,6 +33,10 @@ class ExplicitGAT(MessagePassing):
         self.weight = Parameter(
             torch.Tensor(in_channels, heads * out_channels))
         self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
+
+        self.att_criterion = att_criterion
+        self.att_scaling = Parameter(torch.Tensor(1))
+        self.att_bias = Parameter(torch.Tensor(1))
 
         if bias and concat:
             self.bias = Parameter(torch.Tensor(heads * out_channels))
@@ -50,6 +54,8 @@ class ExplicitGAT(MessagePassing):
         glorot(self.weight)
         glorot(self.att)
         zeros(self.bias)
+        ones(self.att_scaling)
+        zeros(self.att_bias)
 
     def forward(self, x, edge_index, size=None, batch=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -82,11 +88,20 @@ class ExplicitGAT(MessagePassing):
             neg_alpha = self._get_attention_of_negative_edges(neg_edge_index=neg_edge_index, x=x)  # [neg_E, heads]
             total_alpha = torch.cat([self.cached_alpha, neg_alpha])  # [E + neg_E, heads]
             reduced_alpha = total_alpha.mean(dim=1)  # [E + neg_E]
-            self.cached_alpha = None
-        else:
-            reduced_alpha = None
 
-        return propagated, reduced_alpha
+            m, s = reduced_alpha.mean(), reduced_alpha.std()
+            reduced_alpha = torch.sigmoid(self.att_scaling * ((reduced_alpha - m) / s) + self.att_bias)
+
+            if "CrossEntropyLoss" in self.att_criterion:
+                target_alpha = torch.stack([reduced_alpha, 1 - reduced_alpha]).t()  # [E + neg_E, 2]
+            else:  # MSELoss, L1Loss
+                target_alpha = reduced_alpha
+        else:
+            target_alpha = None
+
+        self.cached_alpha = None
+
+        return propagated, target_alpha
 
     def _get_attention(self, edge_index_i, x_i, x_j, size_i):
         """
