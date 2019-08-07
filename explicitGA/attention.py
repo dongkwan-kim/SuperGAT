@@ -13,6 +13,8 @@ from torch_geometric.nn.inits import glorot, zeros, ones
 from utils import get_cartesian, create_hash
 
 import time
+from math import sqrt
+
 
 class ExplicitGAT(MessagePassing):
 
@@ -195,8 +197,15 @@ class ExplicitGAT(MessagePassing):
         neg_edges_list = []
         for edge_hash, n_neg_edges, nodes in zip(edge_hash_list, n_neg_edges_list, nodes_list):
 
+            if n_nodes > 10000:  # Scalability
+                n_sample_nodes = int(sqrt(self.possible_edges_factor * n_neg_edges)) + 1
+                nodes_x = np.random.choice(nodes, n_sample_nodes, replace=False)
+                nodes_y = np.random.choice(nodes, n_sample_nodes, replace=False)
+            else:
+                nodes_x, nodes_y = nodes, nodes
+
             if edge_hash not in self.hash_to_neg_possible_edges:
-                node_pairs = get_cartesian(nodes, nodes)  # ndarray of [N^2, 2]
+                node_pairs = get_cartesian(nodes_x, nodes_y)  # ndarray of [N^2, 2]
                 np.random.shuffle(node_pairs)
                 node_pairs = {tuple(sorted(e)) for e in node_pairs[:self.possible_edges_factor * n_neg_edges]}
                 neg_possible_edges = np.asarray(list(node_pairs - {tuple(e) for e in edge_index.t().numpy()}))
