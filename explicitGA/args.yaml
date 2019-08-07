@@ -3,12 +3,11 @@ GATNet-Cora: &GATNet-Cora
   task_type: Node
   val_interval: 2
   head: 8
-  num_hidden_features: 128
+  num_hidden_features: 64
 
 GATNet-Cora-NE:
   <<: *GATNet-Cora
-  epochs: 100
-  l1_lambda: 7.4e-05
+  epochs: 250
   l2_lambda: 7.2e-05
   save_model: False
   dropout: 0.35
@@ -23,7 +22,6 @@ GATNet-Cora-E: &GATNet-Cora-E
 
 GATNet-Cora-EV1:
   <<: *GATNet-Cora-E
-  l1_lambda: 7.4e-05
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
@@ -31,7 +29,6 @@ GATNet-Cora-EV1:
 
 GATNet-Cora-EV2:
   <<: *GATNet-Cora-E
-  l1_lambda: 7.4e-05
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
@@ -39,7 +36,94 @@ GATNet-Cora-EV2:
 
 GATNet-Cora-EV3:
   <<: *GATNet-Cora-E
-  l1_lambda: 7.4e-05
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.CrossEntropyLoss()
+
+
+GATNet-CiteSeer: &GATNet-CiteSeer
+  model_name: GATNet
+  task_type: Node
+  val_interval: 2
+  head: 8
+  num_hidden_features: 64
+
+GATNet-CiteSeer-NE:
+  <<: *GATNet-CiteSeer
+  epochs: 250
+  l2_lambda: 7.2e-05
+  save_model: False
+  dropout: 0.35
+  is_explicit: False
+
+GATNet-CiteSeer-E: &GATNet-CiteSeer-E
+  <<: *GATNet-CiteSeer
+  epochs: 250
+  is_explicit: True
+  save_model: False
+  possible_edges_factor: 75
+
+GATNet-CiteSeer-EV1:
+  <<: *GATNet-CiteSeer-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.MSELoss()
+
+GATNet-CiteSeer-EV2:
+  <<: *GATNet-CiteSeer-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.L1Loss()
+
+GATNet-CiteSeer-EV3:
+  <<: *GATNet-CiteSeer-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.CrossEntropyLoss()
+
+
+GATNet-PubMed: &GATNet-PubMed
+  model_name: GATNet
+  task_type: Node
+  val_interval: 2
+  head: 8
+  num_hidden_features: 64
+
+GATNet-PubMed-NE:
+  <<: *GATNet-PubMed
+  epochs: 250
+  l2_lambda: 7.2e-05
+  save_model: False
+  dropout: 0.35
+  is_explicit: False
+
+GATNet-PubMed-E: &GATNet-PubMed-E
+  <<: *GATNet-PubMed
+  epochs: 250
+  is_explicit: True
+  save_model: False
+  possible_edges_factor: 100
+
+GATNet-PubMed-EV1:
+  <<: *GATNet-PubMed-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.MSELoss()
+
+GATNet-PubMed-EV2:
+  <<: *GATNet-PubMed-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.L1Loss()
+
+GATNet-PubMed-EV3:
+  <<: *GATNet-PubMed-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
