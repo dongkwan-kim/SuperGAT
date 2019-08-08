@@ -93,14 +93,9 @@ def get_explicit_attention_loss(explicit_attention_list: List[torch.Tensor],
     loss_list = []
     for att in explicit_attention_list:
 
-        link_as_y = torch.zeros(att.size(0))
-
-        if "CrossEntropyLoss" in criterion_cls:
-            link_as_y[:num_pos_samples] = 1
-            link_as_y = link_as_y.long()
-        else:
-            link_as_y[:num_pos_samples] = 1
-            link_as_y = link_as_y.float()
+        link_as_y = torch.ones(att.size(0))
+        link_as_y[:num_pos_samples] = 0
+        link_as_y = link_as_y.long()
 
         loss = criterion(att, link_as_y)
         loss_list.append(loss)
@@ -227,14 +222,14 @@ def run(args):
                 print("\t- Best Accuracy: {}".format(best_acc))
 
             # Check early stop condition
-            if args.early_stop and current_iter > args.epochs // 5:
+            if args.early_stop and current_iter > args.epochs // 4:
                 recent_prev_acc_mean = float(np.mean(prev_acc_deque))
                 acc_change = abs(recent_prev_acc_mean - acc) / recent_prev_acc_mean
                 if acc_change < args.early_stop_threshold:
                     cprint("Early stopped: acc_change is {}% < {}% at {} | {} -> {}".format(
                         round(acc_change, 6), args.early_stop_threshold, epoch, recent_prev_acc_mean, acc), "red")
                     break
-                elif current_iter > args.epochs // 2 and recent_prev_acc_mean < best_acc / 2:
+                elif recent_prev_acc_mean < best_acc / 2:
                     cprint("Early stopped: recent_prev_acc_mean is {}% < {}/2 (at epoch {} > {}/2)".format(
                         recent_prev_acc_mean, best_acc, current_iter, args.epochs), "red")
                     break
@@ -248,7 +243,7 @@ def run(args):
 
 
 if __name__ == '__main__':
-    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV3")
+    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV1")
     pprint_args(main_args)
     # noinspection PyTypeChecker
     run(main_args)

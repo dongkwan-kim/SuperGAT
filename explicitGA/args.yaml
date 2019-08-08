@@ -7,7 +7,7 @@ GAT-Cora: &GAT-Cora
 
 GAT-Cora-NE:
   <<: *GAT-Cora
-  epochs: 400
+  epochs: 500
   l2_lambda: 7.2e-05
   save_model: False
   dropout: 0.6
@@ -15,7 +15,7 @@ GAT-Cora-NE:
 
 GAT-Cora-E: &GAT-Cora-E
   <<: *GAT-Cora
-  epochs: 400
+  epochs: 500
   is_explicit: True
   save_model: False
   possible_edges_factor: 75
@@ -37,7 +37,7 @@ GAT-CiteSeer: &GAT-CiteSeer
 
 GAT-CiteSeer-NE:
   <<: *GAT-CiteSeer
-  epochs: 400
+  epochs: 500
   l2_lambda: 7.2e-05
   save_model: False
   dropout: 0.6
@@ -45,7 +45,7 @@ GAT-CiteSeer-NE:
 
 GAT-CiteSeer-E: &GAT-CiteSeer-E
   <<: *GAT-CiteSeer
-  epochs: 400
+  epochs: 500
   is_explicit: True
   save_model: False
   possible_edges_factor: 75
@@ -67,7 +67,7 @@ GAT-PubMed: &GAT-PubMed
 
 GAT-PubMed-NE:
   <<: *GAT-PubMed
-  epochs: 400
+  epochs: 500
   l2_lambda: 7.2e-05
   save_model: False
   dropout: 0.6
@@ -75,7 +75,7 @@ GAT-PubMed-NE:
 
 GAT-PubMed-E: &GAT-PubMed-E
   <<: *GAT-PubMed
-  epochs: 400
+  epochs: 500
   is_explicit: True
   save_model: False
   possible_edges_factor: 100
