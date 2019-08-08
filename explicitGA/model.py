@@ -13,9 +13,9 @@ from attention import ExplicitGAT
 from data import get_dataset_or_loader, getattr_d
 
 
-def get_model_cls(model_name):
-    if model_name == "GATNet":
-        return GATNet
+def _get_attention_layer(attention_name: str):
+    if attention_name == "GAT":
+        return ExplicitGAT
     else:
         raise ValueError
 
@@ -29,7 +29,7 @@ def _to_pool_cls(pool_name):
 
 def _inspect_attention_tensor(x, edge_index, att) -> bool:
     num_pos_samples = edge_index.size(1) + x.size(0)
-    if att is not None and (num_pos_samples == 143264 or
+    if att is not None and (num_pos_samples == 13264 or
                             num_pos_samples == 12431 or
                             num_pos_samples == 0):
         att_cloned = att.clone()
@@ -58,10 +58,12 @@ class GATNet(torch.nn.Module):
 
         self.args = args
 
+        attention_layer = _get_attention_layer(self.args.model_name)
+
         num_input_features = getattr_d(dataset_or_loader, "num_node_features")
         num_classes = getattr_d(dataset_or_loader, "num_classes")
 
-        self.conv1 = ExplicitGAT(
+        self.conv1 = attention_layer(
             num_input_features, args.num_hidden_features,
             heads=args.head, dropout=args.dropout, is_explicit=args.is_explicit,
             possible_edges_factor=args.possible_edges_factor,
@@ -69,7 +71,7 @@ class GATNet(torch.nn.Module):
         )
 
         num_input_features *= args.head
-        self.conv2 = ExplicitGAT(
+        self.conv2 = attention_layer(
             args.num_hidden_features * args.head, args.num_hidden_features,
             heads=args.head, dropout=0., is_explicit=args.is_explicit,
             hash_to_neg_possible_edges=self.conv1.hash_to_neg_possible_edges,

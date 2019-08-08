@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
-from model import GATNet, get_model_cls
+from model import GATNet
 from utils import create_hash, to_one_hot, get_accuracy
 
 import torch
@@ -193,7 +193,7 @@ def run(args):
         batch_size=args.batch_size, seed=args.seed,
     )
 
-    net = get_model_cls(args.model_name)(args, train_d)
+    net = GATNet(args, train_d)
     net = net.to(dev)
 
     loaded = load_model(net, args, target_epoch=None)
@@ -248,7 +248,7 @@ def run(args):
 
 
 if __name__ == '__main__':
-    main_args = get_args("GATNet", "Planetoid", "Cora", custom_key="EV3")
+    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV3")
     pprint_args(main_args)
     # noinspection PyTypeChecker
     run(main_args)

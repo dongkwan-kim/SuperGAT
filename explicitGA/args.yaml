@@ -1,129 +1,129 @@
-GATNet-Cora: &GATNet-Cora
-  model_name: GATNet
+GAT-Cora: &GAT-Cora
+  model_name: GAT
   task_type: Node
   val_interval: 2
   head: 8
   num_hidden_features: 64
 
-GATNet-Cora-NE:
-  <<: *GATNet-Cora
+GAT-Cora-NE:
+  <<: *GAT-Cora
   epochs: 250
   l2_lambda: 7.2e-05
   save_model: False
-  dropout: 0.35
+  dropout: 0.6
   is_explicit: False
 
-GATNet-Cora-E: &GATNet-Cora-E
-  <<: *GATNet-Cora
+GAT-Cora-E: &GAT-Cora-E
+  <<: *GAT-Cora
   epochs: 250
   is_explicit: True
   save_model: False
   possible_edges_factor: 75
 
-GATNet-Cora-EV1:
-  <<: *GATNet-Cora-E
+GAT-Cora-EV1:
+  <<: *GAT-Cora-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.MSELoss()
 
-GATNet-Cora-EV2:
-  <<: *GATNet-Cora-E
+GAT-Cora-EV2:
+  <<: *GAT-Cora-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.L1Loss()
 
-GATNet-Cora-EV3:
-  <<: *GATNet-Cora-E
+GAT-Cora-EV3:
+  <<: *GAT-Cora-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.CrossEntropyLoss()
 
 
-GATNet-CiteSeer: &GATNet-CiteSeer
-  model_name: GATNet
+GAT-CiteSeer: &GAT-CiteSeer
+  model_name: GAT
   task_type: Node
   val_interval: 2
   head: 8
   num_hidden_features: 64
 
-GATNet-CiteSeer-NE:
-  <<: *GATNet-CiteSeer
+GAT-CiteSeer-NE:
+  <<: *GAT-CiteSeer
   epochs: 250
   l2_lambda: 7.2e-05
   save_model: False
-  dropout: 0.35
+  dropout: 0.6
   is_explicit: False
 
-GATNet-CiteSeer-E: &GATNet-CiteSeer-E
-  <<: *GATNet-CiteSeer
+GAT-CiteSeer-E: &GAT-CiteSeer-E
+  <<: *GAT-CiteSeer
   epochs: 250
   is_explicit: True
   save_model: False
   possible_edges_factor: 75
 
-GATNet-CiteSeer-EV1:
-  <<: *GATNet-CiteSeer-E
+GAT-CiteSeer-EV1:
+  <<: *GAT-CiteSeer-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.MSELoss()
 
-GATNet-CiteSeer-EV2:
-  <<: *GATNet-CiteSeer-E
+GAT-CiteSeer-EV2:
+  <<: *GAT-CiteSeer-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.L1Loss()
 
-GATNet-CiteSeer-EV3:
-  <<: *GATNet-CiteSeer-E
+GAT-CiteSeer-EV3:
+  <<: *GAT-CiteSeer-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.CrossEntropyLoss()
 
 
-GATNet-PubMed: &GATNet-PubMed
-  model_name: GATNet
+GAT-PubMed: &GAT-PubMed
+  model_name: GAT
   task_type: Node
   val_interval: 2
   head: 8
   num_hidden_features: 64
 
-GATNet-PubMed-NE:
-  <<: *GATNet-PubMed
+GAT-PubMed-NE:
+  <<: *GAT-PubMed
   epochs: 250
   l2_lambda: 7.2e-05
   save_model: False
-  dropout: 0.35
+  dropout: 0.6
   is_explicit: False
 
-GATNet-PubMed-E: &GATNet-PubMed-E
-  <<: *GATNet-PubMed
+GAT-PubMed-E: &GAT-PubMed-E
+  <<: *GAT-PubMed
   epochs: 250
   is_explicit: True
   save_model: False
   possible_edges_factor: 100
 
-GATNet-PubMed-EV1:
-  <<: *GATNet-PubMed-E
+GAT-PubMed-EV1:
+  <<: *GAT-PubMed-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.MSELoss()
 
-GATNet-PubMed-EV2:
-  <<: *GATNet-PubMed-E
+GAT-PubMed-EV2:
+  <<: *GAT-PubMed-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.L1Loss()
 
-GATNet-PubMed-EV3:
-  <<: *GATNet-PubMed-E
+GAT-PubMed-EV3:
+  <<: *GAT-PubMed-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
