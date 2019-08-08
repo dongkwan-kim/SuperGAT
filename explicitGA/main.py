@@ -93,11 +93,17 @@ def get_explicit_attention_loss(explicit_attention_list: List[torch.Tensor],
     loss_list = []
     for att in explicit_attention_list:
 
-        link_as_y = torch.ones(att.size(0))
+        att_size = att.size(0)
+        sample_att_size = int(att_size * 0.75)
+
+        link_as_y = torch.ones(att_size)
         link_as_y[:num_pos_samples] = 0
         link_as_y = link_as_y.long()
 
-        loss = criterion(att, link_as_y)
+        permuted = torch.randperm(att_size)
+
+        loss = criterion(att[permuted][:sample_att_size],
+                         link_as_y[permuted][:sample_att_size])
         loss_list.append(loss)
 
     total_loss = att_lambda * sum(loss_list)
@@ -222,7 +228,7 @@ def run(args):
                 print("\t- Best Accuracy: {}".format(best_acc))
 
             # Check early stop condition
-            if args.early_stop and current_iter > args.epochs // 4:
+            if args.early_stop and current_iter > args.epochs // 3:
                 recent_prev_acc_mean = float(np.mean(prev_acc_deque))
                 acc_change = abs(recent_prev_acc_mean - acc) / recent_prev_acc_mean
                 if acc_change < args.early_stop_threshold:
