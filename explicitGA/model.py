@@ -84,10 +84,10 @@ class GATNet(torch.nn.Module):
             self.pool = _to_pool_cls(args.pool_name)
 
         self.fc = nn.Sequential(
-            nn.Linear(args.head * args.num_hidden_features, args.num_hidden_features),
+            nn.Linear(args.head * args.num_hidden_features, args.head * args.num_hidden_features),
             nn.ReLU(inplace=True),
             nn.Dropout(),
-            nn.Linear(args.num_hidden_features, num_classes),
+            nn.Linear(args.head * args.num_hidden_features, num_classes),
         )
 
     def forward(self, x, edge_index, batch=None) -> Tuple[torch.Tensor, None or List[torch.Tensor]]:

@@ -3,7 +3,7 @@ GAT-Cora: &GAT-Cora
   task_type: Node
   val_interval: 2
   head: 8
-  num_hidden_features: 64
+  num_hidden_features: 32
 
 GAT-Cora-NE:
   <<: *GAT-Cora
@@ -33,7 +33,7 @@ GAT-CiteSeer: &GAT-CiteSeer
   task_type: Node
   val_interval: 2
   head: 8
-  num_hidden_features: 64
+  num_hidden_features: 32
 
 GAT-CiteSeer-NE:
   <<: *GAT-CiteSeer
@@ -63,7 +63,7 @@ GAT-PubMed: &GAT-PubMed
   task_type: Node
   val_interval: 2
   head: 8
-  num_hidden_features: 64
+  num_hidden_features: 32
 
 GAT-PubMed-NE:
   <<: *GAT-PubMed
