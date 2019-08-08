@@ -34,7 +34,7 @@ class ExplicitGAT(MessagePassing):
 
         self.weight = Parameter(
             torch.Tensor(in_channels, heads * out_channels))
-        self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
+        self.att = Parameter(torch.Tensor(2, heads, 2 * out_channels))
 
         self.att_criterion = att_criterion
         self.att_scaling = Parameter(torch.Tensor(1))
@@ -87,17 +87,10 @@ class ExplicitGAT(MessagePassing):
                 n_nodes=x.size(0),
                 batch=batch,
             )
-            neg_alpha = self._get_attention_of_negative_edges(neg_edge_index=neg_edge_index, x=x)  # [neg_E, heads]
-            total_alpha = torch.cat([self.cached_alpha, neg_alpha])  # [E + neg_E, heads]
-            reduced_alpha = total_alpha.mean(dim=1)  # [E + neg_E]
-
-            m, s = reduced_alpha.mean(), reduced_alpha.std()
-            reduced_alpha = torch.sigmoid(self.att_scaling * ((reduced_alpha - m) / s) + self.att_bias)
-
-            if "CrossEntropyLoss" in self.att_criterion:
-                target_alpha = torch.stack([reduced_alpha, 1 - reduced_alpha]).t()  # [E + neg_E, 2]
-            else:  # MSELoss, L1Loss
-                target_alpha = reduced_alpha
+            neg_alpha = self._get_raw_attention_of_negative_edges(neg_edge_index=neg_edge_index, x=x)  # [2, neg_E, heads]
+            total_alpha = torch.cat([self.cached_alpha, neg_alpha], dim=-2)  # [2, E + neg_E, heads]
+            reduced_alpha = total_alpha.mean(dim=-1)  # [2, E + neg_E]
+            target_alpha = torch.nn.LogSoftmax(dim=1)(reduced_alpha.t())  # [E + neg_E, 2]
         else:
             target_alpha = None
 
@@ -105,25 +98,22 @@ class ExplicitGAT(MessagePassing):
 
         return propagated, target_alpha
 
-    def _get_attention(self, edge_index_i, x_i, x_j, size_i):
+    def _get_attention(self, edge_index_i, x_i, x_j, size_i) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         :param edge_index_i: [E]
         :param x_i: [E, heads, F]
         :param x_j: [E, heads, F]
         :param size_i: N
-        :return: [E, heads]
+        :return: [E, heads], [2, E, heads]
         """
         # Compute attention coefficients.
-        if x_i is None:
-            alpha = (x_j * self.att[:, :, self.out_channels:]).sum(dim=-1)
-        else:
-            alpha = (torch.cat([x_i, x_j], dim=-1) * self.att).sum(dim=-1)  # [E, heads]
+        # [E, heads, 2F] * [2, heads, 2F] -> [2, E, heads]
+        raw_alpha = torch.einsum("ehf,phf->peh",
+                                 torch.cat([x_i, x_j], dim=-1),
+                                 self.att)
+        alpha = F.leaky_relu(raw_alpha[0], self.negative_slope)
+        return softmax(alpha, edge_index_i, size_i), raw_alpha
 
-        alpha = F.leaky_relu(alpha, self.negative_slope)
-        alpha = softmax(alpha, edge_index_i, size_i)
-        return alpha
-
-    # noinspection PyMethodOverriding
     def message(self, edge_index_i, x_i, x_j, size_i):
         """
         :param edge_index_i: [E]
@@ -137,10 +127,10 @@ class ExplicitGAT(MessagePassing):
             x_i = x_i.view(-1, self.heads, self.out_channels)  # [E, heads, F]
 
         # Compute attention coefficients. [E, heads]
-        alpha = self._get_attention(edge_index_i, x_i, x_j, size_i)
+        alpha, raw_alpha = self._get_attention(edge_index_i, x_i, x_j, size_i)
 
         # Caching
-        self.cached_alpha = alpha
+        self.cached_alpha = raw_alpha
 
         # Sample attention coefficients stochastically.
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
@@ -220,7 +210,7 @@ class ExplicitGAT(MessagePassing):
         neg_edges_index = torch.cat(neg_edges_list, dim=1)
         return neg_edges_index
 
-    def _get_attention_of_negative_edges(self, neg_edge_index, x) -> torch.Tensor:
+    def _get_raw_attention_of_negative_edges(self, neg_edge_index, x) -> torch.Tensor:
         """
         :param neg_edge_index: [2, neg_E]
         :param x: [N, heads * F]
@@ -235,8 +225,8 @@ class ExplicitGAT(MessagePassing):
         if x_i is not None:
             x_i = x_i.view(-1, self.heads, self.out_channels)  # [E, heads, F]
 
-        alpha = self._get_attention(neg_edge_index_i, x_i, x_j, size_i)
-        return alpha
+        alpha, raw_alpha = self._get_attention(neg_edge_index_i, x_i, x_j, size_i)
+        return raw_alpha
 
 
     def __repr__(self):

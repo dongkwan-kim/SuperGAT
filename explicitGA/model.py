@@ -35,6 +35,7 @@ def _inspect_attention_tensor(x, edge_index, att) -> bool:
         att_cloned = att.clone()
 
         if len(att.size()) == 2:
+            att_cloned = torch.exp(att_cloned)
             pos_samples = att_cloned[:num_pos_samples, 0]
             neg_samples = att_cloned[num_pos_samples:, 0]
         else:

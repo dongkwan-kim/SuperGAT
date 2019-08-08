@@ -7,7 +7,7 @@ GAT-Cora: &GAT-Cora
 
 GAT-Cora-NE:
   <<: *GAT-Cora
-  epochs: 250
+  epochs: 400
   l2_lambda: 7.2e-05
   save_model: False
   dropout: 0.6
@@ -15,7 +15,7 @@ GAT-Cora-NE:
 
 GAT-Cora-E: &GAT-Cora-E
   <<: *GAT-Cora
-  epochs: 250
+  epochs: 400
   is_explicit: True
   save_model: False
   possible_edges_factor: 75
@@ -25,21 +25,7 @@ GAT-Cora-EV1:
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
-  att_criterion: nn.MSELoss()
-
-GAT-Cora-EV2:
-  <<: *GAT-Cora-E
-  l2_lambda: 7.2e-05
-  dropout: 0.6
-  att_lambda: 0.0467
-  att_criterion: nn.L1Loss()
-
-GAT-Cora-EV3:
-  <<: *GAT-Cora-E
-  l2_lambda: 7.2e-05
-  dropout: 0.6
-  att_lambda: 0.0467
-  att_criterion: nn.CrossEntropyLoss()
+  att_criterion: nn.NLLLoss()
 
 
 GAT-CiteSeer: &GAT-CiteSeer
@@ -51,7 +37,7 @@ GAT-CiteSeer: &GAT-CiteSeer
 
 GAT-CiteSeer-NE:
   <<: *GAT-CiteSeer
-  epochs: 250
+  epochs: 400
   l2_lambda: 7.2e-05
   save_model: False
   dropout: 0.6
@@ -59,7 +45,7 @@ GAT-CiteSeer-NE:
 
 GAT-CiteSeer-E: &GAT-CiteSeer-E
   <<: *GAT-CiteSeer
-  epochs: 250
+  epochs: 400
   is_explicit: True
   save_model: False
   possible_edges_factor: 75
@@ -69,21 +55,7 @@ GAT-CiteSeer-EV1:
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
-  att_criterion: nn.MSELoss()
-
-GAT-CiteSeer-EV2:
-  <<: *GAT-CiteSeer-E
-  l2_lambda: 7.2e-05
-  dropout: 0.6
-  att_lambda: 0.0467
-  att_criterion: nn.L1Loss()
-
-GAT-CiteSeer-EV3:
-  <<: *GAT-CiteSeer-E
-  l2_lambda: 7.2e-05
-  dropout: 0.6
-  att_lambda: 0.0467
-  att_criterion: nn.CrossEntropyLoss()
+  att_criterion: nn.NLLLoss()
 
 
 GAT-PubMed: &GAT-PubMed
@@ -95,7 +67,7 @@ GAT-PubMed: &GAT-PubMed
 
 GAT-PubMed-NE:
   <<: *GAT-PubMed
-  epochs: 250
+  epochs: 400
   l2_lambda: 7.2e-05
   save_model: False
   dropout: 0.6
@@ -103,26 +75,12 @@ GAT-PubMed-NE:
 
 GAT-PubMed-E: &GAT-PubMed-E
   <<: *GAT-PubMed
-  epochs: 250
+  epochs: 400
   is_explicit: True
   save_model: False
   possible_edges_factor: 100
 
 GAT-PubMed-EV1:
-  <<: *GAT-PubMed-E
-  l2_lambda: 7.2e-05
-  dropout: 0.6
-  att_lambda: 0.0467
-  att_criterion: nn.MSELoss()
-
-GAT-PubMed-EV2:
-  <<: *GAT-PubMed-E
-  l2_lambda: 7.2e-05
-  dropout: 0.6
-  att_lambda: 0.0467
-  att_criterion: nn.L1Loss()
-
-GAT-PubMed-EV3:
   <<: *GAT-PubMed-E
   l2_lambda: 7.2e-05
   dropout: 0.6
