@@ -15,7 +15,6 @@ import random
 
 
 def negative_sampling(pos_edge_index, num_nodes, max_num_samples=None):
-
     max_num_samples = max_num_samples or pos_edge_index.size(1)
     num_samples = min(max_num_samples,
                       num_nodes * num_nodes - pos_edge_index.size(1))
@@ -23,12 +22,12 @@ def negative_sampling(pos_edge_index, num_nodes, max_num_samples=None):
     idx = (pos_edge_index[0] * num_nodes + pos_edge_index[1])
     idx = idx.to(torch.device('cpu'))
 
-    rng = range(num_nodes**2)
-    perm = torch.as_tensor(random.sample(rng, num_samples))
+    rng = range(num_nodes ** 2)
+    perm = torch.tensor(random.sample(rng, num_samples))
     mask = torch.from_numpy(np.isin(perm, idx).astype(np.uint8))
     rest = mask.nonzero().view(-1)
     while rest.numel() > 0:  # pragma: no cover
-        tmp = torch.as_tensor(random.sample(rng, rest.size(0)))
+        tmp = torch.tensor(random.sample(rng, rest.size(0)))
         mask = torch.from_numpy(np.isin(tmp, idx).astype(np.uint8))
         perm[rest] = tmp
         rest = mask.nonzero().view(-1)
@@ -37,10 +36,9 @@ def negative_sampling(pos_edge_index, num_nodes, max_num_samples=None):
     return torch.stack([row, col], dim=0).long().to(pos_edge_index.device)
 
 
-# TODO: scalability
 def batch_negative_sampling(pos_edge_index: torch.Tensor,
-                            num_nodes: int,
-                            batch: torch.Tensor,
+                            num_nodes: int = None,
+                            batch: torch.Tensor = None,
                             max_num_samples: int = None) -> torch.Tensor:
     """
     :param pos_edge_index: [2, E]
@@ -49,28 +47,26 @@ def batch_negative_sampling(pos_edge_index: torch.Tensor,
     :param max_num_samples: neg_E
     :return: tensor of [2, neg_E]
     """
+    assert (num_nodes is not None) or (batch is not None), "Either num_nodes or batch must not be None"
 
     if batch is not None:
-        n_batches = batch.max() + 1
-        batch_numpy = batch.numpy()
-        nodes_list = [np.argwhere(batch_numpy == n).squeeze() for n in range(n_batches)]
-        current_edges_list = [subgraph(torch.as_tensor(nodes), pos_edge_index, relabel_nodes=True)[0]
-                              for nodes in nodes_list]
+        nodes_list = [torch.nonzero(batch == b).squeeze() for b in range(batch.max() + 1)]
+        num_nodes_list = [len(nodes) for nodes in nodes_list]
+        pos_edge_index_list = [subgraph(torch.as_tensor(nodes), pos_edge_index, relabel_nodes=True)[0]
+                               for nodes in nodes_list]
     else:
-        n_batches = 1
-        nodes_list = [np.arange(num_nodes)]
-        current_edges_list = [pos_edge_index]
+        num_nodes_list = [num_nodes]
+        pos_edge_index_list = [pos_edge_index]
 
     neg_edges_index_list = []
     prev_node_idx = 0
-    for curr_nodes, curr_edge_index in zip(nodes_list, current_edges_list):
-        curr_nodes -= prev_node_idx
-        curr_neg_edges_index = negative_sampling(curr_edge_index,
-                                                 num_nodes=len(curr_nodes),
-                                                 max_num_samples=max_num_samples)
-        curr_neg_edges_index += prev_node_idx
-        neg_edges_index_list.append(curr_neg_edges_index)
-        prev_node_idx += len(curr_nodes)
+    for num_nodes, pos_edge_index_of_one_graph in zip(num_nodes_list, pos_edge_index_list):
+        neg_edges_index = negative_sampling(pos_edge_index_of_one_graph,
+                                            num_nodes=num_nodes,
+                                            max_num_samples=max_num_samples)
+        neg_edges_index += prev_node_idx
+        neg_edges_index_list.append(neg_edges_index)
+        prev_node_idx += num_nodes
     neg_edges_index = torch.cat(neg_edges_index_list, dim=1)
     return neg_edges_index
 
