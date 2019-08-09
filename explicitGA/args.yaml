@@ -86,3 +86,35 @@ GAT-PubMed-EV1:
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.CrossEntropyLoss()
+
+
+GAT-PTC_MR: &GAT-PTC_MR
+  model_name: GAT
+  task_type: Graph
+  val_interval: 2
+  head: 8
+  num_hidden_features: 32
+  batch_size: 128
+  pool_name: global_mean_pool
+
+GAT-PTC_MR-NE:
+  <<: *GAT-PTC_MR
+  epochs: 500
+  l2_lambda: 7.2e-05
+  save_model: False
+  dropout: 0.6
+  is_explicit: False
+
+GAT-PTC_MR-E: &GAT-PTC_MR-E
+  <<: *GAT-PTC_MR
+  epochs: 500
+  is_explicit: True
+  save_model: False
+  possible_edges_factor: 75
+
+GAT-PTC_MR-EV1:
+  <<: *GAT-PTC_MR-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.NLLLoss()
