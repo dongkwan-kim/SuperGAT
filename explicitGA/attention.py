@@ -87,13 +87,11 @@ class ExplicitGAT(MessagePassing):
         self.is_explicit = is_explicit
         self.possible_edges_factor = possible_edges_factor
 
-        self.weight = Parameter(
-            torch.Tensor(in_channels, heads * out_channels))
-        self.att = Parameter(torch.Tensor(2, heads, 2 * out_channels))
-
+        self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
+        self.att_base = Parameter(torch.Tensor(out_channels, heads, 2 * out_channels))
+        self.att_out_1 = Parameter(torch.Tensor(1, out_channels, heads))
+        self.att_out_2 = Parameter(torch.Tensor(2, out_channels, heads))
         self.att_criterion = att_criterion
-        self.att_scaling = Parameter(torch.Tensor(1))
-        self.att_bias = Parameter(torch.Tensor(1))
 
         if bias and concat:
             self.bias = Parameter(torch.Tensor(heads * out_channels))
@@ -102,16 +100,16 @@ class ExplicitGAT(MessagePassing):
         else:
             self.register_parameter('bias', None)
 
-        self.cached_alpha = None
+        self.cached_alpha_2 = None
 
         self.reset_parameters()
 
     def reset_parameters(self):
         glorot(self.weight)
-        glorot(self.att)
+        glorot(self.att_base)
+        glorot(self.att_out_1)
+        glorot(self.att_out_2)
         zeros(self.bias)
-        ones(self.att_scaling)
-        zeros(self.att_bias)
 
     def forward(self, x, edge_index, size=None, batch=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -141,17 +139,16 @@ class ExplicitGAT(MessagePassing):
                 batch=batch,
             )
             # noinspection PyTypeChecker
-            neg_alpha = self._get_raw_attention_of_negative_edges(
-                neg_edge_index=neg_edge_index, x=x)  # [2, neg_E, heads]
-            total_alpha = torch.cat([self.cached_alpha, neg_alpha], dim=-2)  # [2, E + neg_E, heads]
-            reduced_alpha = total_alpha.mean(dim=-1)  # [2, E + neg_E]
-            target_alpha = torch.nn.LogSoftmax(dim=1)(reduced_alpha.t())  # [E + neg_E, 2]
+            neg_alpha = self._get_negative_edge_att2(neg_edge_index=neg_edge_index, x=x)  # [2, neg_E, heads]
+            total_alpha_2 = torch.cat([self.cached_alpha_2, neg_alpha], dim=-2)  # [2, E + neg_E, heads]
+            total_alpha_2 = total_alpha_2.mean(dim=-1)  # [2, E + neg_E]
+            total_alpha_2 = torch.nn.LogSoftmax(dim=1)(total_alpha_2.t())  # [E + neg_E, 2]
         else:
-            target_alpha = None
+            total_alpha_2 = None
 
-        self.cached_alpha = None
+        self.cached_alpha_2 = None
 
-        return propagated, target_alpha
+        return propagated, total_alpha_2
 
     def _get_attention(self, edge_index_i, x_i, x_j, size_i) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -162,12 +159,20 @@ class ExplicitGAT(MessagePassing):
         :return: [E, heads], [2, E, heads]
         """
         # Compute attention coefficients.
-        # [E, heads, 2F] * [2, heads, 2F] -> [2, E, heads]
-        raw_alpha = torch.einsum("ehf,phf->peh",
-                                 torch.cat([x_i, x_j], dim=-1),
-                                 self.att)
-        alpha = F.leaky_relu(raw_alpha[0], self.negative_slope)
-        return softmax(alpha, edge_index_i, size_i), raw_alpha
+        # [E, heads, 2F] * [F, heads, 2F] -> [F, E, heads]
+        hidden_alpha = torch.einsum("ehf,phf->peh",
+                                    torch.cat([x_i, x_j], dim=-1),
+                                    self.att_base)
+
+        # Attention, [F, E, heads] * [1, F, heads] -> [E, heads]
+        alpha_1 = torch.einsum("feh,pfh->eh", hidden_alpha, self.att_out_1)
+        alpha_1 = F.leaky_relu(alpha_1, self.negative_slope)
+        alpha_1 = softmax(alpha_1, edge_index_i, size_i)
+
+        # Link prediction, [F, E, heads] * [2, F, heads] -> [2, E, heads]
+        alpha_2 = torch.einsum("feh,pfh->peh", hidden_alpha, self.att_out_2)
+
+        return alpha_1, alpha_2
 
     def message(self, edge_index_i, x_i, x_j, size_i):
         """
@@ -182,16 +187,16 @@ class ExplicitGAT(MessagePassing):
             x_i = x_i.view(-1, self.heads, self.out_channels)  # [E, heads, F]
 
         # Compute attention coefficients. [E, heads]
-        alpha, raw_alpha = self._get_attention(edge_index_i, x_i, x_j, size_i)
+        alpha_1, alpha_2 = self._get_attention(edge_index_i, x_i, x_j, size_i)
 
         # Caching
-        self.cached_alpha = raw_alpha
+        self.cached_alpha_2 = alpha_2
 
         # Sample attention coefficients stochastically.
-        alpha = F.dropout(alpha, p=self.dropout, training=self.training)
+        alpha_1 = F.dropout(alpha_1, p=self.dropout, training=self.training)
 
         # [E, heads, F] * [E, heads, 1] = [E, heads, F]
-        return x_j * alpha.view(-1, self.heads, 1)
+        return x_j * alpha_1.view(-1, self.heads, 1)
 
     def update(self, aggr_out):
         """
@@ -207,7 +212,7 @@ class ExplicitGAT(MessagePassing):
             aggr_out = aggr_out + self.bias
         return aggr_out
 
-    def _get_raw_attention_of_negative_edges(self, neg_edge_index, x) -> torch.Tensor:
+    def _get_negative_edge_att2(self, neg_edge_index, x) -> torch.Tensor:
         """
         :param neg_edge_index: [2, neg_E]
         :param x: [N, heads * F]
@@ -226,8 +231,8 @@ class ExplicitGAT(MessagePassing):
         if x_i is not None:
             x_i = x_i.view(-1, self.heads, self.out_channels)  # [E, heads, F]
 
-        alpha, raw_alpha = self._get_attention(neg_edge_index_i, x_i, x_j, size_i)
-        return raw_alpha
+        alpha_1, alpha_2 = self._get_attention(neg_edge_index_i, x_i, x_j, size_i)
+        return alpha_2
 
     def __repr__(self):
         return '{}({}, {}, heads={})'.format(self.__class__.__name__,
