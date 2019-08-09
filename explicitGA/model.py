@@ -75,7 +75,6 @@ class GATNet(torch.nn.Module):
         self.conv2 = attention_layer(
             args.num_hidden_features * args.head, args.num_hidden_features,
             heads=args.head, dropout=0., is_explicit=args.is_explicit,
-            hash_to_neg_possible_edges=self.conv1.hash_to_neg_possible_edges,
             possible_edges_factor=args.possible_edges_factor,
             att_criterion=args.att_criterion,
         )

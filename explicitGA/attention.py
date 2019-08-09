@@ -10,16 +10,75 @@ from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, su
 
 from torch_geometric.nn.inits import glorot, zeros, ones
 
-from utils import get_cartesian, create_hash
-
 import time
-from math import sqrt
+import random
+
+
+def negative_sampling(pos_edge_index, num_nodes, max_num_samples=None):
+
+    max_num_samples = max_num_samples or pos_edge_index.size(1)
+    num_samples = min(max_num_samples,
+                      num_nodes * num_nodes - pos_edge_index.size(1))
+
+    idx = (pos_edge_index[0] * num_nodes + pos_edge_index[1])
+    idx = idx.to(torch.device('cpu'))
+
+    rng = range(num_nodes**2)
+    perm = torch.as_tensor(random.sample(rng, num_samples))
+    mask = torch.from_numpy(np.isin(perm, idx).astype(np.uint8))
+    rest = mask.nonzero().view(-1)
+    while rest.numel() > 0:  # pragma: no cover
+        tmp = torch.as_tensor(random.sample(rng, rest.size(0)))
+        mask = torch.from_numpy(np.isin(tmp, idx).astype(np.uint8))
+        perm[rest] = tmp
+        rest = mask.nonzero().view(-1)
+
+    row, col = perm / num_nodes, perm % num_nodes
+    return torch.stack([row, col], dim=0).long().to(pos_edge_index.device)
+
+
+# TODO: scalability
+def batch_negative_sampling(pos_edge_index: torch.Tensor,
+                            num_nodes: int,
+                            batch: torch.Tensor,
+                            max_num_samples: int = None) -> torch.Tensor:
+    """
+    :param pos_edge_index: [2, E]
+    :param num_nodes: N
+    :param batch: [B]
+    :param max_num_samples: neg_E
+    :return: tensor of [2, neg_E]
+    """
+
+    if batch is not None:
+        n_batches = batch.max() + 1
+        batch_numpy = batch.numpy()
+        nodes_list = [np.argwhere(batch_numpy == n).squeeze() for n in range(n_batches)]
+        current_edges_list = [subgraph(torch.as_tensor(nodes), pos_edge_index, relabel_nodes=True)[0]
+                              for nodes in nodes_list]
+    else:
+        n_batches = 1
+        nodes_list = [np.arange(num_nodes)]
+        current_edges_list = [pos_edge_index]
+
+    neg_edges_index_list = []
+    prev_node_idx = 0
+    for curr_nodes, curr_edge_index in zip(nodes_list, current_edges_list):
+        curr_nodes -= prev_node_idx
+        curr_neg_edges_index = negative_sampling(curr_edge_index,
+                                                 num_nodes=len(curr_nodes),
+                                                 max_num_samples=max_num_samples)
+        curr_neg_edges_index += prev_node_idx
+        neg_edges_index_list.append(curr_neg_edges_index)
+        prev_node_idx += len(curr_nodes)
+    neg_edges_index = torch.cat(neg_edges_index_list, dim=1)
+    return neg_edges_index
 
 
 class ExplicitGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_explicit=True, hash_to_neg_possible_edges: dict = None, possible_edges_factor: int = None,
+                 is_explicit=True, possible_edges_factor: int = None,
                  att_criterion: str = None, **kwargs):
         super(ExplicitGAT, self).__init__(aggr='add', **kwargs)
 
@@ -48,7 +107,6 @@ class ExplicitGAT(MessagePassing):
             self.register_parameter('bias', None)
 
         self.cached_alpha = None
-        self.hash_to_neg_possible_edges = hash_to_neg_possible_edges if hash_to_neg_possible_edges is not None else dict()
 
         self.reset_parameters()
 
@@ -81,16 +139,19 @@ class ExplicitGAT(MessagePassing):
         propagated = self.propagate(edge_index, size=size, x=x)
 
         if self.training and self.is_explicit:
-            neg_edge_index = self._sample_negative_edges(
-                max_n_neg_edges=edge_index.size(1),
-                edge_index=edge_index,
-                n_nodes=x.size(0),
+            time_mark = time.time()
+            neg_edge_index = batch_negative_sampling(
+                pos_edge_index=edge_index,
+                num_nodes=x.size(0),
                 batch=batch,
             )
-            neg_alpha = self._get_raw_attention_of_negative_edges(neg_edge_index=neg_edge_index, x=x)  # [2, neg_E, heads]
+            # noinspection PyTypeChecker
+            neg_alpha = self._get_raw_attention_of_negative_edges(
+                neg_edge_index=neg_edge_index, x=x)  # [2, neg_E, heads]
             total_alpha = torch.cat([self.cached_alpha, neg_alpha], dim=-2)  # [2, E + neg_E, heads]
             reduced_alpha = total_alpha.mean(dim=-1)  # [2, E + neg_E]
             target_alpha = torch.nn.LogSoftmax(dim=1)(reduced_alpha.t())  # [E + neg_E, 2]
+            cprint("sample time: {}".format(time.time() - time_mark), "red")
         else:
             target_alpha = None
 
@@ -152,70 +213,16 @@ class ExplicitGAT(MessagePassing):
             aggr_out = aggr_out + self.bias
         return aggr_out
 
-    def _sample_negative_edges(self,
-                               max_n_neg_edges: int,
-                               edge_index: torch.Tensor,
-                               n_nodes: int,
-                               batch: torch.Tensor) -> torch.Tensor:
-        """
-        :param max_n_neg_edges: neg_E
-        :param edge_index: [2, E]
-        :param n_nodes: N
-        :param batch: [B]
-        :return: tensor of [2, neg_E]
-        """
-
-        n_possible_edges = n_nodes ** 2
-
-        if batch is not None:
-            n_batches = batch.max() + 1
-            batch_numpy = batch.numpy()
-            nodes_list = [np.argwhere(batch_numpy == n).squeeze() for n in range(n_batches)]
-            current_edges_list = [subgraph(torch.as_tensor(nodes), edge_index)[0] for nodes in nodes_list]
-        else:
-            n_batches = 1
-            nodes_list = [np.arange(n_nodes)]
-            current_edges_list = [edge_index]
-        assert n_batches == 1, "T.T"
-
-        edge_hash_list = [create_hash({"current_edges": current_edges, "n_nodes": n_nodes})
-                          for current_edges in current_edges_list]
-        n_current_edges_list = [current_edges.size(1) for current_edges in current_edges_list]
-        n_neg_edges_list = [min(max_n_neg_edges, n_current_edges, n_possible_edges - n_current_edges)
-                            for n_current_edges in n_current_edges_list]
-
-        neg_edges_list = []
-        for edge_hash, n_neg_edges, nodes in zip(edge_hash_list, n_neg_edges_list, nodes_list):
-
-            if n_nodes > 10000:  # Scalability
-                n_sample_nodes = int(sqrt(self.possible_edges_factor * n_neg_edges)) + 1
-                nodes_x = np.random.choice(nodes, n_sample_nodes, replace=False)
-                nodes_y = np.random.choice(nodes, n_sample_nodes, replace=False)
-            else:
-                nodes_x, nodes_y = nodes, nodes
-
-            if edge_hash not in self.hash_to_neg_possible_edges:
-                node_pairs = get_cartesian(nodes_x, nodes_y)  # ndarray of [N^2, 2]
-                np.random.shuffle(node_pairs)
-                node_pairs = {tuple(sorted(e)) for e in node_pairs[:self.possible_edges_factor * n_neg_edges]}
-                neg_possible_edges = np.asarray(list(node_pairs - {tuple(e) for e in edge_index.t().numpy()}))
-                self.hash_to_neg_possible_edges[edge_hash] = neg_possible_edges
-            else:
-                neg_possible_edges = self.hash_to_neg_possible_edges[edge_hash]  # Use cached one.
-
-            np.random.shuffle(neg_possible_edges)
-            neg_edges = torch.as_tensor(neg_possible_edges[:n_neg_edges]).t()  # [neg_E(i), 2]
-            neg_edges_list.append(neg_edges)
-
-        neg_edges_index = torch.cat(neg_edges_list, dim=1)
-        return neg_edges_index
-
     def _get_raw_attention_of_negative_edges(self, neg_edge_index, x) -> torch.Tensor:
         """
         :param neg_edge_index: [2, neg_E]
         :param x: [N, heads * F]
-        :return: [neg_E, heads]
+        :return: [2, neg_E, heads]
         """
+
+        if neg_edge_index.size(1) <= 0:
+            return torch.zeros((2, 0, self.heads))
+
         neg_edge_index_j, neg_edge_index_i = neg_edge_index  # [neg_E]
         x_i = torch.index_select(x, 0, neg_edge_index_i)  # [neg_E, heads * F]
         x_j = torch.index_select(x, 0, neg_edge_index_j)  # [neg_E, heads * F]
@@ -227,7 +234,6 @@ class ExplicitGAT(MessagePassing):
 
         alpha, raw_alpha = self._get_attention(neg_edge_index_i, x_i, x_j, size_i)
         return raw_alpha
-
 
     def __repr__(self):
         return '{}({}, {}, heads={})'.format(self.__class__.__name__,
