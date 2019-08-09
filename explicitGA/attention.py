@@ -139,7 +139,6 @@ class ExplicitGAT(MessagePassing):
         propagated = self.propagate(edge_index, size=size, x=x)
 
         if self.training and self.is_explicit:
-            time_mark = time.time()
             neg_edge_index = batch_negative_sampling(
                 pos_edge_index=edge_index,
                 num_nodes=x.size(0),
@@ -151,7 +150,6 @@ class ExplicitGAT(MessagePassing):
             total_alpha = torch.cat([self.cached_alpha, neg_alpha], dim=-2)  # [2, E + neg_E, heads]
             reduced_alpha = total_alpha.mean(dim=-1)  # [2, E + neg_E]
             target_alpha = torch.nn.LogSoftmax(dim=1)(reduced_alpha.t())  # [E + neg_E, 2]
-            cprint("sample time: {}".format(time.time() - time_mark), "red")
         else:
             target_alpha = None
 
