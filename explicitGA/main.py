@@ -78,7 +78,7 @@ def get_l1_l2_regularizer(params, l1_lambda=0., l2_lambda=0.) -> torch.Tensor:
     loss_reg: torch.Tensor = 0.
     if l1_lambda != 0.:
         loss_reg += l1_lambda * sum([torch.norm(p, 1) for p in params])
-    if l1_lambda != 0.:
+    if l2_lambda != 0.:
         loss_reg += l2_lambda * sum([torch.norm(p, 2) for p in params])
     return loss_reg
 
