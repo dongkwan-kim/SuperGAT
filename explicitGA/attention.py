@@ -74,8 +74,8 @@ def batch_negative_sampling(pos_edge_index: torch.Tensor,
 class ExplicitGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_explicit=True, possible_edges_factor: int = None,
-                 att_criterion: str = None, **kwargs):
+                 is_explicit=True, att_criterion: str = None,
+                 att_head_type: str = None, att_hidden_features: int = None, **kwargs):
         super(ExplicitGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
@@ -85,13 +85,19 @@ class ExplicitGAT(MessagePassing):
         self.negative_slope = negative_slope
         self.dropout = dropout
         self.is_explicit = is_explicit
-        self.possible_edges_factor = possible_edges_factor
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
-        self.att_base = Parameter(torch.Tensor(out_channels, heads, 2 * out_channels))
-        self.att_out_1 = Parameter(torch.Tensor(1, out_channels, heads))
-        self.att_out_2 = Parameter(torch.Tensor(2, out_channels, heads))
         self.att_criterion = att_criterion
+        self.att_head_type = att_head_type
+        self.att_hidden_features = att_hidden_features
+        if self.att_head_type == "multi":
+            self.att_base = Parameter(torch.Tensor(att_hidden_features, heads, 2 * out_channels))
+            self.att_out_1 = Parameter(torch.Tensor(1, att_hidden_features, heads))
+            self.att_out_2 = Parameter(torch.Tensor(2, att_hidden_features, heads))
+        else:
+            self.att_base = Parameter(torch.Tensor(2, heads, 2 * out_channels))
+            self.att_out_1 = Parameter(torch.Tensor(1, 2, heads))
+            self.att_out_2 = None
 
         if bias and concat:
             self.bias = Parameter(torch.Tensor(heads * out_channels))
@@ -159,18 +165,23 @@ class ExplicitGAT(MessagePassing):
         :return: [E, heads], [2, E, heads]
         """
         # Compute attention coefficients.
-        # [E, heads, 2F] * [F, heads, 2F] -> [F, E, heads]
-        hidden_alpha = torch.einsum("ehf,phf->peh",
-                                    torch.cat([x_i, x_j], dim=-1),
-                                    self.att_base)
 
-        # Attention, [F, E, heads] * [1, F, heads] -> [E, heads]
-        alpha_1 = torch.einsum("feh,pfh->eh", hidden_alpha, self.att_out_1)
-        alpha_1 = F.leaky_relu(alpha_1, self.negative_slope)
-        alpha_1 = softmax(alpha_1, edge_index_i, size_i)
+        # [E, heads, 2F] * [2, heads, 2F] -> [2, E, heads]
+        alpha_2 = torch.einsum("ehf,phf->peh",
+                               torch.cat([x_i, x_j], dim=-1),
+                               self.att_base)
 
-        # Link prediction, [F, E, heads] * [2, F, heads] -> [2, E, heads]
-        alpha_2 = torch.einsum("feh,pfh->peh", hidden_alpha, self.att_out_2)
+        if self.att_head_type == "multi":
+            # Attention, [2, E, heads] * [1, 2, heads] -> [E, heads]
+            alpha_1 = torch.einsum("feh,pfh->eh", alpha_2, self.att_out_1)
+            alpha_1 = F.leaky_relu(alpha_1, self.negative_slope)
+            alpha_1 = softmax(alpha_1, edge_index_i, size_i)
+
+            # Link prediction, [F=2, E, heads] * [2, F=2, heads] -> [2, E, heads]
+            alpha_2 = torch.einsum("feh,pfh->peh", alpha_2, self.att_out_2)
+        else:
+            # Attention, [2, E, heads] * [1, 2, heads] -> [E, heads]
+            alpha_1 = torch.einsum("feh,pfh->eh", alpha_2, self.att_out_1)
 
         return alpha_1, alpha_2
 
