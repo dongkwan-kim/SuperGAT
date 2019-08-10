@@ -1,15 +1,18 @@
-GAT-Cora: &GAT-Cora
+DEFAULT: &DEFAULT
   model_name: GAT
+  head: 8
+  save_model: False
+
+GAT-Cora: &GAT-Cora
+  <<: *DEFAULT
   task_type: Node
   val_interval: 2
-  head: 8
   num_hidden_features: 32
 
 GAT-Cora-NE:
   <<: *GAT-Cora
   epochs: 500
   l2_lambda: 7.2e-05
-  save_model: False
   dropout: 0.6
   is_explicit: False
 
@@ -17,8 +20,7 @@ GAT-Cora-E: &GAT-Cora-E
   <<: *GAT-Cora
   epochs: 500
   is_explicit: True
-  save_model: False
-  possible_edges_factor: 75
+  att_hidden_features: 2
 
 GAT-Cora-EV1:
   <<: *GAT-Cora-E
@@ -26,20 +28,27 @@ GAT-Cora-EV1:
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.NLLLoss()
+  att_head_type: multi
+
+GAT-Cora-EV2:
+  <<: *GAT-Cora-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.NLLLoss()
+  att_head_type: uni
 
 
 GAT-CiteSeer: &GAT-CiteSeer
-  model_name: GAT
+  <<: *DEFAULT
   task_type: Node
   val_interval: 2
-  head: 8
   num_hidden_features: 32
 
 GAT-CiteSeer-NE:
   <<: *GAT-CiteSeer
   epochs: 500
   l2_lambda: 7.2e-05
-  save_model: False
   dropout: 0.6
   is_explicit: False
 
@@ -47,8 +56,7 @@ GAT-CiteSeer-E: &GAT-CiteSeer-E
   <<: *GAT-CiteSeer
   epochs: 500
   is_explicit: True
-  save_model: False
-  possible_edges_factor: 75
+  att_hidden_features: 2
 
 GAT-CiteSeer-EV1:
   <<: *GAT-CiteSeer-E
@@ -56,20 +64,27 @@ GAT-CiteSeer-EV1:
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.NLLLoss()
+  att_head_type: multi
+
+GAT-CiteSeer-EV2:
+  <<: *GAT-CiteSeer-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.NLLLoss()
+  att_head_type: uni
 
 
 GAT-PubMed: &GAT-PubMed
-  model_name: GAT
+  <<: *DEFAULT
   task_type: Node
   val_interval: 2
-  head: 8
   num_hidden_features: 32
 
 GAT-PubMed-NE:
   <<: *GAT-PubMed
   epochs: 500
   l2_lambda: 7.2e-05
-  save_model: False
   dropout: 0.6
   is_explicit: False
 
@@ -77,44 +92,58 @@ GAT-PubMed-E: &GAT-PubMed-E
   <<: *GAT-PubMed
   epochs: 500
   is_explicit: True
-  save_model: False
-  possible_edges_factor: 100
+  att_hidden_features: 2
 
 GAT-PubMed-EV1:
   <<: *GAT-PubMed-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
-  att_criterion: nn.CrossEntropyLoss()
+  att_criterion: nn.NLLLoss()
+  att_head_type: multi
 
-
-GAT-PTC_MR: &GAT-PTC_MR
-  model_name: GAT
-  task_type: Graph
-  val_interval: 2
-  head: 8
-  num_hidden_features: 32
-  batch_size: 128
-  pool_name: global_mean_pool
-
-GAT-PTC_MR-NE:
-  <<: *GAT-PTC_MR
-  epochs: 500
-  l2_lambda: 7.2e-05
-  save_model: False
-  dropout: 0.6
-  is_explicit: False
-
-GAT-PTC_MR-E: &GAT-PTC_MR-E
-  <<: *GAT-PTC_MR
-  epochs: 500
-  is_explicit: True
-  save_model: False
-  possible_edges_factor: 75
-
-GAT-PTC_MR-EV1:
-  <<: *GAT-PTC_MR-E
+GAT-PubMed-EV2:
+  <<: *GAT-PubMed-E
   l2_lambda: 7.2e-05
   dropout: 0.6
   att_lambda: 0.0467
   att_criterion: nn.NLLLoss()
+  att_head_type: uni
+
+
+GAT-NCI1: &GAT-NCI1
+  <<: *DEFAULT
+  task_type: Graph
+  val_interval: 2
+  num_hidden_features: 32
+  batch_size: 128
+  pool_name: global_mean_pool
+
+GAT-NCI1-NE:
+  <<: *GAT-NCI1
+  epochs: 500
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  is_explicit: False
+
+GAT-NCI1-E: &GAT-NCI1-E
+  <<: *GAT-NCI1
+  epochs: 500
+  is_explicit: True
+  att_hidden_features: 2
+
+GAT-NCI1-EV1:
+  <<: *GAT-NCI1-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.NLLLoss()
+  att_head_type: multi
+
+GAT-NCI1-EV2:
+  <<: *GAT-NCI1-E
+  l2_lambda: 7.2e-05
+  dropout: 0.6
+  att_lambda: 0.0467
+  att_criterion: nn.NLLLoss()
+  att_head_type: uni

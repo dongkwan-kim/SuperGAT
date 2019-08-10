@@ -42,8 +42,9 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--head", default=4, type=int)
     parser.add_argument("--pool-name", default=None)
     parser.add_argument("--is-explicit", default=True, type=bool)
-    parser.add_argument("--possible-edges-factor", default=0, type=int)
     parser.add_argument("--att-criterion", default=None)
+    parser.add_argument("--att-hidden-features", default=None, type=int)
+    parser.add_argument("--att-head-type", default=None, type=str)
 
     # Test
     parser.add_argument("--val-interval", default=10)
@@ -69,6 +70,8 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "dropout",
         "att_lambda",
         "att_criterion",
+        "att_hidden_features",
+        "att_head_type",
     ]
     ret = {}
     for ia_key in important_args:
