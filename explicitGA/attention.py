@@ -74,8 +74,7 @@ def batch_negative_sampling(pos_edge_index: torch.Tensor,
 class ExplicitGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_explicit=True, att_criterion: str = None,
-                 att_head_type: str = None, att_hidden_features: int = None, **kwargs):
+                 is_explicit=True, **kwargs):
         super(ExplicitGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
@@ -87,22 +86,15 @@ class ExplicitGAT(MessagePassing):
         self.is_explicit = is_explicit
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
-        self.att_criterion = att_criterion
-        self.att_head_type = att_head_type
-        self.att_hidden_features = att_hidden_features
+
+        self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
         if self.is_explicit:
-            if self.att_head_type == "multi":
-                self.att_base = Parameter(torch.Tensor(att_hidden_features, heads, 2 * out_channels))
-                self.att_out_1 = Parameter(torch.Tensor(1, att_hidden_features, heads))
-                self.att_out_2 = Parameter(torch.Tensor(2, att_hidden_features, heads))
-            else:
-                self.att_base = Parameter(torch.Tensor(att_hidden_features, heads, 2 * out_channels))
-                self.att_out_2 = Parameter(torch.Tensor(2, att_hidden_features, heads))
-                self.att_out_1 = Parameter(torch.Tensor(1, 2, heads))
+            self.att_scaling = Parameter(torch.Tensor(heads))
+            self.att_bias = Parameter(torch.Tensor(heads))
         else:
-            self.att_base = Parameter(torch.Tensor(att_hidden_features, heads, 2 * out_channels))
-            self.att_out_1 = Parameter(torch.Tensor(1, att_hidden_features))
-            self.att_out_2 = None
+            self.att_scaling, self.att_bias = None, None
+
+        self.cached_pos_alpha = None
 
         if bias and concat:
             self.bias = Parameter(torch.Tensor(heads * out_channels))
@@ -111,26 +103,16 @@ class ExplicitGAT(MessagePassing):
         else:
             self.register_parameter('bias', None)
 
-        self.cached_alpha_2 = None
-
         self.reset_parameters()
 
     def reset_parameters(self):
         tgi.glorot(self.weight)
         tgi.zeros(self.bias)
-        tgi.glorot(self.att_base)
+        tgi.glorot(self.att)
+        tgi.ones(self.att_scaling)
+        tgi.zeros(self.att_bias)
 
-        if self.att_out_1 is not None and len(self.att_out_1.size()) > 1:
-            tgi.glorot(self.att_out_1)
-        else:
-            tgi.ones(self.att_out_1)
-
-        if self.att_out_2 is not None and len(self.att_out_2.size()) > 1:
-            tgi.glorot(self.att_out_2)
-        else:
-            tgi.zeros(self.att_out_2)
-
-    def forward(self, x, edge_index, size=None, batch=None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x, edge_index, size=None, batch=None):
         """
         :param x: [N, F]
         :param edge_index: [2, E]
@@ -138,6 +120,8 @@ class ExplicitGAT(MessagePassing):
         :param batch: None or [B]
         :return:
         """
+        residuals = {}
+
         if size is None and torch.is_tensor(x):
             edge_index, _ = remove_self_loops(edge_index)
             edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
@@ -157,64 +141,19 @@ class ExplicitGAT(MessagePassing):
                 num_nodes=x.size(0),
                 batch=batch,
             )
-            # noinspection PyTypeChecker
-            neg_alpha = self._get_negative_edge_att2(neg_edge_index=neg_edge_index, x=x)  # [2, neg_E, heads]
-            total_alpha_2 = torch.cat([self.cached_alpha_2, neg_alpha], dim=-2)  # [2, E + neg_E, heads]
-            #total_alpha_2 = total_alpha_2.mean(dim=-1)  # [2, E + neg_E]
-            total_alpha_2 = total_alpha_2.max(dim=-1)[0]
-            total_alpha_2 = torch.nn.LogSoftmax(dim=1)(total_alpha_2.t())  # [E + neg_E, 2]
-        else:
-            total_alpha_2 = None
+            total_alpha = self._get_attention_with_negatives(
+                edge_index=edge_index,
+                neg_edge_index=neg_edge_index,
+                x=x,
+            )  # [E + neg_E, heads]
+            total_alpha = self.att_scaling * total_alpha + self.att_bias
+            residuals = {
+                "total_alpha": total_alpha,
+                "pos_alpha": self.cached_pos_alpha,
+                **residuals,
+            }
 
-        self.cached_alpha_2 = None
-
-        return propagated, total_alpha_2
-
-    def _get_attention(self, edge_index_i, x_i, x_j, size_i) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        :param edge_index_i: [E]
-        :param x_i: [E, heads, F]
-        :param x_j: [E, heads, F]
-        :param size_i: N
-        :return: [E, heads], [2, E, heads]
-        """
-
-        # Compute attention coefficients.
-
-        # [E, heads, 2F] * [X=1~, heads, 2F] -> [X=1~, E, heads]
-        alpha_base = torch.einsum("ehf,xhf->xeh",
-                                  torch.cat([x_i, x_j], dim=-1),
-                                  self.att_base)
-
-        if not self.is_explicit:
-            # Attention, [X, E, heads] * [1, X] -> [E, heads]
-            alpha_1 = torch.einsum("xeh,px->eh", alpha_base, self.att_out_1)
-            alpha_2 = None
-
-        elif self.att_head_type == "multi":
-
-            alpha_base = torch.tanh(alpha_base)
-            alpha_base = F.dropout(alpha_base, p=0.5, training=self.training)
-
-            # Link prediction, [X, E, heads] * [2, X, heads] -> [2, E, heads]
-            alpha_2 = torch.einsum("xeh,pxh->peh", alpha_base, self.att_out_2)
-
-            # Attention, [X, E, heads] * [1, X, heads] -> [E, heads]
-            alpha_1 = torch.einsum("xeh,pxh->eh", alpha_base, self.att_out_1)
-        else:
-
-            alpha_base = F.dropout(alpha_base, p=0.5, training=self.training)
-
-            # Link prediction, [X, E, heads] * [2, X, heads] -> [2, E, heads]
-            alpha_2 = torch.einsum("xeh,pxh->peh", alpha_base, self.att_out_2)
-
-            # Attention, [2, E, heads] * [1, 2, heads] -> [E, heads]
-            alpha_1 = torch.einsum("xeh,pxh->eh", alpha_2, self.att_out_1)
-
-        alpha_1 = F.leaky_relu(alpha_1, self.negative_slope)
-        alpha_1 = softmax(alpha_1, edge_index_i, size_i)
-
-        return alpha_1, alpha_2
+        return propagated, residuals
 
     def message(self, edge_index_i, x_i, x_j, size_i):
         """
@@ -229,10 +168,9 @@ class ExplicitGAT(MessagePassing):
             x_i = x_i.view(-1, self.heads, self.out_channels)  # [E, heads, F]
 
         # Compute attention coefficients. [E, heads]
-        alpha_1, alpha_2 = self._get_attention(edge_index_i, x_i, x_j, size_i)
+        alpha_1 = self._get_attention(edge_index_i, x_i, x_j, size_i)
 
-        # Caching
-        self.cached_alpha_2 = alpha_2
+        self.cached_pos_alpha = alpha_1
 
         # Sample attention coefficients stochastically.
         alpha_1 = F.dropout(alpha_1, p=self.dropout, training=self.training)
@@ -254,27 +192,50 @@ class ExplicitGAT(MessagePassing):
             aggr_out = aggr_out + self.bias
         return aggr_out
 
-    def _get_negative_edge_att2(self, neg_edge_index, x) -> torch.Tensor:
+    def _get_attention(self, edge_index_i, x_i, x_j, size_i) -> torch.Tensor:
         """
+        :param edge_index_i: [E]
+        :param x_i: [E, heads, F]
+        :param x_j: [E, heads, F]
+        :param size_i: N
+        :return: [E, heads], [2, E, heads]
+        """
+
+        # Compute attention coefficients.
+
+        # [E, heads, 2F] * [1, heads, 2F] -> [E, heads]
+        alpha_1 = torch.einsum("ehf,xhf->eh",
+                               torch.cat([x_i, x_j], dim=-1),
+                               self.att)
+        alpha_1 = F.leaky_relu(alpha_1, self.negative_slope)
+        alpha_1 = softmax(alpha_1, edge_index_i, size_i)
+
+        return alpha_1
+
+    def _get_attention_with_negatives(self, edge_index, neg_edge_index, x):
+        """
+        :param edge_index: [2, E]
         :param neg_edge_index: [2, neg_E]
         :param x: [N, heads * F]
-        :return: [2, neg_E, heads]
+        :return: [1, E + neg_E, heads]
         """
+
+        total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
 
         if neg_edge_index.size(1) <= 0:
             return torch.zeros((2, 0, self.heads))
 
-        neg_edge_index_j, neg_edge_index_i = neg_edge_index  # [neg_E]
-        x_i = torch.index_select(x, 0, neg_edge_index_i)  # [neg_E, heads * F]
-        x_j = torch.index_select(x, 0, neg_edge_index_j)  # [neg_E, heads * F]
+        total_edge_index_j, total_edge_index_i = total_edge_index  # [E + neg_E]
+        x_i = torch.index_select(x, 0, total_edge_index_i)  # [E + neg_E, heads * F]
+        x_j = torch.index_select(x, 0, total_edge_index_j)  # [E + neg_E, heads * F]
         size_i = x.size(0)  # N
 
-        x_j = x_j.view(-1, self.heads, self.out_channels)  # [E, heads, F]
+        x_j = x_j.view(-1, self.heads, self.out_channels)  # [E + neg_E, heads, F]
         if x_i is not None:
-            x_i = x_i.view(-1, self.heads, self.out_channels)  # [E, heads, F]
+            x_i = x_i.view(-1, self.heads, self.out_channels)  # [E + neg_E, heads, F]
 
-        alpha_1, alpha_2 = self._get_attention(neg_edge_index_i, x_i, x_j, size_i)
-        return alpha_2
+        alpha_1 = self._get_attention(total_edge_index_i, x_i, x_j, size_i)
+        return alpha_1
 
     def __repr__(self):
         return '{}({}, {}, heads={})'.format(self.__class__.__name__,

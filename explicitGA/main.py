@@ -85,25 +85,27 @@ def get_l1_l2_regularizer(params, l1_lambda=0., l2_lambda=0.) -> torch.Tensor:
 
 def get_explicit_attention_loss(explicit_attention_list: List[torch.Tensor],
                                 num_pos_samples: int,
-                                criterion_cls,
+                                dropout_explicit_att: float,
                                 att_lambda: float) -> torch.Tensor:
 
-    criterion = eval(criterion_cls)
+    criterion = nn.BCEWithLogitsLoss()
 
     loss_list = []
-    for att in explicit_attention_list:
+    for att_res in explicit_attention_list:
 
+        att = att_res["total_alpha"]
         att_size = att.size(0)
-        sample_att_size = int(att_size * 0.75)
+        sample_att_size = int(att_size * dropout_explicit_att)
 
-        link_as_y = torch.ones(att_size)
-        link_as_y[:num_pos_samples] = 0
-        link_as_y = link_as_y.long()
+        att = att.mean(dim=-1)  # [E + neg_E]
+
+        label = torch.zeros(att_size)
+        label[:num_pos_samples] = 1
+        label = label.float()
 
         permuted = torch.randperm(att_size)
 
-        loss = criterion(att[permuted][:sample_att_size],
-                         link_as_y[permuted][:sample_att_size])
+        loss = criterion(att[permuted][:sample_att_size], label[permuted][:sample_att_size])
         loss_list.append(loss)
 
     total_loss = att_lambda * sum(loss_list)
@@ -130,9 +132,10 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
 
         if _args.is_explicit:
             num_pos_samples = batch.edge_index.size(1) + batch.x.size(0)
-            loss += get_explicit_attention_loss(exp_att_list, num_pos_samples,
-                                                criterion_cls=_args.att_criterion,
-                                                att_lambda=_args.att_lambda)
+            loss += get_explicit_attention_loss(
+                exp_att_list, num_pos_samples,
+                att_lambda=_args.att_lambda, dropout_explicit_att=_args.dropout_explicit_att,
+            )
 
         loss += get_l1_l2_regularizer(model.parameters(), _args.l1_lambda, _args.l2_lambda)
 
@@ -249,7 +252,7 @@ def run(args):
 
 
 if __name__ == '__main__':
-    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV1")
+    main_args = get_args("GAT", "Planetoid", "CiteSeer", custom_key="EV1")
     pprint_args(main_args)
     # noinspection PyTypeChecker
     run(main_args)
