@@ -21,7 +21,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--seed", default=42)
 
     # Training
-    parser.add_argument('--lr', '--learning-rate', default=0.001, type=float,
+    parser.add_argument('--lr', '--learning-rate', default=0.0025, type=float,
                         metavar='LR', help='initial learning rate', dest='lr')
     parser.add_argument('--batch-size', default=128, type=int,
                         metavar='N',
@@ -43,8 +43,6 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--pool-name", default=None)
     parser.add_argument("--is-explicit", default=True, type=bool)
     parser.add_argument("--att-criterion", default=None)
-    parser.add_argument("--att-hidden-features", default=None, type=int)
-    parser.add_argument("--att-head-type", default=None, type=str)
 
     # Test
     parser.add_argument("--val-interval", default=10)
@@ -69,9 +67,6 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "head",
         "dropout",
         "att_lambda",
-        "att_criterion",
-        "att_hidden_features",
-        "att_head_type",
     ]
     ret = {}
     for ia_key in important_args:

@@ -13,30 +13,20 @@ GAT-Cora: &GAT-Cora
 
 GAT-Cora-NE:
   <<: *GAT-Cora
-  epochs: 200
-  l2_lambda: 0.11365803778882298  # 0.837
+  epochs: 1200
+  l2_lambda: 0.11365803778882298
   is_explicit: False
-  att_hidden_features: 8
 
 GAT-Cora-E: &GAT-Cora-E
   <<: *GAT-Cora
-  epochs: 600
+  epochs: 750
   is_explicit: True
-  att_hidden_features: 8
 
 GAT-Cora-EV1:
   <<: *GAT-Cora-E
-  l2_lambda: 0.1065803778882298  #
-  att_lambda: 3
-  att_criterion: nn.NLLLoss()
-  att_head_type: multi
-
-GAT-Cora-EV2:
-  <<: *GAT-Cora-E
-  l2_lambda: 0.11365803778882298  #
-  att_lambda: 1
-  att_criterion: nn.NLLLoss()
-  att_head_type: uni
+  l2_lambda: 0.09349381954790859
+  att_lambda: 10
+  dropout_explicit_att: 0.7
 
 
 GAT-CiteSeer: &GAT-CiteSeer
@@ -44,30 +34,23 @@ GAT-CiteSeer: &GAT-CiteSeer
   task_type: Node
   val_interval: 1
   num_hidden_features: 8
-  l2_lambda: 0.0005
 
 GAT-CiteSeer-NE:
   <<: *GAT-CiteSeer
-  epochs: 500
+  epochs: 200
+  l2_lambda: 0.11365803778882298
   is_explicit: False
 
 GAT-CiteSeer-E: &GAT-CiteSeer-E
   <<: *GAT-CiteSeer
-  epochs: 500
+  epochs: 750
   is_explicit: True
-  att_hidden_features: 2
 
 GAT-CiteSeer-EV1:
   <<: *GAT-CiteSeer-E
-  att_lambda: 0.0467
-  att_criterion: nn.NLLLoss()
-  att_head_type: multi
-
-GAT-CiteSeer-EV2:
-  <<: *GAT-CiteSeer-E
-  att_lambda: 0.0467
-  att_criterion: nn.NLLLoss()
-  att_head_type: uni
+  l2_lambda: 0.09349381954790859
+  att_lambda: 10
+  dropout_explicit_att: 0.7
 
 
 GAT-PubMed: &GAT-PubMed
@@ -75,59 +58,20 @@ GAT-PubMed: &GAT-PubMed
   task_type: Node
   val_interval: 1
   num_hidden_features: 8
-  l2_lambda: 0.001
 
 GAT-PubMed-NE:
   <<: *GAT-PubMed
-  epochs: 500
+  epochs: 200
+  l2_lambda: 0.11365803778882298
   is_explicit: False
 
 GAT-PubMed-E: &GAT-PubMed-E
   <<: *GAT-PubMed
-  epochs: 500
+  epochs: 750
   is_explicit: True
-  att_hidden_features: 2
 
 GAT-PubMed-EV1:
   <<: *GAT-PubMed-E
-  att_lambda: 0.0467
-  att_criterion: nn.NLLLoss()
-  att_head_type: multi
-
-GAT-PubMed-EV2:
-  <<: *GAT-PubMed-E
-  att_lambda: 0.0467
-  att_criterion: nn.NLLLoss()
-  att_head_type: uni
-
-
-GAT-NCI1: &GAT-NCI1
-  <<: *DEFAULT
-  task_type: Graph
-  val_interval: 1
-  num_hidden_features: 8
-  batch_size: 8
-  pool_name: global_mean_pool
-
-GAT-NCI1-NE:
-  <<: *GAT-NCI1
-  epochs: 500
-  is_explicit: False
-
-GAT-NCI1-E: &GAT-NCI1-E
-  <<: *GAT-NCI1
-  epochs: 500
-  is_explicit: True
-  att_hidden_features: 2
-
-GAT-NCI1-EV1:
-  <<: *GAT-NCI1-E
-  att_lambda: 0.0467
-  att_criterion: nn.NLLLoss()
-  att_head_type: multi
-
-GAT-NCI1-EV2:
-  <<: *GAT-NCI1-E
-  att_lambda: 0.0467
-  att_criterion: nn.NLLLoss()
-  att_head_type: uni
+  l2_lambda: 0.09349381954790859
+  att_lambda: 10
+  dropout_explicit_att: 0.7
