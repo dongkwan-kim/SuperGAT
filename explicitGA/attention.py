@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph
 
-from torch_geometric.nn.inits import glorot, zeros, ones
+import torch_geometric.nn.inits as tgi
 
 import time
 import random
@@ -90,14 +90,27 @@ class ExplicitGAT(MessagePassing):
         self.att_criterion = att_criterion
         self.att_head_type = att_head_type
         self.att_hidden_features = att_hidden_features
-        if self.att_head_type == "multi":
-            self.att_base = Parameter(torch.Tensor(att_hidden_features, heads, 2 * out_channels))
-            self.att_out_1 = Parameter(torch.Tensor(1, att_hidden_features, heads))
-            self.att_out_2 = Parameter(torch.Tensor(2, att_hidden_features, heads))
+        if self.is_explicit:
+            if self.att_head_type == "multi":
+                self.att_base = Parameter(torch.Tensor(att_hidden_features, heads, 2 * out_channels))
+                self.att_base_bias = Parameter(torch.Tensor(att_hidden_features, heads))
+                self.att_out_1 = Parameter(torch.Tensor(1, att_hidden_features))
+                self.att_out_2 = Parameter(torch.Tensor(2, att_hidden_features))
+                self.att_out_bias_1 = Parameter(torch.Tensor(1))
+                self.att_out_bias_2 = Parameter(torch.Tensor(2))
+            else:
+                self.att_base = Parameter(torch.Tensor(att_hidden_features, heads, 2 * out_channels))
+                self.att_base_bias = Parameter(torch.Tensor(att_hidden_features, heads))
+                self.att_out_2 = Parameter(torch.Tensor(2, att_hidden_features))
+                self.att_out_1 = Parameter(torch.Tensor(1, 2))
+                self.att_out_bias_1 = Parameter(torch.Tensor(1))
+                self.att_out_bias_2 = Parameter(torch.Tensor(2))
         else:
-            self.att_base = Parameter(torch.Tensor(2, heads, 2 * out_channels))
-            self.att_out_1 = Parameter(torch.Tensor(1, 2, heads))
+            self.att_base = Parameter(torch.Tensor(att_hidden_features, heads, 2 * out_channels))
+            self.att_base_bias = Parameter(torch.Tensor(att_hidden_features, heads))
+            self.att_out_1 = Parameter(torch.Tensor(1, att_hidden_features))
             self.att_out_2 = None
+            self.att_out_bias_1, self.att_out_bias_2 = None, None
 
         if bias and concat:
             self.bias = Parameter(torch.Tensor(heads * out_channels))
@@ -111,11 +124,22 @@ class ExplicitGAT(MessagePassing):
         self.reset_parameters()
 
     def reset_parameters(self):
-        glorot(self.weight)
-        glorot(self.att_base)
-        glorot(self.att_out_1)
-        glorot(self.att_out_2)
-        zeros(self.bias)
+        tgi.glorot(self.weight)
+        tgi.zeros(self.bias)
+        tgi.glorot(self.att_base)
+        tgi.zeros(self.att_base_bias)
+        tgi.zeros(self.att_out_bias_1)
+        tgi.zeros(self.att_out_bias_2)
+
+        if self.att_out_1 is not None and len(self.att_out_1.size()) > 1:
+            tgi.glorot(self.att_out_1)
+        else:
+            tgi.ones(self.att_out_1)
+
+        if self.att_out_2 is not None and len(self.att_out_2.size()) > 1:
+            tgi.glorot(self.att_out_2)
+        else:
+            tgi.zeros(self.att_out_2)
 
     def forward(self, x, edge_index, size=None, batch=None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -164,24 +188,45 @@ class ExplicitGAT(MessagePassing):
         :param size_i: N
         :return: [E, heads], [2, E, heads]
         """
+
+        def _add_bias(tensor_peh_or_eh, tensor_p):
+            if len(tensor_peh_or_eh.size()) == 3:
+                return (tensor_peh_or_eh.permute((1, 2, 0)) + tensor_p).permute((2, 0, 1))
+            else:
+                return (tensor_peh_or_eh.permute((1, 0)) + tensor_p).permute((1, 0))
+
         # Compute attention coefficients.
 
-        # [E, heads, 2F] * [2, heads, 2F] -> [2, E, heads]
-        alpha_2 = torch.einsum("ehf,phf->peh",
-                               torch.cat([x_i, x_j], dim=-1),
-                               self.att_base)
+        # [E, heads, 2F] * [X=1~, heads, 2F] -> [X=1~, E, heads]
+        alpha_base = torch.einsum("ehf,xhf->xeh",
+                                  torch.cat([x_i, x_j], dim=-1),
+                                  self.att_base)
+        alpha_base = _add_bias(alpha_base, self.att_base_bias.t())
 
-        if self.att_head_type == "multi":
-            # Attention, [2, E, heads] * [1, 2, heads] -> [E, heads]
-            alpha_1 = torch.einsum("feh,pfh->eh", alpha_2, self.att_out_1)
-            alpha_1 = F.leaky_relu(alpha_1, self.negative_slope)
-            alpha_1 = softmax(alpha_1, edge_index_i, size_i)
+        if not self.is_explicit:
+            # Attention, [X, E, heads] * [1, X] -> [E, heads]
+            alpha_1 = torch.einsum("xeh,px->eh", alpha_base, self.att_out_1)
+            alpha_2 = None
 
-            # Link prediction, [F=2, E, heads] * [2, F=2, heads] -> [2, E, heads]
-            alpha_2 = torch.einsum("feh,pfh->peh", alpha_2, self.att_out_2)
+        elif self.att_head_type == "multi":
+            # Link prediction, [X, E, heads] * [2, X] -> [2, E, heads]
+            alpha_2 = torch.einsum("xeh,px->peh", alpha_base, self.att_out_2)
+            alpha_2 = _add_bias(alpha_2, self.att_out_bias_2)
+
+            # Attention, [X, E, heads] * [1, X] -> [E, heads]
+            alpha_1 = torch.einsum("xeh,px->eh", alpha_base, self.att_out_1)
+            alpha_1 = _add_bias(alpha_1, self.att_out_bias_1)
         else:
-            # Attention, [2, E, heads] * [1, 2, heads] -> [E, heads]
-            alpha_1 = torch.einsum("feh,pfh->eh", alpha_2, self.att_out_1)
+            # Link prediction, [X, E, heads] * [2, X] -> [2, E, heads]
+            alpha_2 = torch.einsum("xeh,px->peh", alpha_base, self.att_out_2)
+            alpha_2 = _add_bias(alpha_2, self.att_out_bias_2)
+
+            # Attention, [2, E, heads] * [1, 2] -> [E, heads]
+            alpha_1 = torch.einsum("xeh,px->eh", alpha_2, self.att_out_1)
+            alpha_1 = _add_bias(alpha_1, self.att_out_bias_1)
+
+        alpha_1 = F.leaky_relu(alpha_1, self.negative_slope)
+        alpha_1 = softmax(alpha_1, edge_index_i, size_i)
 
         return alpha_1, alpha_2
 

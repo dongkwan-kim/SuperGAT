@@ -71,40 +71,36 @@ class GATNet(torch.nn.Module):
             att_hidden_features=args.att_hidden_features,
         )
 
-        num_input_features *= args.head
         self.conv2 = attention_layer(
-            args.num_hidden_features * args.head, args.num_hidden_features,
-            heads=args.head, dropout=0., is_explicit=args.is_explicit,
+            args.num_hidden_features * args.head, num_classes,
+            heads=1, dropout=0.6, is_explicit=args.is_explicit,
             att_criterion=args.att_criterion, att_head_type=args.att_head_type,
             att_hidden_features=args.att_hidden_features,
         )
 
         if args.pool_name is not None:
             self.pool = _to_pool_cls(args.pool_name)
-
-        self.fc = nn.Sequential(
-            nn.Linear(args.head * args.num_hidden_features, args.head * args.num_hidden_features),
-            nn.ReLU(inplace=True),
-            nn.Dropout(),
-            nn.Linear(args.head * args.num_hidden_features, num_classes),
-        )
+            self.fc = nn.Linear(num_classes, num_classes)
 
     def forward(self, x, edge_index, batch=None) -> Tuple[torch.Tensor, None or List[torch.Tensor]]:
 
-        x, att1 = self.conv1(x, edge_index, batch=batch)
+        x = F.dropout(x, p=0.6, training=self.training)
+        x, att1 = self.conv1(x, edge_index)
         x = F.elu(x)
 
         if _inspect_attention_tensor(x, edge_index, att1):
             # print(self.conv1.att_scaling, self.conv1.att_bias)
             pass
 
-        x, att2 = self.conv2(x, edge_index, batch=batch)
+        x = F.dropout(x, p=0.6, training=self.training)
+        x, att2 = self.conv2(x, edge_index)
         x = F.elu(x)
 
         if self.args.pool_name is not None:
             x = self.pool(x, batch)
+            x = self.fc(x)
 
-        x = self.fc(x)
+        x = F.log_softmax(x, dim=1)
 
         explicit_attentions = [att1, att2] if att1 is not None else None
 

@@ -203,12 +203,12 @@ def run(args):
         best_acc = other_state_dict["perf"]
         args.start_epoch = other_state_dict["epoch"]
 
-    cross_entropy = nn.CrossEntropyLoss()
+    nll_loss = nn.NLLLoss()
     adam_optim = optim.Adam(net.parameters(), lr=args.lr)
 
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
-        train_loss = train_model(dev, net, train_d, cross_entropy, adam_optim, _args=args)
+        train_loss = train_model(dev, net, train_d, nll_loss, adam_optim, _args=args)
 
         if epoch % args.val_interval == 0:
             print("\n\t- Train loss: {}".format(train_loss))
@@ -216,7 +216,7 @@ def run(args):
         # Validation.
         if epoch % args.val_interval == 0 and epoch >= args.val_interval * 0:
 
-            acc = test_model(dev, net, val_d or train_d, cross_entropy, _args=args)
+            acc = test_model(dev, net, val_d or train_d, nll_loss, _args=args)
 
             # Update best_acc
             if acc > best_acc:
