@@ -146,7 +146,7 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
     return total_loss
 
 
-def test_model(device, model, dataset_or_loader, criterion, _args):
+def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="val", verbose=True):
 
     model.eval()
 
@@ -163,9 +163,10 @@ def test_model(device, model, dataset_or_loader, criterion, _args):
 
             # Loss
             if "train_mask" in batch.__dict__:
-                loss = criterion(outputs[batch.test_mask], batch.y[batch.test_mask])
-                outputs_ndarray = outputs[batch.test_mask].cpu().numpy()
-                ys_ndarray = to_one_hot(batch.y[batch.test_mask], num_classes)
+                val_or_test_mask = batch.val_mask if val_or_test == "val" else batch.test_mask
+                loss = criterion(outputs[val_or_test_mask], batch.y[val_or_test_mask])
+                outputs_ndarray = outputs[val_or_test_mask].cpu().numpy()
+                ys_ndarray = to_one_hot(batch.y[val_or_test_mask], num_classes)
             else:
                 loss = criterion(outputs, batch.y)
                 outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), to_one_hot(batch.y, num_classes)
@@ -177,8 +178,9 @@ def test_model(device, model, dataset_or_loader, criterion, _args):
     outputs_total, ys_total = np.concatenate(outputs_list), np.concatenate(ys_list)
     accuracy = get_accuracy(outputs_total, ys_total)
 
-    cprint("\nTest: {}".format(model.__class__.__name__), "yellow")
-    cprint("\t- Accuracy: {}".format(accuracy), "yellow")
+    if verbose:
+        cprint("\n{}: {}".format(val_or_test, model.__class__.__name__), "yellow")
+        cprint("\t- Accuracy: {}".format(accuracy), "yellow")
 
     return accuracy
 
@@ -189,7 +191,9 @@ def run(args):
 
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    best_acc = 0.
+    best_val_acc = 0.
+    test_acc_at_best_val = 0.
+    best_test_acc = 0.
     prev_acc_deque = deque(maxlen=4)
 
     train_d, val_d, test_d = get_dataset_or_loader(
@@ -203,7 +207,7 @@ def run(args):
     loaded = load_model(net, args, target_epoch=None)
     if loaded is not None:
         net, other_state_dict = loaded
-        best_acc = other_state_dict["perf"]
+        best_val_acc = other_state_dict["perf"]
         args.start_epoch = other_state_dict["epoch"]
 
     nll_loss = nn.NLLLoss()
@@ -219,40 +223,53 @@ def run(args):
         # Validation.
         if epoch % args.val_interval == 0 and epoch >= args.val_interval * 0:
 
-            acc = test_model(dev, net, val_d or train_d, nll_loss, _args=args)
+            val_acc = test_model(dev, net, val_d or train_d, nll_loss, _args=args, val_or_test="val", verbose=True)
+            test_acc = test_model(dev, net, test_d or train_d, nll_loss, _args=args, val_or_test="test", verbose=False)
 
-            # Update best_acc
-            if acc > best_acc:
-                best_acc = acc
-                cprint("\t- Best Accuracy: {} [NEW]".format(best_acc), "yellow")
+            if test_acc > best_test_acc:
+                best_test_acc = test_acc
+
+            # Update best_val_acc
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                test_acc_at_best_val = test_acc
+                cprint("\t- Best Val Accuracy: {} [NEW]".format(best_val_acc), "yellow")
+                cprint("\t- Test Accuracy: {} (current)".format(test_acc), "yellow")
+                cprint("\t- Test Accuracy: {} (best)".format(best_test_acc), "yellow")
+                cprint("\t- Test Accuracy: {} (at best val)".format(test_acc_at_best_val), "yellow")
                 if args.save_model:
-                    save_model(net, args, target_epoch=epoch, perf=acc)
+                    save_model(net, args, target_epoch=epoch, perf=val_acc)
             else:
-                print("\t- Best Accuracy: {}".format(best_acc))
+                print("\t- Best Val Accuracy: {}".format(best_val_acc))
+                print("\t- Test Accuracy: {}".format(test_acc))
+                print("\t- Test Accuracy: {} (best)".format(best_test_acc))
+                print("\t- Test Accuracy: {} (at best val)".format(test_acc_at_best_val))
 
             # Check early stop condition
             if args.early_stop and current_iter > args.epochs // 3:
                 recent_prev_acc_mean = float(np.mean(prev_acc_deque))
-                acc_change = abs(recent_prev_acc_mean - acc) / recent_prev_acc_mean
+                acc_change = abs(recent_prev_acc_mean - val_acc) / recent_prev_acc_mean
                 if acc_change < args.early_stop_threshold:
                     cprint("Early stopped: acc_change is {}% < {}% at {} | {} -> {}".format(
-                        round(acc_change, 6), args.early_stop_threshold, epoch, recent_prev_acc_mean, acc), "red")
+                        round(acc_change, 6), args.early_stop_threshold, epoch, recent_prev_acc_mean, val_acc), "red")
                     break
-                elif recent_prev_acc_mean < best_acc / 2:
+                elif recent_prev_acc_mean < best_val_acc / 2:
                     cprint("Early stopped: recent_prev_acc_mean is {}% < {}/2 (at epoch {} > {}/2)".format(
-                        recent_prev_acc_mean, best_acc, current_iter, args.epochs), "red")
+                        recent_prev_acc_mean, best_val_acc, current_iter, args.epochs), "red")
                     break
 
-            prev_acc_deque.append(acc)
+            prev_acc_deque.append(val_acc)
 
     return {
-        "best_acc": best_acc,
+        "best_val_acc": best_val_acc,
+        "test_acc_at_best_val": test_acc_at_best_val,
+        "best_test_acc": best_test_acc,
         "model": net,
     }
 
 
 if __name__ == '__main__':
-    main_args = get_args("GAT", "Planetoid", "CiteSeer", custom_key="EV1")
+    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV1")
     pprint_args(main_args)
     # noinspection PyTypeChecker
     run(main_args)
