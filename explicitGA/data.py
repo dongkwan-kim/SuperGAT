@@ -98,6 +98,7 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
         else:
             dataset = dataset_or_loader
         cprint("{} {} of {} (path={})".format(prefix, dataset_name, dataset_class, root), "yellow")
+        print("\t- is_directed: {}".format(dataset[0].is_directed()))
         print("\t- num_classes: {}".format(dataset.num_classes))
         print("\t- num_graph: {}".format(len(dataset)))
         if dataset.data.x is not None:
