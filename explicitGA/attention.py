@@ -6,7 +6,7 @@ from termcolor import cprint
 from torch.nn import Parameter
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
-from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph
+from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph, degree
 
 import torch_geometric.nn.inits as tgi
 
@@ -14,61 +14,43 @@ import time
 import random
 
 
-def negative_sampling(pos_edge_index, num_nodes, max_num_samples=None):
-    max_num_samples = max_num_samples or pos_edge_index.size(1)
-    num_samples = min(max_num_samples,
-                      num_nodes * num_nodes - pos_edge_index.size(1))
+def negative_sampling(edge_index, num_nodes=None, num_neg_samples=None):
+    num_neg_samples = num_neg_samples or edge_index.size(1)
 
-    idx = (pos_edge_index[0] * num_nodes + pos_edge_index[1])
-    idx = idx.to(torch.device('cpu'))
+    # Handle '2*|edges| > num_nodes^2' case.
+    num_neg_samples = min(num_neg_samples,
+                          num_nodes * num_nodes - edge_index.size(1))
 
-    rng = range(num_nodes ** 2)
-    perm = torch.tensor(random.sample(rng, num_samples))
+    idx = (edge_index[0] * num_nodes + edge_index[1]).to('cpu')
+
+    rng = range(num_nodes**2)
+    perm = torch.as_tensor(random.sample(rng, num_neg_samples))
     mask = torch.from_numpy(np.isin(perm, idx).astype(np.uint8))
     rest = mask.nonzero().view(-1)
     while rest.numel() > 0:  # pragma: no cover
-        tmp = torch.tensor(random.sample(rng, rest.size(0)))
+        tmp = torch.as_tensor(random.sample(rng, rest.size(0)))
         mask = torch.from_numpy(np.isin(tmp, idx).astype(np.uint8))
         perm[rest] = tmp
-        rest = mask.nonzero().view(-1)
+        rest = rest[mask.nonzero().view(-1)]
 
     row, col = perm / num_nodes, perm % num_nodes
-    return torch.stack([row, col], dim=0).long().to(pos_edge_index.device)
+    return torch.stack([row, col], dim=0).long().to(edge_index.device)
 
 
-def batch_negative_sampling(pos_edge_index: torch.Tensor,
-                            num_nodes: int = None,
-                            batch: torch.Tensor = None,
-                            max_num_samples: int = None) -> torch.Tensor:
-    """
-    :param pos_edge_index: [2, E]
-    :param num_nodes: N
-    :param batch: [B]
-    :param max_num_samples: neg_E
-    :return: tensor of [2, neg_E]
-    """
-    assert (num_nodes is not None) or (batch is not None), "Either num_nodes or batch must not be None"
+def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
+    split = degree(batch[edge_index[0]], dtype=torch.long).tolist()
+    edge_indices = torch.split(edge_index, split, dim=1)
+    num_nodes = degree(batch, dtype=torch.long)
+    cum_nodes = torch.cat([batch.new_zeros(1), num_nodes.cumsum(dim=0)[:-1]])
 
-    if batch is not None:
-        nodes_list = [torch.nonzero(batch == b).squeeze() for b in range(batch.max() + 1)]
-        num_nodes_list = [len(nodes) for nodes in nodes_list]
-        pos_edge_index_list = [subgraph(torch.as_tensor(nodes), pos_edge_index, relabel_nodes=True)[0]
-                               for nodes in nodes_list]
-    else:
-        num_nodes_list = [num_nodes]
-        pos_edge_index_list = [pos_edge_index]
+    neg_edge_indices = []
+    for edge_index, N, C in zip(edge_indices, num_nodes.tolist(),
+                                cum_nodes.tolist()):
+        neg_edge_index = negative_sampling(edge_index - C, N,
+                                           num_neg_samples) + C
+        neg_edge_indices.append(neg_edge_index)
 
-    neg_edges_index_list = []
-    prev_node_idx = 0
-    for num_nodes, pos_edge_index_of_one_graph in zip(num_nodes_list, pos_edge_index_list):
-        neg_edges_index = negative_sampling(pos_edge_index_of_one_graph,
-                                            num_nodes=num_nodes,
-                                            max_num_samples=max_num_samples)
-        neg_edges_index += prev_node_idx
-        neg_edges_index_list.append(neg_edges_index)
-        prev_node_idx += num_nodes
-    neg_edges_index = torch.cat(neg_edges_index_list, dim=1)
-    return neg_edges_index
+    return torch.cat(neg_edge_indices, dim=1)
 
 
 class ExplicitGAT(MessagePassing):
@@ -87,12 +69,16 @@ class ExplicitGAT(MessagePassing):
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
 
-        self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
         if self.is_explicit:
+            self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
             self.att_scaling = Parameter(torch.Tensor(heads))
             self.att_bias = Parameter(torch.Tensor(heads))
+            self.att_scaling_2 = Parameter(torch.Tensor(heads))
+            self.att_bias_2 = Parameter(torch.Tensor(heads))
         else:
+            self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
             self.att_scaling, self.att_bias = None, None
+            self.att_scaling_2, self.att_bias_2 = None, None
 
         self.cached_pos_alpha = None
 
@@ -111,6 +97,8 @@ class ExplicitGAT(MessagePassing):
         tgi.glorot(self.att)
         tgi.ones(self.att_scaling)
         tgi.zeros(self.att_bias)
+        tgi.ones(self.att_scaling_2)
+        tgi.zeros(self.att_bias_2)
 
     def forward(self, x, edge_index, size=None, batch=None):
         """
@@ -136,17 +124,24 @@ class ExplicitGAT(MessagePassing):
         propagated = self.propagate(edge_index, size=size, x=x)
 
         if self.training and self.is_explicit:
-            neg_edge_index = batch_negative_sampling(
-                pos_edge_index=edge_index,
-                num_nodes=x.size(0),
-                batch=batch,
-            )
+            if batch is None:
+                neg_edge_index = negative_sampling(
+                    edge_index=edge_index,
+                    num_nodes=x.size(0))
+            else:
+                neg_edge_index = batched_negative_sampling(
+                    edge_index=edge_index,
+                    batch=batch)
+
             total_alpha = self._get_attention_with_negatives(
                 edge_index=edge_index,
                 neg_edge_index=neg_edge_index,
                 x=x,
             )  # [E + neg_E, heads]
-            total_alpha = self.att_scaling * total_alpha + self.att_bias
+
+            total_alpha = F.leaky_relu(self.att_scaling * total_alpha + self.att_bias)
+            total_alpha = self.att_scaling_2 * total_alpha + self.att_bias_2
+            # total_alpha = self.att_scaling * total_alpha + self.att_bias
             residuals = {
                 "total_alpha": total_alpha,
                 "pos_alpha": self.cached_pos_alpha,
