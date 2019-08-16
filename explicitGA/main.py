@@ -1,3 +1,4 @@
+import random
 from typing import Tuple, Any, List
 
 import numpy as np
@@ -74,15 +75,6 @@ def load_model(model, _args, target_epoch=None, **kwargs) -> Tuple[Any, dict] or
         return None
 
 
-def get_l1_l2_regularizer(params, l1_lambda=0., l2_lambda=0.) -> torch.Tensor:
-    loss_reg: torch.Tensor = 0.
-    if l1_lambda != 0.:
-        loss_reg += l1_lambda * sum([torch.norm(p, 1) for p in params])
-    if l2_lambda != 0.:
-        loss_reg += l2_lambda * sum([torch.norm(p, 2) for p in params])
-    return loss_reg
-
-
 def get_explicit_attention_loss(explicit_attention_list: List[torch.Tensor],
                                 num_pos_samples: int,
                                 dropout_explicit_att: float,
@@ -137,8 +129,6 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
                 att_lambda=_args.att_lambda, dropout_explicit_att=_args.dropout_explicit_att,
             )
 
-        loss += get_l1_l2_regularizer(model.parameters(), _args.l1_lambda, _args.l2_lambda)
-
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
@@ -187,12 +177,15 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
 
 def run(args):
 
+    random.seed(args.seed)
     torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
 
     dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     best_val_acc = 0.
     test_acc_at_best_val = 0.
+    test_acc_at_best_val_weak = 0.
     best_test_acc = 0.
     prev_acc_deque = deque(maxlen=4)
 
@@ -211,7 +204,7 @@ def run(args):
         args.start_epoch = other_state_dict["epoch"]
 
     nll_loss = nn.NLLLoss()
-    adam_optim = optim.Adam(net.parameters(), lr=args.lr)
+    adam_optim = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.l2_lambda)
 
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
@@ -229,6 +222,9 @@ def run(args):
             if test_acc > best_test_acc:
                 best_test_acc = test_acc
 
+            if val_acc >= best_val_acc:
+                test_acc_at_best_val_weak = test_acc
+
             # Update best_val_acc
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
@@ -237,6 +233,7 @@ def run(args):
                 cprint("\t- Test Accuracy: {} (current)".format(test_acc), "yellow")
                 cprint("\t- Test Accuracy: {} (best)".format(best_test_acc), "yellow")
                 cprint("\t- Test Accuracy: {} (at best val)".format(test_acc_at_best_val), "yellow")
+                cprint("\t- Test Accuracy: {} (at best val weak)".format(test_acc_at_best_val_weak), "yellow")
                 if args.save_model:
                     save_model(net, args, target_epoch=epoch, perf=val_acc)
             else:
@@ -244,6 +241,7 @@ def run(args):
                 print("\t- Test Accuracy: {}".format(test_acc))
                 print("\t- Test Accuracy: {} (best)".format(best_test_acc))
                 print("\t- Test Accuracy: {} (at best val)".format(test_acc_at_best_val))
+                print("\t- Test Accuracy: {} (at best val weak)".format(test_acc_at_best_val_weak))
 
             # Check early stop condition
             if args.early_stop and current_iter > args.epochs // 3:
@@ -263,13 +261,14 @@ def run(args):
     return {
         "best_val_acc": best_val_acc,
         "test_acc_at_best_val": test_acc_at_best_val,
+        "test_acc_at_best_val_weak": test_acc_at_best_val_weak,
         "best_test_acc": best_test_acc,
         "model": net,
     }
 
 
 if __name__ == '__main__':
-    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV1")
+    main_args = get_args("GAT", "Planetoid", "CiteSeer", custom_key="EV1")
     pprint_args(main_args)
     # noinspection PyTypeChecker
     run(main_args)
