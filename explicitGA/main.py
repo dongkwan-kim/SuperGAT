@@ -3,8 +3,9 @@ from typing import Tuple, Any, List
 
 import numpy as np
 import os
-from collections import deque
+from collections import deque, defaultdict
 
+from copy import deepcopy
 from tqdm import tqdm
 
 from arguments import get_important_args, save_args, get_args, pprint_args
@@ -265,6 +266,17 @@ def run(args):
         "best_test_acc": best_test_acc,
         "model": net,
     }
+
+
+def run_with_many_seeds(args, num_seeds):
+    results = defaultdict(list)
+    for i in range(num_seeds):
+        _args = deepcopy(args)
+        _args.seed = _args.seed + i
+        ret = run(_args)
+        for rk, rv in ret.items():
+            results[rk].append(rv)
+    return results
 
 
 if __name__ == '__main__':
