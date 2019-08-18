@@ -264,7 +264,6 @@ def run(args):
         "test_acc_at_best_val": test_acc_at_best_val,
         "test_acc_at_best_val_weak": test_acc_at_best_val_weak,
         "best_test_acc": best_test_acc,
-        "model": net,
     }
 
 
