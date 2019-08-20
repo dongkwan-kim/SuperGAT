@@ -1,5 +1,7 @@
+from pprint import pprint
+
 import random
-from typing import Tuple, Any, List
+from typing import Tuple, Any, List, Dict
 
 import numpy as np
 import os
@@ -270,6 +272,7 @@ def run(args):
 def run_with_many_seeds(args, num_seeds):
     results = defaultdict(list)
     for i in range(num_seeds):
+        cprint("## TRIAL {} ##".format(i))
         _args = deepcopy(args)
         _args.seed = _args.seed + i
         ret = run(_args)
@@ -278,8 +281,25 @@ def run_with_many_seeds(args, num_seeds):
     return results
 
 
+def summary_results(results_dict: Dict[str, list or float]):
+    cprint("## RESULTS SUMMARY ##", "yellow")
+    is_value_list = False
+    for rk, rv in results_dict.items():
+        if isinstance(rv, list):
+            print("{}: {} +- {}".format(rk, round(float(np.mean(rv)), 5), round(float(np.std(rv)), 5)))
+            is_value_list = True
+        else:
+            print("{}: {}".format(rk, rv))
+    cprint("## RESULTS DETAILS ##", "yellow")
+    if is_value_list:
+        for rk, rv in results_dict.items():
+            print("{}: {}".format(rk, rv))
+
+
+
 if __name__ == '__main__':
-    main_args = get_args("GAT", "Planetoid", "CiteSeer", custom_key="EV1")
+    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV2")
     pprint_args(main_args)
     # noinspection PyTypeChecker
-    run(main_args)
+    many_seeds_result = run_with_many_seeds(main_args, 5)
+    summary_results(many_seeds_result)
