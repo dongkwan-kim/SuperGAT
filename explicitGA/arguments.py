@@ -5,6 +5,9 @@ from termcolor import cprint
 
 
 def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="./args.yaml") -> argparse.Namespace:
+
+    custom_key = custom_key.split("+")[0]
+
     parser = argparse.ArgumentParser(description='Parser for Explicit Graph Attention')
 
     # Basics
