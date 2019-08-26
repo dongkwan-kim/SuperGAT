@@ -7,7 +7,6 @@ from torch.nn import Parameter
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph, degree
-
 import torch_geometric.nn.inits as tgi
 
 import time
@@ -56,7 +55,7 @@ def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
 class ExplicitGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_explicit=True, **kwargs):
+                 is_explicit=True, explicit_type="basic", **kwargs):
         super(ExplicitGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
@@ -66,19 +65,26 @@ class ExplicitGAT(MessagePassing):
         self.negative_slope = negative_slope
         self.dropout = dropout
         self.is_explicit = is_explicit
+        self.explicit_type = explicit_type
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
 
         if self.is_explicit:
-            self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
-            self.att_scaling = Parameter(torch.Tensor(heads))
-            self.att_bias = Parameter(torch.Tensor(heads))
-            self.att_scaling_2 = Parameter(torch.Tensor(heads))
-            self.att_bias_2 = Parameter(torch.Tensor(heads))
+
+            if self.explicit_type == "two_layer_scaling":
+                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
+                self.att_scaling = Parameter(torch.Tensor(heads))
+                self.att_bias = Parameter(torch.Tensor(heads))
+                self.att_scaling_2 = Parameter(torch.Tensor(heads))
+                self.att_bias_2 = Parameter(torch.Tensor(heads))
+
+            elif self.explicit_type == "divided_head":
+                self.att_mh_1 = Parameter(torch.Tensor(out_channels, heads, 2 * out_channels))
+                self.att_mh_2_not_neg = Parameter(torch.Tensor(1, heads, out_channels))
+                self.att_mh_2_neg = Parameter(torch.Tensor(1, heads, out_channels))
+
         else:
-            self.att = Parameter(torch.Tensor(1, heads, 2 * out_channels))
-            self.att_scaling, self.att_bias = None, None
-            self.att_scaling_2, self.att_bias_2 = None, None
+            self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
         self.cached_pos_alpha = None
 
@@ -94,11 +100,13 @@ class ExplicitGAT(MessagePassing):
     def reset_parameters(self):
         tgi.glorot(self.weight)
         tgi.zeros(self.bias)
-        tgi.glorot(self.att)
-        tgi.ones(self.att_scaling)
-        tgi.zeros(self.att_bias)
-        tgi.ones(self.att_scaling_2)
-        tgi.zeros(self.att_bias_2)
+        for name, param in self.named_parameters():
+            if name.startswith("att_scaling"):
+                tgi.ones(param)
+            elif name.startswith("att_bias"):
+                tgi.zeros(param)
+            elif name.startswith("att_mh"):
+                tgi.glorot(param)
 
     def forward(self, x, edge_index, size=None, batch=None):
         """
@@ -139,9 +147,13 @@ class ExplicitGAT(MessagePassing):
                 x=x,
             )  # [E + neg_E, heads]
 
-            total_alpha = F.leaky_relu(self.att_scaling * total_alpha + self.att_bias)
-            total_alpha = self.att_scaling_2 * total_alpha + self.att_bias_2
-            # total_alpha = self.att_scaling * total_alpha + self.att_bias
+            #total_alpha = self._degree_scaling(total_alpha, edge_index, neg_edge_index, x.size(0))
+
+            if self.explicit_type == "two_layer_scaling":
+                total_alpha = self.att_scaling * total_alpha + self.att_bias
+                total_alpha = F.elu(total_alpha)
+                total_alpha = self.att_scaling_2 * total_alpha + self.att_bias_2
+
             residuals = {
                 "total_alpha": total_alpha,
                 "pos_alpha": self.cached_pos_alpha,
@@ -163,15 +175,15 @@ class ExplicitGAT(MessagePassing):
             x_i = x_i.view(-1, self.heads, self.out_channels)  # [E, heads, F]
 
         # Compute attention coefficients. [E, heads]
-        alpha_1 = self._get_attention(edge_index_i, x_i, x_j, size_i)
+        alpha = self._get_attention(edge_index_i, x_i, x_j, size_i)
 
-        self.cached_pos_alpha = alpha_1
+        self.cached_pos_alpha = alpha
 
         # Sample attention coefficients stochastically.
-        alpha_1 = F.dropout(alpha_1, p=self.dropout, training=self.training)
+        alpha = F.dropout(alpha, p=self.dropout, training=self.training)
 
         # [E, heads, F] * [E, heads, 1] = [E, heads, F]
-        return x_j * alpha_1.view(-1, self.heads, 1)
+        return x_j * alpha.view(-1, self.heads, 1)
 
     def update(self, aggr_out):
         """
@@ -187,32 +199,52 @@ class ExplicitGAT(MessagePassing):
             aggr_out = aggr_out + self.bias
         return aggr_out
 
-    def _get_attention(self, edge_index_i, x_i, x_j, size_i) -> torch.Tensor:
+    def _get_attention(self, edge_index_i, x_i, x_j, size_i, **kwargs) -> torch.Tensor:
         """
         :param edge_index_i: [E]
         :param x_i: [E, heads, F]
         :param x_j: [E, heads, F]
         :param size_i: N
-        :return: [E, heads], [2, E, heads]
+        :return: [E, heads]
         """
 
         # Compute attention coefficients.
 
-        # [E, heads, 2F] * [1, heads, 2F] -> [E, heads]
-        alpha_1 = torch.einsum("ehf,xhf->eh",
-                               torch.cat([x_i, x_j], dim=-1),
-                               self.att)
-        alpha_1 = F.leaky_relu(alpha_1, self.negative_slope)
-        alpha_1 = softmax(alpha_1, edge_index_i, size_i)
+        if self.explicit_type == "basic" or self.explicit_type == "two_layer_scaling":
+            # [E, heads, 2F] * [1, heads, 2F] -> [E, heads]
+            alpha = torch.einsum("ehf,xhf->eh",
+                                   torch.cat([x_i, x_j], dim=-1),
+                                   self.att_mh_1)
 
-        return alpha_1
+        elif self.explicit_type == "divided_head":
+            # [E, heads, 2F] * [F(=x), heads, 2F] -> [F(=x), E, heads]
+            alpha = torch.einsum("ehf,xhf->xeh",
+                                   torch.cat([x_i, x_j], dim=-1),
+                                   self.att_mh_1)
+            alpha = F.elu(alpha)
+            alpha = F.dropout(alpha, training=self.training)
+
+            # [F, E, heads] * [1, heads, F] -> [E, heads]
+            with_negatives = kwargs["with_negatives"] if "with_negatives" in kwargs else False
+            if not with_negatives:
+                alpha = torch.einsum("feh,xhf->eh", alpha, self.att_mh_2_not_neg)
+            else:
+                alpha = torch.einsum("feh,xhf->eh", alpha, self.att_mh_2_neg)
+
+        else:
+            raise ValueError
+
+        alpha = F.leaky_relu(alpha, self.negative_slope)
+        alpha = softmax(alpha, edge_index_i, size_i)
+
+        return alpha
 
     def _get_attention_with_negatives(self, edge_index, neg_edge_index, x):
         """
         :param edge_index: [2, E]
         :param neg_edge_index: [2, neg_E]
         :param x: [N, heads * F]
-        :return: [1, E + neg_E, heads]
+        :return: [E + neg_E, heads]
         """
 
         total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
@@ -229,8 +261,16 @@ class ExplicitGAT(MessagePassing):
         if x_i is not None:
             x_i = x_i.view(-1, self.heads, self.out_channels)  # [E + neg_E, heads, F]
 
-        alpha_1 = self._get_attention(total_edge_index_i, x_i, x_j, size_i)
-        return alpha_1
+        alpha = self._get_attention(total_edge_index_i, x_i, x_j, size_i, with_negatives=True)
+        return alpha
+
+    def _degree_scaling(self, attention_eh, edge_index, neg_edge_index, num_nodes):
+        total_edge_index = torch.cat([edge_index, neg_edge_index], dim=1)  # [2, E + neg_E]
+        node_degree = degree(total_edge_index[1], num_nodes)  # [N]
+        total_edge_degree = node_degree[total_edge_index[1]]  # [E + neg_E]
+        attention_eh = torch.einsum("e,eh->eh", total_edge_degree, attention_eh)  # [E + neg_E, heads]
+        attention_eh /= node_degree.mean()
+        return attention_eh
 
     def __repr__(self):
         return '{}({}, {}, heads={})'.format(self.__class__.__name__,
