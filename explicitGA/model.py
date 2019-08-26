@@ -69,12 +69,14 @@ class GATNet(torch.nn.Module):
 
         self.conv1 = attention_layer(
             num_input_features, args.num_hidden_features,
-            heads=args.head, dropout=args.dropout, is_explicit=args.is_explicit,
+            heads=args.head, dropout=args.dropout,
+            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
         )
 
         self.conv2 = attention_layer(
             args.num_hidden_features * args.head, num_classes,
-            heads=1, dropout=0.6, is_explicit=args.is_explicit,
+            heads=1, dropout=args.dropout,
+            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
         )
 
         if args.pool_name is not None:

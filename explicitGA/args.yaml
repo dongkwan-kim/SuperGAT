@@ -4,6 +4,7 @@ DEFAULT: &DEFAULT
   dropout: 0.6
   save_model: False
   early_stop: False
+  seed: 42
 
 GAT-Cora: &GAT-Cora
   <<: *DEFAULT
@@ -13,20 +14,28 @@ GAT-Cora: &GAT-Cora
 
 GAT-Cora-NE:
   <<: *GAT-Cora
-  epochs: 1200
-  l2_lambda: 0.11365803778882298
+  epochs: 500
+  l2_lambda: 0.08972731018740646
   is_explicit: False
 
 GAT-Cora-E: &GAT-Cora-E
   <<: *GAT-Cora
-  epochs: 750
+  epochs: 500
   is_explicit: True
 
 GAT-Cora-EV1:
   <<: *GAT-Cora-E
-  l2_lambda: 0.09349381954790859
-  att_lambda: 10
-  dropout_explicit_att: 0.7
+  l2_lambda: 0.0062217959117146174
+  att_lambda: 17.773268078120786
+  dropout_explicit_att: 0.501350615237207
+  explicit_type: "two_layer_scaling"
+
+GAT-Cora-EV2:
+  <<: *GAT-Cora-E
+  l2_lambda: 0.0092217959117146174
+  att_lambda: 7.773268078120786
+  dropout_explicit_att: 0.501350615237207
+  explicit_type: "divided_head"
 
 
 GAT-CiteSeer: &GAT-CiteSeer
@@ -37,41 +46,25 @@ GAT-CiteSeer: &GAT-CiteSeer
 
 GAT-CiteSeer-NE:
   <<: *GAT-CiteSeer
-  epochs: 200
-  l2_lambda: 0.11365803778882298
+  epochs: 400
+  l2_lambda: 0.23966668645590786
   is_explicit: False
 
 GAT-CiteSeer-E: &GAT-CiteSeer-E
   <<: *GAT-CiteSeer
-  epochs: 750
+  epochs: 400
   is_explicit: True
 
 GAT-CiteSeer-EV1:
   <<: *GAT-CiteSeer-E
-  l2_lambda: 0.09349381954790859
-  att_lambda: 10
-  dropout_explicit_att: 0.7
+  l2_lambda: 0.13696961054860327
+  att_lambda: 32.81081775196542
+  dropout_explicit_att: 0.5290612803915209
+  explicit_type: "two_layer_scaling"
 
-
-GAT-PubMed: &GAT-PubMed
-  <<: *DEFAULT
-  task_type: Node
-  val_interval: 1
-  num_hidden_features: 8
-
-GAT-PubMed-NE:
-  <<: *GAT-PubMed
-  epochs: 200
-  l2_lambda: 0.11365803778882298
-  is_explicit: False
-
-GAT-PubMed-E: &GAT-PubMed-E
-  <<: *GAT-PubMed
-  epochs: 750
-  is_explicit: True
-
-GAT-PubMed-EV1:
-  <<: *GAT-PubMed-E
-  l2_lambda: 0.09349381954790859
-  att_lambda: 10
-  dropout_explicit_att: 0.7
+GAT-CiteSeer-EV2:
+  <<: *GAT-CiteSeer-E
+  l2_lambda: 0.13696961054860327
+  att_lambda: 32.81081775196542
+  dropout_explicit_att: 0.5290612803915209
+  explicit_type: "divided_head"
