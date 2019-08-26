@@ -190,7 +190,9 @@ def run(args):
     test_acc_at_best_val = 0.
     test_acc_at_best_val_weak = 0.
     best_test_acc = 0.
-    prev_acc_deque = deque(maxlen=4)
+    best_test_acc_at_best_val = 0.
+    best_test_acc_at_best_val_weak = 0.
+    prev_acc_deque = deque(maxlen=10)
 
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
@@ -232,11 +234,17 @@ def run(args):
             if val_acc > best_val_acc:
                 best_val_acc = val_acc
                 test_acc_at_best_val = test_acc
+                if test_acc_at_best_val > best_test_acc_at_best_val:
+                    best_test_acc_at_best_val = test_acc_at_best_val
+                if test_acc_at_best_val_weak > best_test_acc_at_best_val_weak:
+                    best_test_acc_at_best_val_weak = test_acc_at_best_val_weak
                 cprint("\t- Best Val Accuracy: {} [NEW]".format(best_val_acc), "yellow")
                 cprint("\t- Test Accuracy: {} (current)".format(test_acc), "yellow")
                 cprint("\t- Test Accuracy: {} (best)".format(best_test_acc), "yellow")
                 cprint("\t- Test Accuracy: {} (at best val)".format(test_acc_at_best_val), "yellow")
                 cprint("\t- Test Accuracy: {} (at best val weak)".format(test_acc_at_best_val_weak), "yellow")
+                cprint("\t- Test Accuracy: {} (best at best val)".format(best_test_acc_at_best_val), "yellow")
+                cprint("\t- Test Accuracy: {} (best at best val weak)".format(best_test_acc_at_best_val_weak), "yellow")
                 if args.save_model:
                     save_model(net, args, target_epoch=epoch, perf=val_acc)
             else:
@@ -245,6 +253,8 @@ def run(args):
                 print("\t- Test Accuracy: {} (best)".format(best_test_acc))
                 print("\t- Test Accuracy: {} (at best val)".format(test_acc_at_best_val))
                 print("\t- Test Accuracy: {} (at best val weak)".format(test_acc_at_best_val_weak))
+                print("\t- Test Accuracy: {} (best at best val)".format(best_test_acc_at_best_val))
+                print("\t- Test Accuracy: {} (best at best val weak)".format(best_test_acc_at_best_val_weak))
 
             # Check early stop condition
             if args.early_stop and current_iter > args.epochs // 3:
@@ -266,6 +276,7 @@ def run(args):
         "test_acc_at_best_val": test_acc_at_best_val,
         "test_acc_at_best_val_weak": test_acc_at_best_val_weak,
         "best_test_acc": best_test_acc,
+        "best_test_acc_at_best_val": best_test_acc_at_best_val,
     }
 
 
@@ -294,7 +305,6 @@ def summary_results(results_dict: Dict[str, list or float]):
     if is_value_list:
         for rk, rv in results_dict.items():
             print("{}: {}".format(rk, rv))
-
 
 
 if __name__ == '__main__':
