@@ -22,7 +22,7 @@ def negative_sampling(edge_index, num_nodes=None, num_neg_samples=None):
 
     idx = (edge_index[0] * num_nodes + edge_index[1]).to('cpu')
 
-    rng = range(num_nodes**2)
+    rng = range(num_nodes ** 2)
     perm = torch.as_tensor(random.sample(rng, num_neg_samples))
     mask = torch.from_numpy(np.isin(perm, idx).astype(np.uint8))
     rest = mask.nonzero().view(-1)
@@ -147,7 +147,7 @@ class ExplicitGAT(MessagePassing):
                 x=x,
             )  # [E + neg_E, heads]
 
-            #total_alpha = self._degree_scaling(total_alpha, edge_index, neg_edge_index, x.size(0))
+            # total_alpha = self._degree_scaling(total_alpha, edge_index, neg_edge_index, x.size(0))
 
             if self.explicit_type == "two_layer_scaling":
                 total_alpha = self.att_scaling * total_alpha + self.att_bias
@@ -213,14 +213,14 @@ class ExplicitGAT(MessagePassing):
         if self.explicit_type == "basic" or self.explicit_type == "two_layer_scaling":
             # [E, heads, 2F] * [1, heads, 2F] -> [E, heads]
             alpha = torch.einsum("ehf,xhf->eh",
-                                   torch.cat([x_i, x_j], dim=-1),
-                                   self.att_mh_1)
+                                 torch.cat([x_i, x_j], dim=-1),
+                                 self.att_mh_1)
 
         elif self.explicit_type == "divided_head":
             # [E, heads, 2F] * [F(=x), heads, 2F] -> [F(=x), E, heads]
             alpha = torch.einsum("ehf,xhf->xeh",
-                                   torch.cat([x_i, x_j], dim=-1),
-                                   self.att_mh_1)
+                                 torch.cat([x_i, x_j], dim=-1),
+                                 self.att_mh_1)
             alpha = F.elu(alpha)
             alpha = F.dropout(alpha, training=self.training)
 
