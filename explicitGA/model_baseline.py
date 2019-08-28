@@ -7,7 +7,7 @@ from termcolor import cprint
 
 from typing import Tuple, List
 
-from attention import negative_sampling, batched_negative_sampling
+from layer import negative_sampling, batched_negative_sampling
 from data import getattr_d
 from model import to_pool_cls
 

@@ -6,7 +6,7 @@ from termcolor import cprint
 import torch_geometric.transforms as T
 import torch_geometric.nn as pygnn
 
-from attention import ExplicitGAT
+from layer import ExplicitGAT
 from data import get_dataset_or_loader, getattr_d
 
 from typing import Tuple, List
