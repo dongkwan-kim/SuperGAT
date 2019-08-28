@@ -7,6 +7,8 @@ from termcolor import cprint
 
 from typing import Tuple, List
 
+from torch_geometric.utils import remove_self_loops, add_self_loops
+
 from layer import negative_sampling, batched_negative_sampling
 from data import getattr_d
 from model import to_pool_cls
@@ -122,9 +124,12 @@ class BaselineGNNet(nn.Module):
         batch = self.residuals["batch"]
         for layer_id in range(1, 3):
             x = self.residuals["x_conv{}".format(layer_id)]
+            edge_index, _ = remove_self_loops(edge_index)
+            edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+
             recon = self.forward_to_reconstruct_edges(x, edge_index, batch)  # [E + neg_E]
 
-            num_pos_samples = x.size(0)
+            num_pos_samples = edge_index.size(1)
             num_total_samples = recon.size(0)
             num_to_sample = int(num_total_samples * self.args.edge_sampling_ratio)
 
