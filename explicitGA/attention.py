@@ -86,7 +86,7 @@ class ExplicitGAT(MessagePassing):
         else:
             self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
-        self.cached_pos_alpha = None
+        self.att_residuals = {"num_updated": 0, "att_with_negatives": None}
 
         if bias and concat:
             self.bias = Parameter(torch.Tensor(heads * out_channels))
@@ -116,7 +116,6 @@ class ExplicitGAT(MessagePassing):
         :param batch: None or [B]
         :return:
         """
-        residuals = {}
 
         if size is None and torch.is_tensor(x):
             edge_index, _ = remove_self_loops(edge_index)
@@ -141,26 +140,22 @@ class ExplicitGAT(MessagePassing):
                     edge_index=edge_index,
                     batch=batch)
 
-            total_alpha = self._get_attention_with_negatives(
+            att_with_negatives = self._get_attention_with_negatives(
                 edge_index=edge_index,
                 neg_edge_index=neg_edge_index,
                 x=x,
             )  # [E + neg_E, heads]
 
-            # total_alpha = self._degree_scaling(total_alpha, edge_index, neg_edge_index, x.size(0))
+            # att_with_negatives = self._degree_scaling(att_with_negatives, edge_index, neg_edge_index, x.size(0))
 
             if self.explicit_type == "two_layer_scaling":
-                total_alpha = self.att_scaling * total_alpha + self.att_bias
-                total_alpha = F.elu(total_alpha)
-                total_alpha = self.att_scaling_2 * total_alpha + self.att_bias_2
+                att_with_negatives = self.att_scaling * att_with_negatives + self.att_bias
+                att_with_negatives = F.elu(att_with_negatives)
+                att_with_negatives = self.att_scaling_2 * att_with_negatives + self.att_bias_2
 
-            residuals = {
-                "total_alpha": total_alpha,
-                "pos_alpha": self.cached_pos_alpha,
-                **residuals,
-            }
+            self._update_att_residuals("att_with_negatives", att_with_negatives)
 
-        return propagated, residuals
+        return propagated
 
     def message(self, edge_index_i, x_i, x_j, size_i):
         """
@@ -176,8 +171,6 @@ class ExplicitGAT(MessagePassing):
 
         # Compute attention coefficients. [E, heads]
         alpha = self._get_attention(edge_index_i, x_i, x_j, size_i)
-
-        self.cached_pos_alpha = alpha
 
         # Sample attention coefficients stochastically.
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
@@ -275,3 +268,7 @@ class ExplicitGAT(MessagePassing):
         return '{}({}, {}, heads={})'.format(self.__class__.__name__,
                                              self.in_channels,
                                              self.out_channels, self.heads)
+
+    def _update_att_residuals(self, key, val):
+        self.att_residuals[key] = val
+        self.att_residuals["num_updated"] += 1

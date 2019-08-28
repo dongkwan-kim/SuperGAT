@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
-from model import GATNet
+from model import ExplicitGATNet
 from utils import create_hash, to_one_hot, get_accuracy
 
 import torch
@@ -78,35 +78,6 @@ def load_model(model, _args, target_epoch=None, **kwargs) -> Tuple[Any, dict] or
         return None
 
 
-def get_explicit_attention_loss(explicit_attention_list: List[torch.Tensor],
-                                num_pos_samples: int,
-                                edge_sampling_ratio: float,
-                                att_lambda: float) -> torch.Tensor:
-
-    criterion = nn.BCEWithLogitsLoss()
-
-    loss_list = []
-    for att_res in explicit_attention_list:
-
-        att = att_res["total_alpha"]
-        num_total_samples = att.size(0)
-        num_to_sample = int(num_total_samples * edge_sampling_ratio)
-
-        att = att.mean(dim=-1)  # [E + neg_E]
-
-        label = torch.zeros(num_total_samples)
-        label[:num_pos_samples] = 1
-        label = label.float()
-
-        permuted = torch.randperm(num_total_samples)
-
-        loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
-        loss_list.append(loss)
-
-    total_loss = att_lambda * sum(loss_list)
-    return total_loss
-
-
 def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
 
     model.train()
@@ -117,7 +88,7 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
         optimizer.zero_grad()
 
         # Forward
-        outputs, exp_att_list = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+        outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
 
         # Loss
         if "train_mask" in batch.__dict__:
@@ -127,10 +98,7 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
 
         if _args.is_explicit:
             num_pos_samples = batch.edge_index.size(1) + batch.x.size(0)
-            loss += get_explicit_attention_loss(
-                exp_att_list, num_pos_samples,
-                att_lambda=_args.att_lambda, edge_sampling_ratio=_args.edge_sampling_ratio,
-            )
+            loss += model.get_explicit_attention_loss(num_pos_samples)
 
         loss.backward()
         optimizer.step()
@@ -152,7 +120,7 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
             batch = batch.to(device)
 
             # Forward
-            outputs, exp_att = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+            outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
 
             # Loss
             if "train_mask" in batch.__dict__:
@@ -199,7 +167,7 @@ def run(args):
         batch_size=args.batch_size, seed=args.seed,
     )
 
-    net = GATNet(args, train_d)
+    net = ExplicitGATNet(args, train_d)
     net = net.to(dev)
 
     loaded = load_model(net, args, target_epoch=None)
