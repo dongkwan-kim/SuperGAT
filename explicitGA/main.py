@@ -14,7 +14,7 @@ from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
 from model import ExplicitGATNet
 from model_baseline import BaselineGNNet
-from utils import create_hash, to_one_hot, get_accuracy
+from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines
 
 import torch
 import torch.nn as nn
@@ -25,7 +25,6 @@ from termcolor import cprint
 
 
 def get_model_path(target_epoch, _args, **kwargs):
-
     args_key = "-".join([_args.model_name, _args.dataset_name, _args.custom_key])
 
     dir_path = os.path.join(
@@ -80,7 +79,6 @@ def load_model(model, _args, target_epoch=None, **kwargs) -> Tuple[Any, dict] or
 
 
 def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
-
     model.train()
 
     total_loss = 0.
@@ -112,7 +110,6 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
 
 
 def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="val", verbose=True):
-
     model.eval()
 
     num_classes = getattr_d(dataset_or_loader, "num_classes")
@@ -160,7 +157,6 @@ def _get_model_cls(model_name: str):
 
 
 def run(args):
-
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -193,6 +189,7 @@ def run(args):
     nll_loss = nn.NLLLoss()
     adam_optim = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.l2_lambda)
 
+    ret = {}
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
         train_loss = train_model(dev, net, train_d, nll_loss, adam_optim, _args=args)
@@ -211,32 +208,29 @@ def run(args):
 
             if val_acc >= best_val_acc:
                 test_acc_at_best_val_weak = test_acc
+                if test_acc_at_best_val_weak > best_test_acc_at_best_val_weak:
+                    best_test_acc_at_best_val_weak = test_acc_at_best_val_weak
 
-            # Update best_val_acc
             if val_acc > best_val_acc:
+                print_color = "yellow"
                 best_val_acc = val_acc
                 test_acc_at_best_val = test_acc
                 if test_acc_at_best_val > best_test_acc_at_best_val:
                     best_test_acc_at_best_val = test_acc_at_best_val
-                if test_acc_at_best_val_weak > best_test_acc_at_best_val_weak:
-                    best_test_acc_at_best_val_weak = test_acc_at_best_val_weak
-                cprint("\t- Best Val Accuracy: {} [NEW]".format(best_val_acc), "yellow")
-                cprint("\t- Test Accuracy: {} (current)".format(test_acc), "yellow")
-                cprint("\t- Test Accuracy: {} (best)".format(best_test_acc), "yellow")
-                cprint("\t- Test Accuracy: {} (at best val)".format(test_acc_at_best_val), "yellow")
-                cprint("\t- Test Accuracy: {} (at best val weak)".format(test_acc_at_best_val_weak), "yellow")
-                cprint("\t- Test Accuracy: {} (best at best val)".format(best_test_acc_at_best_val), "yellow")
-                cprint("\t- Test Accuracy: {} (best at best val weak)".format(best_test_acc_at_best_val_weak), "yellow")
                 if args.save_model:
                     save_model(net, args, target_epoch=epoch, perf=val_acc)
             else:
-                print("\t- Best Val Accuracy: {}".format(best_val_acc))
-                print("\t- Test Accuracy: {}".format(test_acc))
-                print("\t- Test Accuracy: {} (best)".format(best_test_acc))
-                print("\t- Test Accuracy: {} (at best val)".format(test_acc_at_best_val))
-                print("\t- Test Accuracy: {} (at best val weak)".format(test_acc_at_best_val_weak))
-                print("\t- Test Accuracy: {} (best at best val)".format(best_test_acc_at_best_val))
-                print("\t- Test Accuracy: {} (best at best val weak)".format(best_test_acc_at_best_val_weak))
+                print_color = None
+
+            ret = {
+                "best_val_acc": best_val_acc,
+                "test_acc_at_best_val": test_acc_at_best_val,
+                "test_acc_at_best_val_weak": test_acc_at_best_val_weak,
+                "best_test_acc": best_test_acc,
+                "best_test_acc_at_best_val": best_test_acc_at_best_val,
+                "best_test_acc_at_best_val_weak": best_test_acc_at_best_val_weak,
+            }
+            cprint_multi_lines("\t- ", print_color, **ret)
 
             # Check early stop condition
             if args.early_stop and current_iter > args.epochs // 3:
@@ -253,13 +247,7 @@ def run(args):
 
             prev_acc_deque.append(val_acc)
 
-    return {
-        "best_val_acc": best_val_acc,
-        "test_acc_at_best_val": test_acc_at_best_val,
-        "test_acc_at_best_val_weak": test_acc_at_best_val_weak,
-        "best_test_acc": best_test_acc,
-        "best_test_acc_at_best_val": best_test_acc_at_best_val,
-    }
+    return ret
 
 
 def run_with_many_seeds(args, num_seeds):
@@ -290,11 +278,10 @@ def summary_results(results_dict: Dict[str, list or float]):
 
 
 if __name__ == '__main__':
-
     # GAT, BaselineGAT
     # Cora, CiteSeer, PubMed
     # NE, EV1, NR, RV1
-    main_args = get_args("BaselineGAT", "Planetoid", "Cora", custom_key="RV1")
+    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV1")
     pprint_args(main_args)
 
     # noinspection PyTypeChecker

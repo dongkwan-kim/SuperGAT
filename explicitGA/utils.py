@@ -123,3 +123,8 @@ def debug_with_exit(func):
         cprint("=====   END  =====", "red", "on_yellow")
         exit()
     return wrapped
+
+
+def cprint_multi_lines(prefix, color, **kwargs):
+    for k, v in kwargs.items():
+        cprint("{}{}: {}".format(prefix, k, v), color)
