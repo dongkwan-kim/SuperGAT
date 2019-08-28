@@ -1,13 +1,16 @@
 DEFAULT: &DEFAULT
-  model_name: GAT
-  head: 8
+  heads: 8
   dropout: 0.6
   save_model: False
   early_stop: False
   seed: 42
 
-GAT-Cora: &GAT-Cora
+GAT: &GAT
+  model_name: GAT
   <<: *DEFAULT
+
+GAT-Cora: &GAT-Cora
+  <<: *GAT
   task_type: Node
   val_interval: 1
   num_hidden_features: 8
@@ -39,7 +42,7 @@ GAT-Cora-EV2:
 
 
 GAT-CiteSeer: &GAT-CiteSeer
-  <<: *DEFAULT
+  <<: *GAT
   task_type: Node
   val_interval: 1
   num_hidden_features: 8

@@ -42,11 +42,10 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
 
     # Graph (w/ Attention)
     parser.add_argument("--num-hidden-features", default=64, type=int)
-    parser.add_argument("--head", default=4, type=int)
+    parser.add_argument("--heads", default=8, type=int)
     parser.add_argument("--pool-name", default=None)
     parser.add_argument("--is-explicit", default=True, type=bool)
     parser.add_argument("--explicit-type", default="basic", type=str)
-    parser.add_argument("--att-criterion", default=None)
 
     # Test
     parser.add_argument("--val-interval", default=10)

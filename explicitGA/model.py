@@ -22,20 +22,21 @@ def _get_gat_cls(attention_name: str):
 def _inspect_attention_tensor(x, edge_index, att_res) -> bool:
     num_pos_samples = edge_index.size(1) + x.size(0)
 
-    if att_res and (num_pos_samples == 13264 or
-                    num_pos_samples == 12431 or
-                    num_pos_samples == 0):
+    if att_res["att_with_negatives"] is not None \
+            and (num_pos_samples == 13264 or
+                 num_pos_samples == 12431 or
+                 num_pos_samples == 0):
 
-        total_att = att_res["att_with_negatives"]
-        total_att_cloned = total_att.clone()
-        total_att_cloned = torch.sigmoid(total_att_cloned)
+        att_with_negatives = att_res["att_with_negatives"]
+        att_with_negatives_cloned = att_with_negatives.clone()
+        att_with_negatives_cloned = torch.sigmoid(att_with_negatives_cloned)
 
-        if len(total_att.size()) == 2:
-            pos_samples = total_att_cloned[:num_pos_samples, 0]
-            neg_samples = total_att_cloned[num_pos_samples:, 0]
+        if len(att_with_negatives.size()) == 2:
+            pos_samples = att_with_negatives_cloned[:num_pos_samples, 0]
+            neg_samples = att_with_negatives_cloned[num_pos_samples:, 0]
         else:
-            pos_samples = total_att_cloned[:num_pos_samples]
-            neg_samples = total_att_cloned[num_pos_samples:]
+            pos_samples = att_with_negatives_cloned[:num_pos_samples]
+            neg_samples = att_with_negatives_cloned[num_pos_samples:]
 
         print()
         pos_m, pos_s = float(pos_samples.mean()), float(pos_samples.std())
@@ -68,12 +69,12 @@ class ExplicitGATNet(nn.Module):
 
         self.conv1 = gat_cls(
             num_input_features, args.num_hidden_features,
-            heads=args.head, dropout=args.dropout,
+            heads=args.heads, dropout=args.dropout,
             is_explicit=args.is_explicit, explicit_type=args.explicit_type,
         )
 
         self.conv2 = gat_cls(
-            args.num_hidden_features * args.head, num_classes,
+            args.num_hidden_features * args.heads, num_classes,
             heads=1, dropout=args.dropout,
             is_explicit=args.is_explicit, explicit_type=args.explicit_type,
         )
@@ -114,7 +115,6 @@ class ExplicitGATNet(nn.Module):
                               if m.__class__.__name__ == ExplicitGAT.__name__]
 
         for att_res in att_residuals_list:
-
             att = att_res["att_with_negatives"]
             num_total_samples = att.size(0)
             num_to_sample = int(num_total_samples * self.args.edge_sampling_ratio)
