@@ -251,7 +251,7 @@ def run(args):
 def run_with_many_seeds(args, num_seeds):
     results = defaultdict(list)
     for i in range(num_seeds):
-        cprint("## TRIAL {} ##".format(i))
+        cprint("## TRIAL {} ##".format(i), "yellow")
         _args = deepcopy(args)
         _args.seed = _args.seed + i
         ret = run(_args)
