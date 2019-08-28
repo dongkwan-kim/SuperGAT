@@ -13,6 +13,7 @@ from tqdm import tqdm
 from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
 from model import ExplicitGATNet
+from model_baseline import BaselineGNNet
 from utils import create_hash, to_one_hot, get_accuracy
 
 import torch
@@ -100,6 +101,9 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
             num_pos_samples = batch.edge_index.size(1) + batch.x.size(0)
             loss += model.get_explicit_attention_loss(num_pos_samples)
 
+        if _args.is_reconstructed:
+            loss += model.get_reconstruction_loss(batch.edge_index)
+
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
@@ -146,6 +150,15 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     return accuracy
 
 
+def _get_model_cls(model_name: str):
+    if model_name == "GAT":
+        return ExplicitGATNet
+    elif model_name.startswith("BaselineG"):
+        return BaselineGNNet
+    else:
+        raise ValueError
+
+
 def run(args):
 
     random.seed(args.seed)
@@ -167,7 +180,8 @@ def run(args):
         batch_size=args.batch_size, seed=args.seed,
     )
 
-    net = ExplicitGATNet(args, train_d)
+    net_cls = _get_model_cls(args.model_name)
+    net = net_cls(args, train_d)
     net = net.to(dev)
 
     loaded = load_model(net, args, target_epoch=None)
@@ -276,8 +290,13 @@ def summary_results(results_dict: Dict[str, list or float]):
 
 
 if __name__ == '__main__':
-    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV2")
+
+    # GAT, BaselineGAT
+    # Cora, CiteSeer, PubMed
+    # NE, EV1, NR, RV1
+    main_args = get_args("BaselineGAT", "Planetoid", "Cora", custom_key="RV1")
     pprint_args(main_args)
+
     # noinspection PyTypeChecker
     many_seeds_result = run_with_many_seeds(main_args, 5)
     summary_results(many_seeds_result)

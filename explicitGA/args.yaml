@@ -71,3 +71,29 @@ GAT-CiteSeer-EV2:
   att_lambda: 32.81081775196542
   edge_sampling_ratio: 0.5290612803915209
   explicit_type: "divided_head"
+
+
+BaselineGAT: &BaselineGAT
+  model_name: BaselineGAT
+  is_explicit: False
+  <<: *DEFAULT
+
+BaselineGAT-Cora: &BaselineGAT-Cora
+  <<: *BaselineGAT
+  task_type: Node
+  val_interval: 1
+  num_hidden_features: 8
+
+BaselineGAT-Cora-NR:
+  <<: *BaselineGAT-Cora
+  is_reconstructed: False
+  epochs: 500
+  l2_lambda: 0.08972731018740646
+
+BaselineGAT-Cora-RV1:
+  <<: *BaselineGAT-Cora
+  is_reconstructed: True
+  edge_sampling_ratio: 0.7
+  recon_lambda: 0.01
+  epochs: 500
+  l2_lambda: 0.08972731018740646
