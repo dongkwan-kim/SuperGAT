@@ -247,11 +247,10 @@ class ExplicitGAT(MessagePassing):
         :return: [E + neg_E, heads]
         """
 
-        total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
-
         if neg_edge_index.size(1) <= 0:
-            return torch.zeros((2, 0, self.heads))
+            neg_edge_index = torch.zeros((2, 0, self.heads))
 
+        total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
         total_edge_index_j, total_edge_index_i = total_edge_index  # [E + neg_E]
         x_i = torch.index_select(x, 0, total_edge_index_i)  # [E + neg_E, heads * F]
         x_j = torch.index_select(x, 0, total_edge_index_j)  # [E + neg_E, heads * F]

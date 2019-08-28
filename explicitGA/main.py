@@ -80,7 +80,7 @@ def load_model(model, _args, target_epoch=None, **kwargs) -> Tuple[Any, dict] or
 
 def get_explicit_attention_loss(explicit_attention_list: List[torch.Tensor],
                                 num_pos_samples: int,
-                                dropout_explicit_att: float,
+                                edge_sampling_ratio: float,
                                 att_lambda: float) -> torch.Tensor:
 
     criterion = nn.BCEWithLogitsLoss()
@@ -89,18 +89,18 @@ def get_explicit_attention_loss(explicit_attention_list: List[torch.Tensor],
     for att_res in explicit_attention_list:
 
         att = att_res["total_alpha"]
-        att_size = att.size(0)
-        sample_att_size = int(att_size * dropout_explicit_att)
+        num_total_samples = att.size(0)
+        num_to_sample = int(num_total_samples * edge_sampling_ratio)
 
         att = att.mean(dim=-1)  # [E + neg_E]
 
-        label = torch.zeros(att_size)
+        label = torch.zeros(num_total_samples)
         label[:num_pos_samples] = 1
         label = label.float()
 
-        permuted = torch.randperm(att_size)
+        permuted = torch.randperm(num_total_samples)
 
-        loss = criterion(att[permuted][:sample_att_size], label[permuted][:sample_att_size])
+        loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
         loss_list.append(loss)
 
     total_loss = att_lambda * sum(loss_list)
@@ -129,7 +129,7 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
             num_pos_samples = batch.edge_index.size(1) + batch.x.size(0)
             loss += get_explicit_attention_loss(
                 exp_att_list, num_pos_samples,
-                att_lambda=_args.att_lambda, dropout_explicit_att=_args.dropout_explicit_att,
+                att_lambda=_args.att_lambda, edge_sampling_ratio=_args.edge_sampling_ratio,
             )
 
         loss.backward()
