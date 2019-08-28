@@ -93,7 +93,7 @@ class ExplicitGATNet(nn.Module):
         x = F.elu(x)
 
         if self.training:
-            _inspect_attention_tensor(x, edge_index, self.conv2.att_residuals)
+            _inspect_attention_tensor(x, edge_index, self.conv2.residuals)
 
         if self.args.pool_name is not None:
             x = self.pool(x, batch)
@@ -110,7 +110,7 @@ class ExplicitGATNet(nn.Module):
             criterion = nn.BCEWithLogitsLoss()
 
         loss_list = []
-        att_residuals_list = [m.att_residuals for m in self.modules()
+        att_residuals_list = [m.residuals for m in self.modules()
                               if m.__class__.__name__ == ExplicitGAT.__name__]
 
         for att_res in att_residuals_list:

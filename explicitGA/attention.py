@@ -86,7 +86,7 @@ class ExplicitGAT(MessagePassing):
         else:
             self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
-        self.att_residuals = {"num_updated": 0, "att_with_negatives": None}
+        self.residuals = {"num_updated": 0, "att_with_negatives": None}
 
         if bias and concat:
             self.bias = Parameter(torch.Tensor(heads * out_channels))
@@ -153,7 +153,7 @@ class ExplicitGAT(MessagePassing):
                 att_with_negatives = F.elu(att_with_negatives)
                 att_with_negatives = self.att_scaling_2 * att_with_negatives + self.att_bias_2
 
-            self._update_att_residuals("att_with_negatives", att_with_negatives)
+            self._update_residuals("att_with_negatives", att_with_negatives)
 
         return propagated
 
@@ -269,6 +269,6 @@ class ExplicitGAT(MessagePassing):
                                              self.in_channels,
                                              self.out_channels, self.heads)
 
-    def _update_att_residuals(self, key, val):
-        self.att_residuals[key] = val
-        self.att_residuals["num_updated"] += 1
+    def _update_residuals(self, key, val):
+        self.residuals[key] = val
+        self.residuals["num_updated"] += 1
