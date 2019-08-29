@@ -93,7 +93,7 @@ class ExplicitGATNet(nn.Module):
         x = self.conv2(x, edge_index)
         x = F.elu(x)
 
-        if self.training:
+        if self.training and self.args.verbose:
             _inspect_attention_tensor(x, edge_index, self.conv2.residuals)
 
         if self.args.pool_name is not None:

@@ -1,13 +1,20 @@
+import os
+import random
+from collections import deque, defaultdict
+from typing import Tuple, Any, List, Dict
+from copy import deepcopy
 from pprint import pprint
 
-import random
-from typing import Tuple, Any, List, Dict
-
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch_geometric
 import numpy as np
-import os
-from collections import deque, defaultdict
 
-from copy import deepcopy
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from termcolor import cprint
 from tqdm import tqdm
 
 from arguments import get_important_args, save_args, get_args, pprint_args
@@ -15,13 +22,6 @@ from data import getattr_d, get_dataset_or_loader
 from model import ExplicitGATNet
 from model_baseline import BaselineGNNet
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines
-
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch_geometric
-
-from termcolor import cprint
 
 
 def get_model_path(target_epoch, _args, **kwargs):
@@ -144,7 +144,24 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
         cprint("\n{}: {}".format(val_or_test, model.__class__.__name__), "yellow")
         cprint("\t- Accuracy: {}".format(accuracy), "yellow")
 
-    return accuracy
+    return accuracy, total_loss
+
+
+def save_loss_and_acc_plot(val_loss_list, val_acc_list, test_acc_list, return_dict, args):
+    sns.set(style="whitegrid")
+    df = pd.DataFrame(np.transpose(np.asarray([val_loss_list, val_acc_list, test_acc_list])),
+                      list(range(len(val_loss_list))),
+                      columns=["val_loss", "val_acc", "test_acc"])
+    print("\t".join(["epoch"] + list(str(r) for r in range(len(val_acc_list)))))
+    for col_name, row in zip(df, df.values.transpose()):
+        print("\t".join([col_name] + [str(round(r, 5)) for r in row]))
+    cprint_multi_lines("\t- ", "yellow", **return_dict)
+
+    plot = sns.lineplot(data=df, palette="tab10", linewidth=2.5)
+    title = "{}_{}_{}".format(args.model_name, args.dataset_name, args.custom_key)
+    plot.set_title(title)
+    plot.get_figure().savefig("./{}.png".format(title))
+    plt.clf()
 
 
 def _get_model_cls(model_name: str):
@@ -190,18 +207,25 @@ def run(args):
     adam_optim = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.l2_lambda)
 
     ret = {}
+    val_acc_list, test_acc_list, val_loss_list = [], [], []
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
         train_loss = train_model(dev, net, train_d, nll_loss, adam_optim, _args=args)
 
-        if epoch % args.val_interval == 0:
+        if args.verbose and epoch % args.val_interval == 0:
             print("\n\t- Train loss: {}".format(train_loss))
 
         # Validation.
         if epoch % args.val_interval == 0 and epoch >= args.val_interval * 0:
 
-            val_acc = test_model(dev, net, val_d or train_d, nll_loss, _args=args, val_or_test="val", verbose=True)
-            test_acc = test_model(dev, net, test_d or train_d, nll_loss, _args=args, val_or_test="test", verbose=False)
+            val_acc, val_loss = test_model(dev, net, val_d or train_d, nll_loss,
+                                           _args=args, val_or_test="val", verbose=args.verbose)
+            test_acc, test_loss = test_model(dev, net, test_d or train_d, nll_loss,
+                                             _args=args, val_or_test="test", verbose=False)
+            if args.save_plot:
+                val_acc_list.append(val_acc)
+                test_acc_list.append(test_acc)
+                val_loss_list.append(val_loss)
 
             if test_acc > best_test_acc:
                 best_test_acc = test_acc
@@ -230,7 +254,8 @@ def run(args):
                 "best_test_acc_at_best_val": best_test_acc_at_best_val,
                 "best_test_acc_at_best_val_weak": best_test_acc_at_best_val_weak,
             }
-            cprint_multi_lines("\t- ", print_color, **ret)
+            if args.verbose:
+                cprint_multi_lines("\t- ", print_color, **ret)
 
             # Check early stop condition
             if args.early_stop and current_iter > args.epochs // 3:
@@ -246,6 +271,9 @@ def run(args):
                     break
 
             prev_acc_deque.append(val_acc)
+
+    if args.save_plot:
+        save_loss_and_acc_plot(val_loss_list, val_acc_list, test_acc_list, ret, args)
 
     return ret
 
@@ -281,7 +309,7 @@ if __name__ == '__main__':
     # GAT, BaselineGAT
     # Cora, CiteSeer, PubMed
     # NE, EV1, NR, RV1
-    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV1")
+    main_args = get_args("GAT", "Planetoid", "CiteSeer", custom_key="EV1")
     pprint_args(main_args)
 
     # noinspection PyTypeChecker
