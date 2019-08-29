@@ -109,7 +109,7 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
     return total_loss
 
 
-def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="val", verbose=True):
+def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="val", verbose=0):
     model.eval()
 
     num_classes = getattr_d(dataset_or_loader, "num_classes")
@@ -140,7 +140,7 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     outputs_total, ys_total = np.concatenate(outputs_list), np.concatenate(ys_list)
     accuracy = get_accuracy(outputs_total, ys_total)
 
-    if verbose:
+    if verbose >= 2:
         cprint("\n{}: {}".format(val_or_test, model.__class__.__name__), "yellow")
         cprint("\t- Accuracy: {}".format(accuracy), "yellow")
 
@@ -216,7 +216,7 @@ def run(args):
 
         train_loss = train_model(dev, net, train_d, nll_loss, adam_optim, _args=args)
 
-        if args.verbose and epoch % args.val_interval == 0:
+        if args.verbose >= 2 and epoch % args.val_interval == 0:
             print("\n\t- Train loss: {}".format(train_loss))
 
         # Validation.
@@ -225,7 +225,7 @@ def run(args):
             val_acc, val_loss = test_model(dev, net, val_d or train_d, nll_loss,
                                            _args=args, val_or_test="val", verbose=args.verbose)
             test_acc, test_loss = test_model(dev, net, test_d or train_d, nll_loss,
-                                             _args=args, val_or_test="test", verbose=False)
+                                             _args=args, val_or_test="test", verbose=0)
             if args.save_plot:
                 val_acc_list.append(val_acc)
                 test_acc_list.append(test_acc)
@@ -258,24 +258,26 @@ def run(args):
                 "best_test_acc_at_best_val": best_test_acc_at_best_val,
                 "best_test_acc_at_best_val_weak": best_test_acc_at_best_val_weak,
             }
-            if args.verbose:
+            if args.verbose >= 1:
                 cprint_multi_lines("\t- ", print_color, **ret)
 
             # Check early stop condition
-            val_loss_change = 0.
             if args.early_stop and current_iter > 0:
                 recent_val_loss_mean = float(np.mean(val_loss_deque))
                 val_loss_change = abs(recent_val_loss_mean - val_loss) / recent_val_loss_mean
-                if val_loss_change < args.early_stop_threshold and current_iter > args.epochs // 5:
-                    if args.verbose:
+
+                if args.save_plot:
+                    val_loss_change_list.append(val_loss_change)
+
+                if val_loss_change < args.early_stop_threshold and current_iter > args.epochs // 3:
+                    if args.verbose >= 1:
                         cprint("Early stopped: val_loss_change is {}% < {}% at {} | {} -> {}".format(
                             round(val_loss_change, 6), args.early_stop_threshold,
-                            epoch, recent_val_loss_mean, val_acc,
+                            epoch, recent_val_loss_mean, val_loss,
                         ), "red")
                     break
-
-            if args.save_plot:
-                val_loss_change_list.append(val_loss_change)
+            else:
+                val_loss_change_list.append(0.)
 
             val_loss_deque.append(val_loss)
 

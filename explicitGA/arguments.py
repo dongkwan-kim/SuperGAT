@@ -21,7 +21,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--dataset-name", default=dataset_name)
     parser.add_argument("--custom-key", default=custom_key)
     parser.add_argument("--save-model", default=True)
-    parser.add_argument("--verbose", default=True)
+    parser.add_argument("--verbose", default=2)
     parser.add_argument("--save-plot", default=False)
     parser.add_argument("--seed", default=42)
 
