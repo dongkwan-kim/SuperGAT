@@ -147,20 +147,22 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     return accuracy, total_loss
 
 
-def save_loss_and_acc_plot(val_loss_list, val_acc_list, test_acc_list, return_dict, args):
+def save_loss_and_acc_plot(list_of_list, return_dict, args, columns=None):
+
     sns.set(style="whitegrid")
-    df = pd.DataFrame(np.transpose(np.asarray([val_loss_list, val_acc_list, test_acc_list])),
-                      list(range(len(val_loss_list))),
-                      columns=["val_loss", "val_acc", "test_acc"])
-    print("\t".join(["epoch"] + list(str(r) for r in range(len(val_acc_list)))))
+    sz = len(list_of_list[0])
+    columns = columns or ["col_{}".format(i) for i in range(sz)]
+    df = pd.DataFrame(np.transpose(np.asarray([*list_of_list])), list(range(sz)), columns=columns)
+
+    print("\t".join(["epoch"] + list(str(r) for r in range(sz))))
     for col_name, row in zip(df, df.values.transpose()):
         print("\t".join([col_name] + [str(round(r, 5)) for r in row]))
     cprint_multi_lines("\t- ", "yellow", **return_dict)
 
     plot = sns.lineplot(data=df, palette="tab10", linewidth=2.5)
-    title = "{}_{}_{}".format(args.model_name, args.dataset_name, args.custom_key)
+    title = "{}-{}-{}".format(args.model_name, args.dataset_name, args.custom_key)
     plot.set_title(title)
-    plot.get_figure().savefig("./{}.png".format(title))
+    plot.get_figure().savefig("./{}_{}.png".format(title, return_dict["test_acc_at_best_val"]))
     plt.clf()
 
 
@@ -186,7 +188,8 @@ def run(args):
     best_test_acc = 0.
     best_test_acc_at_best_val = 0.
     best_test_acc_at_best_val_weak = 0.
-    prev_acc_deque = deque(maxlen=10)
+
+    val_loss_deque = deque(maxlen=10)
 
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
@@ -208,6 +211,7 @@ def run(args):
 
     ret = {}
     val_acc_list, test_acc_list, val_loss_list = [], [], []
+    val_loss_change_list = []
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
         train_loss = train_model(dev, net, train_d, nll_loss, adam_optim, _args=args)
@@ -216,7 +220,7 @@ def run(args):
             print("\n\t- Train loss: {}".format(train_loss))
 
         # Validation.
-        if epoch % args.val_interval == 0 and epoch >= args.val_interval * 0:
+        if epoch % args.val_interval == 0:
 
             val_acc, val_loss = test_model(dev, net, val_d or train_d, nll_loss,
                                            _args=args, val_or_test="val", verbose=args.verbose)
@@ -258,22 +262,26 @@ def run(args):
                 cprint_multi_lines("\t- ", print_color, **ret)
 
             # Check early stop condition
-            if args.early_stop and current_iter > args.epochs // 3:
-                recent_prev_acc_mean = float(np.mean(prev_acc_deque))
-                acc_change = abs(recent_prev_acc_mean - val_acc) / recent_prev_acc_mean
-                if acc_change < args.early_stop_threshold:
-                    cprint("Early stopped: acc_change is {}% < {}% at {} | {} -> {}".format(
-                        round(acc_change, 6), args.early_stop_threshold, epoch, recent_prev_acc_mean, val_acc), "red")
-                    break
-                elif recent_prev_acc_mean < best_val_acc / 2:
-                    cprint("Early stopped: recent_prev_acc_mean is {}% < {}/2 (at epoch {} > {}/2)".format(
-                        recent_prev_acc_mean, best_val_acc, current_iter, args.epochs), "red")
+            val_loss_change = 0.
+            if args.early_stop and current_iter > 0:
+                recent_val_loss_mean = float(np.mean(val_loss_deque))
+                val_loss_change = abs(recent_val_loss_mean - val_loss) / recent_val_loss_mean
+                if val_loss_change < args.early_stop_threshold and current_iter > args.epochs // 5:
+                    if args.verbose:
+                        cprint("Early stopped: val_loss_change is {}% < {}% at {} | {} -> {}".format(
+                            round(val_loss_change, 6), args.early_stop_threshold,
+                            epoch, recent_val_loss_mean, val_acc,
+                        ), "red")
                     break
 
-            prev_acc_deque.append(val_acc)
+            if args.save_plot:
+                val_loss_change_list.append(val_loss_change)
+
+            val_loss_deque.append(val_loss)
 
     if args.save_plot:
-        save_loss_and_acc_plot(val_loss_list, val_acc_list, test_acc_list, ret, args)
+        save_loss_and_acc_plot([val_loss_list, val_acc_list, test_acc_list, val_loss_change_list], ret, args,
+                               columns=["val_loss", "val_acc", "test_acc", "val_loss_change"])
 
     return ret
 
@@ -309,7 +317,7 @@ if __name__ == '__main__':
     # GAT, BaselineGAT
     # Cora, CiteSeer, PubMed
     # NE, EV1, NR, RV1
-    main_args = get_args("GAT", "Planetoid", "CiteSeer", custom_key="EV1")
+    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV2")
     pprint_args(main_args)
 
     # noinspection PyTypeChecker
