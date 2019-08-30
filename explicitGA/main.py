@@ -162,7 +162,7 @@ def save_loss_and_acc_plot(list_of_list, return_dict, args, columns=None):
     plot = sns.lineplot(data=df, palette="tab10", linewidth=2.5)
     title = "{}-{}-{}".format(args.model_name, args.dataset_name, args.custom_key)
     plot.set_title(title)
-    plot.get_figure().savefig("./{}_{}.png".format(title, return_dict["test_acc_at_best_val"]))
+    plot.get_figure().savefig("./{}_{}_{}.png".format(title, args.seed, return_dict["best_test_acc_at_best_val"]))
     plt.clf()
 
 
@@ -189,7 +189,7 @@ def run(args):
     best_test_acc_at_best_val = 0.
     best_test_acc_at_best_val_weak = 0.
 
-    val_loss_deque = deque(maxlen=10)
+    val_loss_deque = deque(maxlen=50)
 
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
@@ -211,7 +211,6 @@ def run(args):
 
     ret = {}
     val_acc_list, test_acc_list, val_loss_list = [], [], []
-    val_loss_change_list = []
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
         train_loss = train_model(dev, net, train_d, nll_loss, adam_optim, _args=args)
@@ -266,9 +265,6 @@ def run(args):
                 recent_val_loss_mean = float(np.mean(val_loss_deque))
                 val_loss_change = abs(recent_val_loss_mean - val_loss) / recent_val_loss_mean
 
-                if args.save_plot:
-                    val_loss_change_list.append(val_loss_change)
-
                 if val_loss_change < args.early_stop_threshold and current_iter > args.epochs // 3:
                     if args.verbose >= 1:
                         cprint("Early stopped: val_loss_change is {}% < {}% at {} | {} -> {}".format(
@@ -276,14 +272,12 @@ def run(args):
                             epoch, recent_val_loss_mean, val_loss,
                         ), "red")
                     break
-            else:
-                val_loss_change_list.append(0.)
 
             val_loss_deque.append(val_loss)
 
     if args.save_plot:
-        save_loss_and_acc_plot([val_loss_list, val_acc_list, test_acc_list, val_loss_change_list], ret, args,
-                               columns=["val_loss", "val_acc", "test_acc", "val_loss_change"])
+        save_loss_and_acc_plot([val_loss_list, val_acc_list, test_acc_list], ret, args,
+                               columns=["val_loss", "val_acc", "test_acc"])
 
     return ret
 
@@ -316,10 +310,12 @@ def summary_results(results_dict: Dict[str, list or float]):
 
 
 if __name__ == '__main__':
-    # GAT, BaselineGAT
-    # Cora, CiteSeer, PubMed
-    # NE, EV1, NR, RV1
-    main_args = get_args("GAT", "Planetoid", "Cora", custom_key="EV2")
+    main_args = get_args(
+        model_name="GAT",  # GAT, BaselineGAT
+        dataset_class="Planetoid",
+        dataset_name="CiteSeer",  # Cora, CiteSeer, PubMed
+        custom_key="EV2",  # NE, EV1, EV2 NR, RV1
+    )
     pprint_args(main_args)
 
     # noinspection PyTypeChecker
