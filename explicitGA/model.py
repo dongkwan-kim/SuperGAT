@@ -69,13 +69,13 @@ class ExplicitGATNet(nn.Module):
 
         self.conv1 = gat_cls(
             num_input_features, args.num_hidden_features,
-            heads=args.heads, dropout=args.dropout,
+            heads=args.heads, dropout=args.dropout, concat=True,
             is_explicit=args.is_explicit, explicit_type=args.explicit_type,
         )
 
         self.conv2 = gat_cls(
             args.num_hidden_features * args.heads, num_classes,
-            heads=1, dropout=args.dropout,
+            heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
             is_explicit=args.is_explicit, explicit_type=args.explicit_type,
         )
 
