@@ -79,9 +79,9 @@ class ExplicitGAT(MessagePassing):
                 self.att_bias_2 = Parameter(torch.Tensor(heads))
 
             elif self.explicit_type == "divided_head":
-                self.att_mh_1 = Parameter(torch.Tensor(out_channels, heads, 2 * out_channels))
-                self.att_mh_2_not_neg = Parameter(torch.Tensor(1, heads, out_channels))
-                self.att_mh_2_neg = Parameter(torch.Tensor(1, heads, out_channels))
+                self.att_mh_1 = Parameter(torch.Tensor(2 * out_channels, heads, 2 * out_channels))
+                self.att_mh_2_not_neg = Parameter(torch.Tensor(1, heads, 2 * out_channels))
+                self.att_mh_2_neg = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
         else:
             self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
@@ -192,7 +192,7 @@ class ExplicitGAT(MessagePassing):
             aggr_out = aggr_out + self.bias
         return aggr_out
 
-    def _get_attention(self, edge_index_i, x_i, x_j, size_i, **kwargs) -> torch.Tensor:
+    def _get_attention(self, edge_index_i, x_i, x_j, size_i, normalize=True, **kwargs) -> torch.Tensor:
         """
         :param edge_index_i: [E]
         :param x_i: [E, heads, F]
@@ -227,8 +227,9 @@ class ExplicitGAT(MessagePassing):
         else:
             raise ValueError
 
-        alpha = F.leaky_relu(alpha, self.negative_slope)
-        alpha = softmax(alpha, edge_index_i, size_i)
+        if normalize:
+            alpha = F.leaky_relu(alpha, self.negative_slope)
+            alpha = softmax(alpha, edge_index_i, size_i)
 
         return alpha
 
@@ -253,7 +254,8 @@ class ExplicitGAT(MessagePassing):
         if x_i is not None:
             x_i = x_i.view(-1, self.heads, self.out_channels)  # [E + neg_E, heads, F]
 
-        alpha = self._get_attention(total_edge_index_i, x_i, x_j, size_i, with_negatives=True)
+        alpha = self._get_attention(total_edge_index_i, x_i, x_j, size_i,
+                                    normalize=False, with_negatives=True)
         return alpha
 
     def _degree_scaling(self, attention_eh, edge_index, neg_edge_index, num_nodes):
