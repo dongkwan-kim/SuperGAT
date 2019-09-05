@@ -21,7 +21,7 @@ from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
 from model import ExplicitGATNet
 from model_baseline import BaselineGNNet
-from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines
+from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
 
 
 def get_model_path(target_epoch, _args, **kwargs):
@@ -175,12 +175,12 @@ def _get_model_cls(model_name: str):
         raise ValueError
 
 
-def run(args):
+def run(args, gpu_id=None):
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    dev = torch.device('cuda:{}'.format(gpu_id) if torch.cuda.is_available() else 'cpu')
 
     best_val_acc = 0.
     test_acc_at_best_val = 0.
@@ -282,13 +282,14 @@ def run(args):
     return ret
 
 
-def run_with_many_seeds(args, num_seeds):
+def run_with_many_seeds(args, num_seeds, gpu_id=None):
+
     results = defaultdict(list)
     for i in range(num_seeds):
         cprint("## TRIAL {} ##".format(i), "yellow")
         _args = deepcopy(args)
         _args.seed = _args.seed + i
-        ret = run(_args)
+        ret = run(_args, gpu_id=gpu_id)
         for rk, rv in ret.items():
             results[rk].append(rv)
     return results
@@ -318,6 +319,11 @@ if __name__ == '__main__':
     )
     pprint_args(main_args)
 
+    alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
+                                 num_gpus_to_use=main_args.num_gpus_to_use)
+    if alloc_gpu:
+        cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
+
     # noinspection PyTypeChecker
-    many_seeds_result = run_with_many_seeds(main_args, 5)
+    many_seeds_result = run_with_many_seeds(main_args, 5, gpu_id=alloc_gpu[0])
     summary_results(many_seeds_result)

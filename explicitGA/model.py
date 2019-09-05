@@ -106,6 +106,7 @@ class ExplicitGATNet(nn.Module):
     def get_explicit_attention_loss(self, num_pos_samples, criterion=None):
 
         assert self.args.is_explicit
+        device = next(self.parameters()).device
 
         if criterion is None:
             criterion = nn.BCEWithLogitsLoss()
@@ -121,11 +122,11 @@ class ExplicitGATNet(nn.Module):
 
             att = att.mean(dim=-1)  # [E + neg_E]
 
-            label = torch.zeros(num_total_samples)
+            label = torch.zeros(num_total_samples).to(device)
             label[:num_pos_samples] = 1
             label = label.float()
 
-            permuted = torch.randperm(num_total_samples)
+            permuted = torch.randperm(num_total_samples).to(device)
 
             loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
             loss_list.append(loss)

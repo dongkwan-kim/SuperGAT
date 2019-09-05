@@ -108,8 +108,13 @@ def blind_other_gpus(num_gpus_total, num_gpus_to_use, is_safe=True, **kwargs):
         free_gpu_ids = get_free_gpu_ids_safe(num_gpus_total, **kwargs)
     else:
         free_gpu_ids = get_free_gpu_ids(num_gpus_total, **kwargs)
-    gpu_ids_to_use = random.sample(free_gpu_ids, num_gpus_to_use)
-    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(n) for n in gpu_ids_to_use)
+
+    if free_gpu_ids:
+        gpu_ids_to_use = random.sample(free_gpu_ids, num_gpus_to_use)
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(str(n) for n in gpu_ids_to_use)
+    else:
+        gpu_ids_to_use = []
+
     return gpu_ids_to_use
 
 
