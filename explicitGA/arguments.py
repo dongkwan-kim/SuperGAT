@@ -37,6 +37,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
                         help='number of total epochs to run')
     parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                         help='manual epoch number (useful on restarts)')
+    parser.add_argument("--loss", default=None, type=str)
     parser.add_argument("--l1-lambda", default=0., type=float)
     parser.add_argument("--l2-lambda", default=0., type=float)
     parser.add_argument("--early-stop", default=True, type=bool)
