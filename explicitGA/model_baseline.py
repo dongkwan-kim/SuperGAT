@@ -14,11 +14,22 @@ from data import getattr_d
 from model import to_pool_cls
 
 
+class LinearWrapper(nn.Linear):
+
+    def __init__(self, in_features, out_features):
+        super().__init__(in_features, out_features)
+
+    def forward(self, x, edge_index=None, *args, **kwargs):
+        return super().forward(x)
+
+
 def _get_gn_cls(cls_name: str):
     if cls_name == "BaselineGAT":
         return GATConv
     elif cls_name == "BaselineGCN":
         return GCNConv
+    elif cls_name == "MLP":
+        return LinearWrapper
     else:
         raise ValueError
 
@@ -28,6 +39,8 @@ def _get_gn_kwargs(cls_name: str, args, **kwargs):
         return {"heads": args.heads, "dropout": args.dropout, **kwargs}
     elif cls_name == "BaselineGCN":
         return {}
+    elif cls_name == "MLP":
+        return {}
     else:
         raise ValueError
 
@@ -36,6 +49,8 @@ def _get_last_features(cls_name: str, args):
     if cls_name == "BaselineGAT":
         return args.num_hidden_features * args.heads
     elif cls_name == "BaselineGCN":
+        return args.num_hidden_features
+    elif cls_name == "MLP":
         return args.num_hidden_features
     else:
         raise ValueError
@@ -116,6 +131,8 @@ class BaselineGNNet(nn.Module):
 
     def get_reconstruction_loss(self, edge_index, criterion=None):
 
+        device = next(self.parameters()).device
+
         if criterion is None:
             criterion = nn.BCEWithLogitsLoss()
 
@@ -133,11 +150,11 @@ class BaselineGNNet(nn.Module):
             num_total_samples = recon.size(0)
             num_to_sample = int(num_total_samples * self.args.edge_sampling_ratio)
 
-            label = torch.zeros(num_total_samples)
+            label = torch.zeros(num_total_samples).to(device)
             label[:num_pos_samples] = 1
             label = label.float()
 
-            permuted = torch.randperm(num_total_samples)
+            permuted = torch.randperm(num_total_samples).to(device)
 
             loss = criterion(recon[permuted][:num_to_sample], label[permuted][:num_to_sample])
             loss_list.append(loss)

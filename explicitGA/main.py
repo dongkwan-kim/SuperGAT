@@ -16,6 +16,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from termcolor import cprint
 from tqdm import tqdm
+from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
@@ -138,17 +139,23 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
             ys_list.append(ys_ndarray)
 
     outputs_total, ys_total = np.concatenate(outputs_list), np.concatenate(ys_list)
-    accuracy = get_accuracy(outputs_total, ys_total)
+
+    if _args.task_type == "Node_Inductive":
+        preds = (outputs_total > 0).float()
+        perfs = f1_score(ys_total, preds, average="micro") if preds.sum() > 0 else 0
+    elif _args.task_type == "Node_Transductive":
+        perfs = get_accuracy(outputs_total, ys_total)
+    else:
+        raise ValueError
 
     if verbose >= 2:
         cprint("\n{}: {}".format(val_or_test, model.__class__.__name__), "yellow")
-        cprint("\t- Accuracy: {}".format(accuracy), "yellow")
+        cprint("\t- Accuracy: {}".format(perfs), "yellow")
 
-    return accuracy, total_loss
+    return perfs, total_loss
 
 
-def save_loss_and_acc_plot(list_of_list, return_dict, args, columns=None):
-
+def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
     sns.set(style="whitegrid")
     sz = len(list_of_list[0])
     columns = columns or ["col_{}".format(i) for i in range(sz)]
@@ -162,7 +169,7 @@ def save_loss_and_acc_plot(list_of_list, return_dict, args, columns=None):
     plot = sns.lineplot(data=df, palette="tab10", linewidth=2.5)
     title = "{}-{}-{}".format(args.model_name, args.dataset_name, args.custom_key)
     plot.set_title(title)
-    plot.get_figure().savefig("./{}_{}_{}.png".format(title, args.seed, return_dict["best_test_acc_at_best_val"]))
+    plot.get_figure().savefig("./{}_{}_{}.png".format(title, args.seed, return_dict["best_test_perf_at_best_val"]))
     plt.clf()
 
 
@@ -175,19 +182,21 @@ def _get_model_cls(model_name: str):
         raise ValueError
 
 
-def run(args, gpu_id=None):
+def run(args, gpu_id=None, return_model=False):
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
-    dev = torch.device('cuda:{}'.format(gpu_id) if torch.cuda.is_available() else 'cpu')
+    dev = torch.device('cuda:{}'.format(gpu_id) if torch.cuda.is_available() else 'cpu') if gpu_id else "cpu"
 
-    best_val_acc = 0.
-    test_acc_at_best_val = 0.
-    test_acc_at_best_val_weak = 0.
-    best_test_acc = 0.
-    best_test_acc_at_best_val = 0.
-    best_test_acc_at_best_val_weak = 0.
+    best_val_perf = 0.
+    test_perf_at_best_val = 0.
+    test_perf_at_best_val_weak = 0.
+    best_test_perf = 0.
+    best_test_perf_at_best_val = 0.
+    best_test_perf_at_best_val_weak = 0.
 
     val_loss_deque = deque(maxlen=50)
 
@@ -203,17 +212,17 @@ def run(args, gpu_id=None):
     loaded = load_model(net, args, target_epoch=None)
     if loaded is not None:
         net, other_state_dict = loaded
-        best_val_acc = other_state_dict["perf"]
+        best_val_perf = other_state_dict["perf"]
         args.start_epoch = other_state_dict["epoch"]
 
-    nll_loss = nn.NLLLoss()
+    loss_func = eval(str(args.loss)) or nn.CrossEntropyLoss()  # nn.BCEWithLogitsLoss(), nn.CrossEntropyLoss()
     adam_optim = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.l2_lambda)
 
     ret = {}
-    val_acc_list, test_acc_list, val_loss_list = [], [], []
+    val_perf_list, test_perf_list, val_loss_list = [], [], []
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
-        train_loss = train_model(dev, net, train_d, nll_loss, adam_optim, _args=args)
+        train_loss = train_model(dev, net, train_d, loss_func, adam_optim, _args=args)
 
         if args.verbose >= 2 and epoch % args.val_interval == 0:
             print("\n\t- Train loss: {}".format(train_loss))
@@ -221,41 +230,41 @@ def run(args, gpu_id=None):
         # Validation.
         if epoch % args.val_interval == 0:
 
-            val_acc, val_loss = test_model(dev, net, val_d or train_d, nll_loss,
-                                           _args=args, val_or_test="val", verbose=args.verbose)
-            test_acc, test_loss = test_model(dev, net, test_d or train_d, nll_loss,
-                                             _args=args, val_or_test="test", verbose=0)
+            val_perf, val_loss = test_model(dev, net, val_d or train_d, loss_func,
+                                            _args=args, val_or_test="val", verbose=args.verbose)
+            test_perf, test_loss = test_model(dev, net, test_d or train_d, loss_func,
+                                              _args=args, val_or_test="test", verbose=0)
             if args.save_plot:
-                val_acc_list.append(val_acc)
-                test_acc_list.append(test_acc)
+                val_perf_list.append(val_perf)
+                test_perf_list.append(test_perf)
                 val_loss_list.append(val_loss)
 
-            if test_acc > best_test_acc:
-                best_test_acc = test_acc
+            if test_perf > best_test_perf:
+                best_test_perf = test_perf
 
-            if val_acc >= best_val_acc:
-                test_acc_at_best_val_weak = test_acc
-                if test_acc_at_best_val_weak > best_test_acc_at_best_val_weak:
-                    best_test_acc_at_best_val_weak = test_acc_at_best_val_weak
+            if val_perf >= best_val_perf:
+                test_perf_at_best_val_weak = test_perf
+                if test_perf_at_best_val_weak > best_test_perf_at_best_val_weak:
+                    best_test_perf_at_best_val_weak = test_perf_at_best_val_weak
 
-            if val_acc > best_val_acc:
+            if val_perf > best_val_perf:
                 print_color = "yellow"
-                best_val_acc = val_acc
-                test_acc_at_best_val = test_acc
-                if test_acc_at_best_val > best_test_acc_at_best_val:
-                    best_test_acc_at_best_val = test_acc_at_best_val
+                best_val_perf = val_perf
+                test_perf_at_best_val = test_perf
+                if test_perf_at_best_val > best_test_perf_at_best_val:
+                    best_test_perf_at_best_val = test_perf_at_best_val
                 if args.save_model:
-                    save_model(net, args, target_epoch=epoch, perf=val_acc)
+                    save_model(net, args, target_epoch=epoch, perf=val_perf)
             else:
                 print_color = None
 
             ret = {
-                "best_val_acc": best_val_acc,
-                "test_acc_at_best_val": test_acc_at_best_val,
-                "test_acc_at_best_val_weak": test_acc_at_best_val_weak,
-                "best_test_acc": best_test_acc,
-                "best_test_acc_at_best_val": best_test_acc_at_best_val,
-                "best_test_acc_at_best_val_weak": best_test_acc_at_best_val_weak,
+                "best_val_perf": best_val_perf,
+                "test_perf_at_best_val": test_perf_at_best_val,
+                "test_perf_at_best_val_weak": test_perf_at_best_val_weak,
+                "best_test_perf": best_test_perf,
+                "best_test_perf_at_best_val": best_test_perf_at_best_val,
+                "best_test_perf_at_best_val_weak": best_test_perf_at_best_val_weak,
             }
             if args.verbose >= 1:
                 cprint_multi_lines("\t- ", print_color, **ret)
@@ -276,14 +285,13 @@ def run(args, gpu_id=None):
             val_loss_deque.append(val_loss)
 
     if args.save_plot:
-        save_loss_and_acc_plot([val_loss_list, val_acc_list, test_acc_list], ret, args,
-                               columns=["val_loss", "val_acc", "test_acc"])
+        save_loss_and_perf_plot([val_loss_list, val_perf_list, test_perf_list], ret, args,
+                                columns=["val_loss", "val_perf", "test_perf"])
 
-    return ret
+    return ret if not return_model else (net, ret)
 
 
 def run_with_many_seeds(args, num_seeds, gpu_id=None):
-
     results = defaultdict(list)
     for i in range(num_seeds):
         cprint("## TRIAL {} ##".format(i), "yellow")
@@ -314,16 +322,18 @@ if __name__ == '__main__':
     main_args = get_args(
         model_name="GAT",  # GAT, BaselineGAT
         dataset_class="Planetoid",
-        dataset_name="CiteSeer",  # Cora, CiteSeer, PubMed
-        custom_key="EV2",  # NE, EV1, EV2 NR, RV1
+        dataset_name="Cora",  # Cora, CiteSeer, PubMed
+        custom_key="EV1",  # NE, EV1, EV2 NR, RV1
     )
     pprint_args(main_args)
 
     alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
-                                 num_gpus_to_use=main_args.num_gpus_to_use)
+                                 num_gpus_to_use=main_args.num_gpus_to_use,
+                                 black_list=main_args.black_list)
     if alloc_gpu:
         cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
+    alloc_gpu_id = alloc_gpu[0] if alloc_gpu else 1
 
     # noinspection PyTypeChecker
-    many_seeds_result = run_with_many_seeds(main_args, 5, gpu_id=alloc_gpu[0])
+    many_seeds_result = run_with_many_seeds(main_args, 10, gpu_id=alloc_gpu_id)
     summary_results(many_seeds_result)

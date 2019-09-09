@@ -55,12 +55,51 @@ def to_pool_cls(pool_name):
         raise ValueError("{} is not in {} or {}".format(pool_name, pygnn.glob.__all__, pygnn.pool.__all__))
 
 
-class ExplicitGATNet(nn.Module):
+class BaseExplicitGATNet(nn.Module):
 
     def __init__(self, args, dataset_or_loader):
-        super(ExplicitGATNet, self).__init__()
-
+        super().__init__()
         self.args = args
+
+    def forward(self, x, edge_index, batch=None):
+        raise NotImplementedError
+
+    def get_explicit_attention_loss(self, num_pos_samples, criterion=None):
+
+        assert self.args.is_explicit
+        device = next(self.parameters()).device
+
+        if criterion is None:
+            criterion = nn.BCEWithLogitsLoss()
+
+        loss_list = []
+        att_residuals_list = [m.residuals for m in self.modules()
+                              if m.__class__.__name__ == ExplicitGAT.__name__]
+
+        for att_res in att_residuals_list:
+            att = att_res["att_with_negatives"]
+            num_total_samples = att.size(0)
+            num_to_sample = int(num_total_samples * self.args.edge_sampling_ratio)
+
+            att = att.mean(dim=-1)  # [E + neg_E]
+
+            label = torch.zeros(num_total_samples).to(device)
+            label[:num_pos_samples] = 1
+            label = label.float()
+
+            permuted = torch.randperm(num_total_samples).to(device)
+
+            loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
+            loss_list.append(loss)
+
+        total_loss = self.args.att_lambda * sum(loss_list)
+        return total_loss
+
+
+class ExplicitGATNet(BaseExplicitGATNet):
+
+    def __init__(self, args, dataset_or_loader):
+        super(ExplicitGATNet, self).__init__(args, dataset_or_loader)
 
         gat_cls = _get_gat_cls(self.args.model_name)
 
@@ -100,36 +139,51 @@ class ExplicitGATNet(nn.Module):
             x = self.pool(x, batch)
             x = self.fc(x)
 
-        x = F.log_softmax(x, dim=1)
         return x
 
-    def get_explicit_attention_loss(self, num_pos_samples, criterion=None):
 
-        assert self.args.is_explicit
-        device = next(self.parameters()).device
+class ExplicitGATNetPPI(BaseExplicitGATNet):
 
-        if criterion is None:
-            criterion = nn.BCEWithLogitsLoss()
+    def __init__(self, args, dataset_or_loader):
+        super(ExplicitGATNetPPI, self).__init__(args, dataset_or_loader)
 
-        loss_list = []
-        att_residuals_list = [m.residuals for m in self.modules()
-                              if m.__class__.__name__ == ExplicitGAT.__name__]
+        gat_cls = _get_gat_cls(self.args.model_name)
 
-        for att_res in att_residuals_list:
-            att = att_res["att_with_negatives"]
-            num_total_samples = att.size(0)
-            num_to_sample = int(num_total_samples * self.args.edge_sampling_ratio)
+        num_input_features = getattr_d(dataset_or_loader, "num_node_features")
+        num_classes = getattr_d(dataset_or_loader, "num_classes")
 
-            att = att.mean(dim=-1)  # [E + neg_E]
+        self.conv1 = gat_cls(
+            num_input_features, args.num_hidden_features,
+            heads=args.heads, dropout=args.dropout, concat=True,
+            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
+        )
+        self.lin1 = nn.Linear(num_input_features, args.num_hidden_features * args.heads)
 
-            label = torch.zeros(num_total_samples).to(device)
-            label[:num_pos_samples] = 1
-            label = label.float()
+        self.conv2 = gat_cls(
+            args.num_hidden_features * args.heads, args.num_hidden_features,
+            heads=args.heads, dropout=args.dropout, concat=False,
+            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
+        )
+        self.lin2 = nn.Linear(args.num_hidden_features * args.heads, args.num_hidden_features * args.heads)
 
-            permuted = torch.randperm(num_total_samples).to(device)
+        self.conv3 = gat_cls(
+            args.num_hidden_features * args.heads, num_classes,
+            heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
+            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
+        )
+        self.lin3 = nn.Linear(args.num_hidden_features * args.heads, num_classes)
 
-            loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
-            loss_list.append(loss)
+    def forward(self, x, edge_index, batch=None) -> Tuple[torch.Tensor, None or List[torch.Tensor]]:
 
-        total_loss = self.args.att_lambda * sum(loss_list)
-        return total_loss
+        x = self.conv1(x, edge_index) + self.lin1(x)
+        x = F.elu(x)
+
+        x = self.conv2(x, edge_index) + self.lin2(x)
+        x = F.elu(x)
+
+        x = self.conv3(x, edge_index) + self.lin3(x)
+
+        # if self.training and self.args.verbose >= 2:
+        #     _inspect_attention_tensor(x, edge_index, self.conv2.residuals)
+
+        return x
