@@ -185,11 +185,12 @@ def _get_model_cls(model_name: str):
 def run(args, gpu_id=None, return_model=False):
     random.seed(args.seed)
     torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
     np.random.seed(args.seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    dev = torch.device('cuda:{}'.format(gpu_id) if torch.cuda.is_available() else 'cpu') if gpu_id else "cpu"
+    dev = "cpu" if gpu_id is None else torch.device('cuda:{}'.format(gpu_id) if torch.cuda.is_available() else 'cpu')
 
     best_val_perf = 0.
     test_perf_at_best_val = 0.
@@ -332,7 +333,7 @@ if __name__ == '__main__':
                                  black_list=main_args.black_list)
     if alloc_gpu:
         cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
-    alloc_gpu_id = alloc_gpu[0] if alloc_gpu else 1
+    alloc_gpu_id = alloc_gpu[0] if alloc_gpu else None
 
     # noinspection PyTypeChecker
     many_seeds_result = run_with_many_seeds(main_args, 10, gpu_id=alloc_gpu_id)
