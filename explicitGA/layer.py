@@ -55,7 +55,7 @@ def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
 class ExplicitGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_explicit=True, explicit_type="basic", **kwargs):
+                 is_explicit=True, attention_type="basic", **kwargs):
         super(ExplicitGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
@@ -65,26 +65,33 @@ class ExplicitGAT(MessagePassing):
         self.negative_slope = negative_slope
         self.dropout = dropout
         self.is_explicit = is_explicit
-        self.explicit_type = explicit_type
+        self.attention_type = attention_type
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
 
         if self.is_explicit:
 
-            if self.explicit_type == "two_layer_scaling":
+            if self.attention_type == "gat_originated":
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
                 self.att_scaling = Parameter(torch.Tensor(heads))
                 self.att_bias = Parameter(torch.Tensor(heads))
                 self.att_scaling_2 = Parameter(torch.Tensor(heads))
                 self.att_bias_2 = Parameter(torch.Tensor(heads))
 
-            elif self.explicit_type == "divided_head":
+            elif self.attention_type == "scaled_dot":
+                self.att_scaling = Parameter(torch.Tensor(heads))
+                self.att_bias = Parameter(torch.Tensor(heads))
+                self.att_scaling_2 = Parameter(torch.Tensor(heads))
+                self.att_bias_2 = Parameter(torch.Tensor(heads))
+
+            elif self.attention_type == "divided_head":
                 self.att_mh_1 = Parameter(torch.Tensor(2 * out_channels, heads, 2 * out_channels))
                 self.att_mh_2_not_neg = Parameter(torch.Tensor(1, heads, 2 * out_channels))
                 self.att_mh_2_neg = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
         else:
-            self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
+            if not self.attention_type == "scaled_dot":
+                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
         self.residuals = {"num_updated": 0, "att_with_negatives": None}
 
@@ -148,7 +155,7 @@ class ExplicitGAT(MessagePassing):
 
             # att_with_negatives = self._degree_scaling(att_with_negatives, edge_index, neg_edge_index, x.size(0))
 
-            if self.explicit_type == "two_layer_scaling":
+            if self.attention_type == "gat_originated" or self.attention_type == "scaled_dot":
                 att_with_negatives = self.att_scaling * att_with_negatives + self.att_bias
                 att_with_negatives = F.elu(att_with_negatives)
                 att_with_negatives = self.att_scaling_2 * att_with_negatives + self.att_bias_2
@@ -203,13 +210,19 @@ class ExplicitGAT(MessagePassing):
 
         # Compute attention coefficients.
 
-        if self.explicit_type == "basic" or self.explicit_type == "two_layer_scaling":
+        if self.attention_type == "basic" or self.attention_type == "gat_originated":
             # [E, heads, 2F] * [1, heads, 2F] -> [E, heads]
             alpha = torch.einsum("ehf,xhf->eh",
                                  torch.cat([x_i, x_j], dim=-1),
                                  self.att_mh_1)
 
-        elif self.explicit_type == "divided_head":
+        elif self.attention_type == "scaled_dot":
+            # [E, heads, F] * [E, heads, F] -> [E, heads]
+            d = x_i.size(-1)
+            alpha = torch.einsum("ehf,ehf->eh", x_i, x_j)
+            alpha = alpha / np.sqrt(d)
+
+        elif self.attention_type == "divided_head":
             # [E, heads, 2F] * [F(=x), heads, 2F] -> [F(=x), E, heads]
             alpha = torch.einsum("ehf,xhf->xeh",
                                  torch.cat([x_i, x_j], dim=-1),

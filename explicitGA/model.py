@@ -109,13 +109,13 @@ class ExplicitGATNet(BaseExplicitGATNet):
         self.conv1 = gat_cls(
             num_input_features, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
-            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
+            is_explicit=args.is_explicit, attention_type=args.attention_type,
         )
 
         self.conv2 = gat_cls(
             args.num_hidden_features * args.heads, num_classes,
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
-            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
+            is_explicit=args.is_explicit, attention_type=args.attention_type,
         )
 
         if args.pool_name is not None:
@@ -155,21 +155,21 @@ class ExplicitGATNetPPI(BaseExplicitGATNet):
         self.conv1 = gat_cls(
             num_input_features, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
-            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
+            is_explicit=args.is_explicit, attention_type=args.attention_type,
         )
         self.lin1 = nn.Linear(num_input_features, args.num_hidden_features * args.heads)
 
         self.conv2 = gat_cls(
             args.num_hidden_features * args.heads, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=False,
-            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
+            is_explicit=args.is_explicit, attention_type=args.attention_type,
         )
         self.lin2 = nn.Linear(args.num_hidden_features * args.heads, args.num_hidden_features * args.heads)
 
         self.conv3 = gat_cls(
             args.num_hidden_features * args.heads, num_classes,
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
-            is_explicit=args.is_explicit, explicit_type=args.explicit_type,
+            is_explicit=args.is_explicit, attention_type=args.attention_type,
         )
         self.lin3 = nn.Linear(args.num_hidden_features * args.heads, num_classes)
 
