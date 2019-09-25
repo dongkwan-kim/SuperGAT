@@ -1,0 +1,117 @@
+DEFAULT: &DEFAULT
+  black_list: [0]
+  num_gpus_total: 4
+  num_gpus_to_use: 1
+  heads: 8
+  dropout: 0.6
+  edge_sampling_ratio: 0.9
+
+  early_stop: True
+  early_stop_threshold: -1
+  seed: 42
+  verbose: 1
+  save_model: False
+  save_plot: False
+
+
+GAT: &GAT
+  model_name: GAT
+  <<: *DEFAULT
+
+GAT-Cora: &GAT-Cora
+  <<: *GAT
+  lr: 0.005
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+
+GAT-Cora-NE:
+  <<: *GAT-Cora
+  epochs: 500
+  l2_lambda: 0.00940636731162557
+  is_super_gat: False
+
+GAT-Cora-E: &GAT-Cora-E
+  <<: *GAT-Cora
+  epochs: 500
+  is_super_gat: True
+
+GAT-Cora-EV1:
+  <<: *GAT-Cora-E
+  edge_sampling_ratio: 0.65491644887445
+  l2_lambda: 0.011833069233159986
+  att_lambda: 3.8805693322191623
+  attention_type: "gat_originated"
+
+GAT-Cora-EV2:  # V
+  <<: *GAT-Cora-E
+  edge_sampling_ratio: 0.6057244078117906
+  l2_lambda: 0.016754183821929596
+  att_lambda: 5.449370600039373
+  attention_type: "scaled_dot"
+
+
+GAT-CiteSeer: &GAT-CiteSeer
+  <<: *GAT
+  lr: 0.005
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+
+GAT-CiteSeer-NE:
+  <<: *GAT-CiteSeer
+  epochs: 400
+  l2_lambda: 0.0388021344144113
+  is_super_gat: False
+
+GAT-CiteSeer-E: &GAT-CiteSeer-E
+  <<: *GAT-CiteSeer
+  epochs: 400
+  is_super_gat: True
+
+GAT-CiteSeer-EV1:  # V
+  <<: *GAT-CiteSeer-E
+  edge_sampling_ratio: 0.7078667583542126
+  l2_lambda: 0.03794579277540424
+  att_lambda: 1.8799002487735323e-05
+  attention_type: "gat_originated"
+
+GAT-CiteSeer-EV2:  # V
+  <<: *GAT-CiteSeer-E
+  edge_sampling_ratio: 0.5039404411045578
+  l2_lambda: 0.04777495641265913
+  att_lambda: 0.6183687430239637
+  attention_type: "scaled_dot"
+
+
+GAT-PubMed: &GAT-PubMed
+  <<: *DEFAULT
+  lr: 0.0025  # 0.01
+  out_heads: 8
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+
+GAT-PubMed-NE:
+  <<: *GAT-PubMed
+  epochs: 300
+  l2_lambda: 0.0031713465638164933
+  is_super_gat: False
+
+GAT-PubMed-E: &GAT-PubMed-E
+  <<: *GAT-PubMed
+  epochs: 300
+  is_super_gat: True
+
+GAT-PubMed-EV1:  # TODO
+  <<: *GAT-PubMed-E
+  l2_lambda: 0.000645037883687564 #0.0006315004390049409
+  att_lambda: 2.5531353134129856e-06 # 0.2530560969277056
+  attention_type: "gat_originated"
+
+GAT-PubMed-EV2:
+  <<: *GAT-PubMed-E
+  edge_sampling_ratio: 0.6013315947726043
+  l2_lambda: 0.0008249065014261066
+  att_lambda: 0.36055516958817213
+  attention_type: "scaled_dot"

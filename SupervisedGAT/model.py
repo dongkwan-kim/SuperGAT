@@ -6,7 +6,7 @@ from termcolor import cprint
 import torch_geometric.transforms as T
 import torch_geometric.nn as pygnn
 
-from layer import ExplicitGAT
+from layer import SupervisedGAT
 from data import get_dataset_or_loader, getattr_d
 
 from typing import Tuple, List
@@ -14,7 +14,7 @@ from typing import Tuple, List
 
 def _get_gat_cls(attention_name: str):
     if attention_name == "GAT":
-        return ExplicitGAT
+        return SupervisedGAT
     else:
         raise ValueError
 
@@ -55,7 +55,7 @@ def to_pool_cls(pool_name):
         raise ValueError("{} is not in {} or {}".format(pool_name, pygnn.glob.__all__, pygnn.pool.__all__))
 
 
-class BaseExplicitGATNet(nn.Module):
+class BaseSupervisedGATNet(nn.Module):
 
     def __init__(self, args, dataset_or_loader):
         super().__init__()
@@ -64,9 +64,9 @@ class BaseExplicitGATNet(nn.Module):
     def forward(self, x, edge_index, batch=None):
         raise NotImplementedError
 
-    def get_explicit_attention_loss(self, num_pos_samples, criterion=None):
+    def get_supervised_attention_loss(self, num_pos_samples, criterion=None):
 
-        assert self.args.is_explicit
+        assert self.args.is_super_gat
         device = next(self.parameters()).device
 
         if criterion is None:
@@ -74,7 +74,7 @@ class BaseExplicitGATNet(nn.Module):
 
         loss_list = []
         att_residuals_list = [m.residuals for m in self.modules()
-                              if m.__class__.__name__ == ExplicitGAT.__name__]
+                              if m.__class__.__name__ == SupervisedGAT.__name__]
 
         for att_res in att_residuals_list:
             att = att_res["att_with_negatives"]
@@ -96,10 +96,10 @@ class BaseExplicitGATNet(nn.Module):
         return total_loss
 
 
-class ExplicitGATNet(BaseExplicitGATNet):
+class SupervisedGATNet(BaseSupervisedGATNet):
 
     def __init__(self, args, dataset_or_loader):
-        super(ExplicitGATNet, self).__init__(args, dataset_or_loader)
+        super(SupervisedGATNet, self).__init__(args, dataset_or_loader)
 
         gat_cls = _get_gat_cls(self.args.model_name)
 
@@ -109,13 +109,13 @@ class ExplicitGATNet(BaseExplicitGATNet):
         self.conv1 = gat_cls(
             num_input_features, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
-            is_explicit=args.is_explicit, attention_type=args.attention_type,
+            is_super_gat=args.is_super_gat, attention_type=args.attention_type,
         )
 
         self.conv2 = gat_cls(
             args.num_hidden_features * args.heads, num_classes,
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
-            is_explicit=args.is_explicit, attention_type=args.attention_type,
+            is_super_gat=args.is_super_gat, attention_type=args.attention_type,
         )
 
         if args.pool_name is not None:
@@ -142,10 +142,10 @@ class ExplicitGATNet(BaseExplicitGATNet):
         return x
 
 
-class ExplicitGATNetPPI(BaseExplicitGATNet):
+class SupervisedGATNetPPI(BaseSupervisedGATNet):
 
     def __init__(self, args, dataset_or_loader):
-        super(ExplicitGATNetPPI, self).__init__(args, dataset_or_loader)
+        super(SupervisedGATNetPPI, self).__init__(args, dataset_or_loader)
 
         gat_cls = _get_gat_cls(self.args.model_name)
 
@@ -155,21 +155,21 @@ class ExplicitGATNetPPI(BaseExplicitGATNet):
         self.conv1 = gat_cls(
             num_input_features, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
-            is_explicit=args.is_explicit, attention_type=args.attention_type,
+            is_super_gat=args.is_super_gat, attention_type=args.attention_type,
         )
         self.lin1 = nn.Linear(num_input_features, args.num_hidden_features * args.heads)
 
         self.conv2 = gat_cls(
             args.num_hidden_features * args.heads, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=False,
-            is_explicit=args.is_explicit, attention_type=args.attention_type,
+            is_super_gat=args.is_super_gat, attention_type=args.attention_type,
         )
         self.lin2 = nn.Linear(args.num_hidden_features * args.heads, args.num_hidden_features * args.heads)
 
         self.conv3 = gat_cls(
             args.num_hidden_features * args.heads, num_classes,
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
-            is_explicit=args.is_explicit, attention_type=args.attention_type,
+            is_super_gat=args.is_super_gat, attention_type=args.attention_type,
         )
         self.lin3 = nn.Linear(args.num_hidden_features * args.heads, num_classes)
 

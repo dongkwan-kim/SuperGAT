@@ -1,10 +1,11 @@
-# explicitGA
-Learning Explicit Graph Attention
+# SupervisedGAT
+Code for Supervised Graph Attention Network
 
 ## Graph Attention Types
 - GAT; Graph Attention Network
 - AGNN; Attention-based Graph Neural Network for Semi-Supervised Learning
 - SAGPool; Self-Attention Graph Pooling
+- EdgePool; Towards Graph Pooling by Edge Contraction
 - GATE: Graph Attention Auto-Encoders
 
 ## Code Base

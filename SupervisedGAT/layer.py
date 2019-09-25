@@ -52,11 +52,11 @@ def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
     return torch.cat(neg_edge_indices, dim=1)
 
 
-class ExplicitGAT(MessagePassing):
+class SupervisedGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_explicit=True, attention_type="basic", **kwargs):
-        super(ExplicitGAT, self).__init__(aggr='add', **kwargs)
+                 is_super_gat=True, attention_type="basic", **kwargs):
+        super(SupervisedGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -64,12 +64,12 @@ class ExplicitGAT(MessagePassing):
         self.concat = concat
         self.negative_slope = negative_slope
         self.dropout = dropout
-        self.is_explicit = is_explicit
+        self.is_super_gat = is_super_gat
         self.attention_type = attention_type
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
 
-        if self.is_explicit:
+        if self.is_super_gat:
 
             if self.attention_type == "gat_originated":
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
@@ -137,7 +137,7 @@ class ExplicitGAT(MessagePassing):
 
         propagated = self.propagate(edge_index, size=size, x=x)
 
-        if self.training and self.is_explicit:
+        if self.training and self.is_super_gat:
             if batch is None:
                 neg_edge_index = negative_sampling(
                     edge_index=edge_index,

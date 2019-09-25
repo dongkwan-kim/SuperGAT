@@ -48,7 +48,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--heads", default=8, type=int)
     parser.add_argument("--out-heads", default=None, type=int)
     parser.add_argument("--pool-name", default=None)
-    parser.add_argument("--is-explicit", default=True, type=bool)
+    parser.add_argument("--is-super-gat", default=True, type=bool)
     parser.add_argument("--attention-type", default="basic", type=str)
     parser.add_argument("--is-reconstructed", default=False, type=bool)
 
@@ -71,7 +71,7 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "lr",
         "l1_lambda",
         "l2_lambda",
-        "is_explicit",
+        "is_super_gat",
         "head",
         "dropout",
         "att_lambda",
