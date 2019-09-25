@@ -182,7 +182,7 @@ def _get_model_cls(model_name: str):
         raise ValueError
 
 
-def run(args, gpu_id=None, return_model=False):
+def run(args, gpu_id=None, return_model=False, return_time_series=False):
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
@@ -289,16 +289,21 @@ def run(args, gpu_id=None, return_model=False):
         save_loss_and_perf_plot([val_loss_list, val_perf_list, test_perf_list], ret, args,
                                 columns=["val_loss", "val_perf", "test_perf"])
 
-    return ret if not return_model else (net, ret)
+    if return_model:
+        return net, ret
+    if return_time_series:
+        return {"val_loss_list": val_loss_list, "val_perf_list": val_perf_list, "test_perf_list": test_perf_list, **ret}
+
+    return ret
 
 
-def run_with_many_seeds(args, num_seeds, gpu_id=None):
+def run_with_many_seeds(args, num_seeds, gpu_id=None, **kwargs):
     results = defaultdict(list)
     for i in range(num_seeds):
         cprint("## TRIAL {} ##".format(i), "yellow")
         _args = deepcopy(args)
         _args.seed = _args.seed + i
-        ret = run(_args, gpu_id=gpu_id)
+        ret = run(_args, gpu_id=gpu_id, **kwargs)
         for rk, rv in ret.items():
             results[rk].append(rv)
     return results
