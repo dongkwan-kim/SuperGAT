@@ -9,6 +9,10 @@ from sklearn.metrics import roc_curve, auc
 from termcolor import cprint
 
 
+def sigmoid(x):
+    return float(1. / (1. + np.exp(-x)))
+
+
 def get_cartesian(x, y):
     return np.transpose([np.tile(x, len(y)), np.repeat(y, len(x))])
 
