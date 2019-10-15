@@ -73,7 +73,7 @@ GAT-CiteSeer-EV1:  # V
   <<: *GAT-CiteSeer-E
   edge_sampling_ratio: 0.7078667583542126
   l2_lambda: 0.03794579277540424
-  att_lambda: 1.8799002487735323e-05
+  att_lambda: 0.045071824873627146 #1.8799002487735323e-05
   attention_type: "gat_originated"
 
 GAT-CiteSeer-EV2:  # V
@@ -95,7 +95,7 @@ GAT-PubMed: &GAT-PubMed
 GAT-PubMed-NE:
   <<: *GAT-PubMed
   epochs: 300
-  l2_lambda: 0.0031713465638164933
+  l2_lambda: 0.000760004460172606
   is_super_gat: False
 
 GAT-PubMed-E: &GAT-PubMed-E
@@ -105,8 +105,8 @@ GAT-PubMed-E: &GAT-PubMed-E
 
 GAT-PubMed-EV1:  # TODO
   <<: *GAT-PubMed-E
-  l2_lambda: 0.000645037883687564 #0.0006315004390049409
-  att_lambda: 2.5531353134129856e-06 # 0.2530560969277056
+  l2_lambda: 0.0006427648456884977 # 0.0006315004390049409
+  att_lambda: 0.00033724064657300704 # 0.2530560969277056
   attention_type: "gat_originated"
 
 GAT-PubMed-EV2:
