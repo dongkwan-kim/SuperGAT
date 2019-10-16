@@ -12,6 +12,18 @@ import os
 from pprint import pprint
 
 
+def get_dataset_class_name(dataset_name: str) -> str:
+    dataset_name = dataset_name.lower()
+    if dataset_name in ["cora", "citeseer", "pubmed"]:
+        return "Planetoid"
+    elif dataset_name in ['ptc_mr', 'nci1', 'proteins', 'dd', 'collab', 'imdb-binary', 'imdb-multi']:
+        return "TUDataset"
+    elif dataset_name in ["ppi"]:
+        return "PPI"
+    else:
+        raise ValueError
+
+
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in torch_geometric.datasets.__all__
     return eval(dataset_class)
@@ -127,7 +139,7 @@ if __name__ == '__main__':
     _test_data("Planetoid", "CiteSeer", '~/graph-data')
     _test_data("Planetoid", "Cora", '~/graph-data')
     _test_data("Planetoid", "PubMed", '~/graph-data')
-    _test_data("PPI", None, '~/graph-data')
+    _test_data("PPI", "PPI", '~/graph-data')
 
     # Graph Classification
     _test_data("TUDataset", "MUTAG", '~/graph-data')
