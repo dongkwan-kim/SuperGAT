@@ -240,9 +240,8 @@ class SupervisedGAT(MessagePassing):
         else:
             raise ValueError
 
-        alpha = F.leaky_relu(alpha, self.negative_slope)
-
         if normalize:
+            alpha = F.leaky_relu(alpha, self.negative_slope)  # TODO
             alpha = softmax(alpha, edge_index_i, size_i)
 
         return alpha
