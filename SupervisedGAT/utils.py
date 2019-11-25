@@ -140,3 +140,8 @@ def debug_with_exit(func):
 def cprint_multi_lines(prefix, color, **kwargs):
     for k, v in kwargs.items():
         cprint("{}{}: {}".format(prefix, k, v), color)
+
+
+def count_parameters(model):
+    # https://discuss.pytorch.org/t/how-do-i-check-the-number-of-parameters-of-a-model/4325/9
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
