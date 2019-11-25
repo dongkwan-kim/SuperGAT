@@ -50,6 +50,37 @@ GAT-Cora-EV2:  # V
   att_lambda: 5.449370600039373
   attention_type: "scaled_dot"
 
+GAT-Cora-EV3:
+  <<: *GAT-Cora-E
+  edge_sampling_ratio: 0.5032009013284641
+  l2_lambda: 0.011928595032463785
+  att_lambda: 0.0005070260233823909
+  attention_type: "gat_originated"
+  super_gat_criterion: nn.L1Loss()
+
+GAT-Cora-EV4:
+  <<: *GAT-Cora-E
+  edge_sampling_ratio: 1.0
+  l2_lambda: 0.001
+  att_lambda: 2.0
+  attention_type: "divided_head"
+  super_gat_criterion: nn.L1Loss()
+
+GAT-Cora-EV5:  # no leaky_relu for negative att.
+  <<: *GAT-Cora-E
+  edge_sampling_ratio: 0.6069769273137672
+  l2_lambda: 0.006670170825508933
+  att_lambda: 0.0006773070966635731
+  attention_type: "gat_originated"
+  super_gat_criterion: nn.L1Loss()
+
+GAT-Cora-EV6:  # no leaky_relu for negative att.
+  <<: *GAT-Cora-E
+  edge_sampling_ratio: 0.6069769273137672
+  l2_lambda: 0.006670170825508933
+  att_lambda: 0.0006773070966635731
+  attention_type: "gat_originated"
+
 
 GAT-CiteSeer: &GAT-CiteSeer
   <<: *GAT
@@ -83,6 +114,37 @@ GAT-CiteSeer-EV2:  # V
   att_lambda: 0.6183687430239637
   attention_type: "scaled_dot"
 
+GAT-CiteSeer-EV3:
+  <<: *GAT-CiteSeer-E
+  edge_sampling_ratio: 0.6069769273137672
+  l2_lambda: 0.006670170825508933
+  att_lambda: 0.0006773070966635731
+  attention_type: "gat_originated"
+  super_gat_criterion: nn.L1Loss()  # TODO
+
+GAT-CiteSeer-EV4:
+  <<: *GAT-CiteSeer-E
+  edge_sampling_ratio: 1.0
+  l2_lambda: 0.001
+  att_lambda: 2.0
+  attention_type: "divided_head"
+  super_gat_criterion: nn.L1Loss()  # TODO
+
+GAT-CiteSeer-EV5:  # no leaky_relu for negative att.
+  <<: *GAT-CiteSeer-E
+  edge_sampling_ratio: 0.6069769273137672
+  l2_lambda: 0.006670170825508933
+  att_lambda: 0.0006773070966635731
+  attention_type: "gat_originated"
+  super_gat_criterion: nn.L1Loss()
+
+GAT-CiteSeer-EV6:  # no leaky_relu for negative att.
+  <<: *GAT-CiteSeer-E
+  edge_sampling_ratio: 0.6069769273137672
+  l2_lambda: 0.006670170825508933
+  att_lambda: 0.0006773070966635731
+  attention_type: "gat_originated"
+
 
 GAT-PubMed: &GAT-PubMed
   <<: *DEFAULT
@@ -115,3 +177,50 @@ GAT-PubMed-EV2:
   l2_lambda: 0.0008249065014261066
   att_lambda: 0.36055516958817213
   attention_type: "scaled_dot"
+
+
+GAT-PPI: &GAT-PPI
+  <<: *DEFAULT
+  model_name: GATPPI
+  dropout: 0.
+  loss: nn.BCEWithLogitsLoss()
+  lr: 0.005
+  task_type: Node_Inductive
+  val_interval: 1
+  num_hidden_features: 128
+  heads: 4
+  out_heads: 6
+  use_skip_connect_for_2: True
+
+GAT-PPI-NE:
+  <<: *GAT-PPI
+  epochs: 130
+  l2_lambda: 0.0
+  is_super_gat: False
+
+GAT-PPI-NE2:
+  <<: *GAT-PPI
+  epochs: 130
+  l2_lambda: 0.0
+  is_super_gat: False
+  use_skip_connect_for_2: False
+
+GAT-PPI-E: &GAT-PPI-E
+  <<: *GAT-PPI
+  epochs: 130
+  is_super_gat: True
+
+GAT-PPI-EV3:
+  <<: *GAT-PPI-E
+  edge_sampling_ratio: 0.65491644887445
+  att_lambda: 0
+  attention_type: "gat_originated"
+  use_skip_connect_for_2: False
+
+GAT-PPI-EV4:
+  <<: *GAT-PPI-E
+  edge_sampling_ratio: 0.65491644887445
+  att_lambda: 0
+  attention_type: "gat_originated"
+  use_skip_connect_for_2: False
+  super_gat_criterion: nn.L1Loss()

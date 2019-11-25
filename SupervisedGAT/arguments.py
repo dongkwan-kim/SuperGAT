@@ -50,6 +50,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--pool-name", default=None)
     parser.add_argument("--is-super-gat", default=True, type=bool)
     parser.add_argument("--attention-type", default="basic", type=str)
+    parser.add_argument("--super-gat-criterion", default=None, type=str)
     parser.add_argument("--is-reconstructed", default=False, type=bool)
 
     # Test
