@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,10 +15,10 @@ from typing import Tuple, List
 
 
 def _get_gat_cls(attention_name: str):
-    if attention_name == "GAT":
+    if attention_name == "GAT" or attention_name == "GATPPI":
         return SupervisedGAT
     else:
-        raise ValueError
+        raise ValueError("{} is not proper name".format(attention_name))
 
 
 def _inspect_attention_tensor(x, edge_index, att_res) -> bool:
@@ -71,6 +73,8 @@ class BaseSupervisedGATNet(nn.Module):
 
         if criterion is None:
             criterion = nn.BCEWithLogitsLoss()
+        else:
+            criterion = eval(criterion)
 
         loss_list = []
         att_residuals_list = [m.residuals for m in self.modules()
@@ -122,6 +126,8 @@ class SupervisedGATNet(BaseSupervisedGATNet):
             self.pool = to_pool_cls(args.pool_name)
             self.fc = nn.Linear(num_classes, num_classes)
 
+        pprint(next(self.modules()))
+
     def forward(self, x, edge_index, batch=None) -> Tuple[torch.Tensor, None or List[torch.Tensor]]:
 
         x = F.dropout(x, p=self.args.dropout, training=self.training)
@@ -161,10 +167,11 @@ class SupervisedGATNetPPI(BaseSupervisedGATNet):
 
         self.conv2 = gat_cls(
             args.num_hidden_features * args.heads, args.num_hidden_features,
-            heads=args.heads, dropout=args.dropout, concat=False,
+            heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
         )
-        self.lin2 = nn.Linear(args.num_hidden_features * args.heads, args.num_hidden_features * args.heads)
+        if self.args.use_skip_connect_for_2:
+            self.lin2 = nn.Linear(args.num_hidden_features * args.heads, args.num_hidden_features * args.heads)
 
         self.conv3 = gat_cls(
             args.num_hidden_features * args.heads, num_classes,
@@ -173,12 +180,17 @@ class SupervisedGATNetPPI(BaseSupervisedGATNet):
         )
         self.lin3 = nn.Linear(args.num_hidden_features * args.heads, num_classes)
 
+        pprint(next(self.modules()))
+
     def forward(self, x, edge_index, batch=None) -> Tuple[torch.Tensor, None or List[torch.Tensor]]:
 
         x = self.conv1(x, edge_index) + self.lin1(x)
         x = F.elu(x)
 
-        x = self.conv2(x, edge_index) + self.lin2(x)
+        if self.args.use_skip_connect_for_2:
+            x = self.conv2(x, edge_index) + self.lin2(x)
+        else:
+            x = self.conv2(x, edge_index) + x
         x = F.elu(x)
 
         x = self.conv3(x, edge_index) + self.lin3(x)

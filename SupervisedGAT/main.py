@@ -20,7 +20,7 @@ from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
-from model import SupervisedGATNet
+from model import SupervisedGATNet, SupervisedGATNetPPI
 from model_baseline import BaselineGNNet
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
 
@@ -98,7 +98,10 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
 
         if _args.is_super_gat:
             num_pos_samples = batch.edge_index.size(1) + batch.x.size(0)
-            loss += model.get_supervised_attention_loss(num_pos_samples)
+            loss += model.get_supervised_attention_loss(
+                num_pos_samples=num_pos_samples,
+                criterion=_args.super_gat_criterion,
+            )
 
         if _args.is_reconstructed:
             loss += model.get_reconstruction_loss(batch.edge_index)
@@ -130,6 +133,9 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
                 loss = criterion(outputs[val_or_test_mask], batch.y[val_or_test_mask])
                 outputs_ndarray = outputs[val_or_test_mask].cpu().numpy()
                 ys_ndarray = to_one_hot(batch.y[val_or_test_mask], num_classes)
+            elif model.__class__.__name__ == SupervisedGATNetPPI.__name__:  # PPI task
+                loss = criterion(outputs, batch.y)
+                outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), batch.y.cpu().numpy()
             else:
                 loss = criterion(outputs, batch.y)
                 outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), to_one_hot(batch.y, num_classes)
@@ -141,7 +147,7 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     outputs_total, ys_total = np.concatenate(outputs_list), np.concatenate(ys_list)
 
     if _args.task_type == "Node_Inductive":
-        preds = (outputs_total > 0).float()
+        preds = (outputs_total > 0).astype(int)
         perfs = f1_score(ys_total, preds, average="micro") if preds.sum() > 0 else 0
     elif _args.task_type == "Node_Transductive":
         perfs = get_accuracy(outputs_total, ys_total)
@@ -176,6 +182,8 @@ def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
 def _get_model_cls(model_name: str):
     if model_name == "GAT":
         return SupervisedGATNet
+    elif model_name == "GATPPI":
+        return SupervisedGATNetPPI
     elif model_name.startswith("BaselineG"):
         return BaselineGNNet
     else:
@@ -329,7 +337,7 @@ if __name__ == '__main__':
         model_name="GAT",  # GAT, BaselineGAT
         dataset_class="Planetoid",
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV1",  # NE, EV1, EV2 NR, RV1
+        custom_key="EV3",  # NE, EV1, EV2 NR, RV1
     )
     pprint_args(main_args)
 
