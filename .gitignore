@@ -1,6 +1,7 @@
 log_*
 deprecated
 figs
+test_*.py
 
 # Created by https://www.gitignore.io/api/git,macos,python,virtualenv,pycharm+all
 # Edit at https://www.gitignore.io/?templates=git,macos,python,virtualenv,pycharm+all
