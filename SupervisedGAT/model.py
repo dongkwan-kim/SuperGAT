@@ -66,7 +66,7 @@ class BaseSupervisedGATNet(nn.Module):
     def forward(self, x, edge_index, batch=None):
         raise NotImplementedError
 
-    def get_supervised_attention_loss(self, num_pos_samples, criterion=None):
+    def get_supervised_attention_loss(self, criterion=None):
 
         assert self.args.is_super_gat
         device = next(self.parameters()).device
@@ -77,23 +77,28 @@ class BaseSupervisedGATNet(nn.Module):
             criterion = eval(criterion)
 
         loss_list = []
-        att_residuals_list = [m.residuals for m in self.modules()
+        att_residuals_list = [(m, m.residuals) for m in self.modules()
                               if m.__class__.__name__ == SupervisedGAT.__name__]
 
-        for att_res in att_residuals_list:
-            att = att_res["att_with_negatives"]
+        for module, att_res in att_residuals_list:
+
+            # Attention (X)
+            att = att_res["att_with_negatives"]  # [E + neg_E, heads]
             num_total_samples = att.size(0)
             num_to_sample = int(num_total_samples * self.args.edge_sampling_ratio)
 
-            att = att.mean(dim=-1)  # [E + neg_E]
-
-            label = torch.zeros(num_total_samples).to(device)
-            label[:num_pos_samples] = 1
-            label = label.float()
+            # Labels (Y)
+            label = att_res["att_label"]  # [E + neg_E]
 
             permuted = torch.randperm(num_total_samples).to(device)
 
-            loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
+            if module.is_kld_sup_loss():
+                raise NotImplementedError
+
+            else:  # L1, MSE, CE
+                att = att.mean(dim=-1)  # [E + neg_E]
+                loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
+
             loss_list.append(loss)
 
         total_loss = self.args.att_lambda * sum(loss_list)
@@ -114,12 +119,14 @@ class SupervisedGATNet(BaseSupervisedGATNet):
             num_input_features, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
+            super_gat_criterion=args.super_gat_criterion,
         )
 
         self.conv2 = gat_cls(
             args.num_hidden_features * args.heads, num_classes,
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
+            super_gat_criterion=args.super_gat_criterion,
         )
 
         if args.pool_name is not None:
@@ -162,6 +169,7 @@ class SupervisedGATNetPPI(BaseSupervisedGATNet):
             num_input_features, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
+            super_gat_criterion=args.super_gat_criterion,
         )
         self.lin1 = nn.Linear(num_input_features, args.num_hidden_features * args.heads)
 
@@ -169,6 +177,7 @@ class SupervisedGATNetPPI(BaseSupervisedGATNet):
             args.num_hidden_features * args.heads, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
+            super_gat_criterion=args.super_gat_criterion,
         )
         if self.args.use_skip_connect_for_2:
             self.lin2 = nn.Linear(args.num_hidden_features * args.heads, args.num_hidden_features * args.heads)
@@ -177,6 +186,7 @@ class SupervisedGATNetPPI(BaseSupervisedGATNet):
             args.num_hidden_features * args.heads, num_classes,
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
+            super_gat_criterion=args.super_gat_criterion,
         )
         self.lin3 = nn.Linear(args.num_hidden_features * args.heads, num_classes)
 

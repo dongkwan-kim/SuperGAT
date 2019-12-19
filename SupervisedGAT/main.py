@@ -79,7 +79,7 @@ def load_model(model, _args, target_epoch=None, **kwargs) -> Tuple[Any, dict] or
         return None
 
 
-def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
+def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _args):
     model.train()
 
     total_loss = 0.
@@ -96,10 +96,16 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, _args):
         else:
             loss = criterion(outputs, batch.y)
 
+        # Supervision Loss
         if _args.is_super_gat:
-            num_pos_samples = batch.edge_index.size(1) + batch.x.size(0)
-            loss += model.get_supervised_attention_loss(
-                num_pos_samples=num_pos_samples,
+
+            # Pretraining
+            if epoch < _args.attention_pretraining_epoch:
+                p, q = 0.0, 1.0 / _args.att_lambda
+            else:
+                p, q = 1.0, 1.0
+
+            loss = p * loss + q * model.get_supervised_attention_loss(
                 criterion=_args.super_gat_criterion,
             )
 
@@ -231,7 +237,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     val_perf_list, test_perf_list, val_loss_list = [], [], []
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
-        train_loss = train_model(dev, net, train_d, loss_func, adam_optim, _args=args)
+        train_loss = train_model(dev, net, train_d, loss_func, adam_optim, epoch=epoch, _args=args)
 
         if args.verbose >= 2 and epoch % args.val_interval == 0:
             print("\n\t- Train loss: {}".format(train_loss))
@@ -337,7 +343,7 @@ if __name__ == '__main__':
         model_name="GAT",  # GAT, BaselineGAT
         dataset_class="Planetoid",
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV3",  # NE, EV1, EV2 NR, RV1
+        custom_key="EV10",  # NE, EV
     )
     pprint_args(main_args)
 
