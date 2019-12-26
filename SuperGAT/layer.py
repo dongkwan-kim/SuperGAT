@@ -114,6 +114,9 @@ class SupervisedGAT(MessagePassing):
             elif self.attention_type == "general":
                 self.att_mh_1 = Parameter(torch.Tensor(heads, out_channels, out_channels))
 
+            elif self.attention_type == "dot_product":
+                pass
+
             else:
                 raise ValueError
 

@@ -69,6 +69,9 @@ class BaseSupervisedGATNet(nn.Module):
     def get_supervised_attention_loss(self, criterion=None):
 
         assert self.args.is_super_gat
+        if self.args.att_lambda == 0:
+            return 0
+
         device = next(self.parameters()).device
 
         if criterion is None:
