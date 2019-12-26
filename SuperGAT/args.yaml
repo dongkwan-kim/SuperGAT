@@ -1,5 +1,5 @@
 DEFAULT: &DEFAULT
-  black_list: [0]
+  black_list: [0, 2, 3]
   num_gpus_total: 4
   num_gpus_to_use: 1
   heads: 8
@@ -184,6 +184,14 @@ GAT-Cora-EV12O8:  # No pretraining  # 0.8493
   att_lambda: 3.3387640167333097
   attention_type: "prob_mask"
 
+GAT-Cora-NEV12O8:  # No pretraining
+  <<: *GAT-Cora-E
+  out_heads: 8
+  edge_sampling_ratio: 0.6977021924133151
+  l2_lambda: 0.009591902680360786
+  att_lambda: 0  # NEV
+  attention_type: "prob_mask"
+
 GAT-Cora-EV12O1:  # No pretraining
   <<: *GAT-Cora-E
   edge_sampling_ratio: 0.5001065133395246
@@ -365,6 +373,14 @@ GAT-CiteSeer-EV12O8:  # No pretraining  0.737
   att_lambda: 0.01019006831591324
   attention_type: "prob_mask"
 
+GAT-CiteSeer-NEV12O8:  # No pretraining
+  <<: *GAT-CiteSeer-E
+  out_heads: 8
+  edge_sampling_ratio: 0.8626322691750812
+  l2_lambda: 0.03866305390334028
+  att_lambda: 0  # NEV
+  attention_type: "prob_mask"
+
 GAT-CiteSeer-EV12O1:  # No pretraining
   <<: *GAT-CiteSeer-E
   edge_sampling_ratio: 0.5
@@ -390,7 +406,7 @@ GAT-CiteSeer-EV14O8:
 
 GAT-PubMed: &GAT-PubMed
   <<: *DEFAULT
-  lr: 0.0025  # 0.01
+  lr: 0.01  # 0.0025
   out_heads: 8
   task_type: Node_Transductive
   val_interval: 1
@@ -399,13 +415,19 @@ GAT-PubMed: &GAT-PubMed
 GAT-PubMed-NE:
   <<: *GAT-PubMed
   epochs: 300
-  l2_lambda: 0.000760004460172606
+  l2_lambda: 0.0006334814661840428
+  is_super_gat: False
+
+GAT-PubMed-NE-500:
+  <<: *GAT-PubMed
+  epochs: 500
+  l2_lambda: 0.0006334814661840428
   is_super_gat: False
 
 GAT-PubMed-NEDP:
   <<: *GAT-PubMed
   epochs: 300
-  l2_lambda: 0.0388021344144113
+  l2_lambda: 0.0008387863766220923
   is_super_gat: False
   attention_type: "dot_product"
 
@@ -436,14 +458,6 @@ GAT-PubMed-EV9O8:
   attention_type: "prob_mask"
   attention_pretraining_epoch: 41
 
-GAT-PubMed-EV12O8:  # No pretraining
-  <<: *GAT-PubMed-E
-  out_heads: 8
-  edge_sampling_ratio: 0.8626322691750812
-  l2_lambda: 0.03866305390334028
-  att_lambda: 0.01019006831591324
-  attention_type: "prob_mask"
-
 GAT-PubMed-EV9O8-500:
   <<: *GAT-PubMed-E
   epochs: 500
@@ -454,9 +468,45 @@ GAT-PubMed-EV9O8-500:
   attention_type: "prob_mask"
   attention_pretraining_epoch: 41
 
+GAT-PubMed-EV9O8-600:
+  <<: *GAT-PubMed-E
+  epochs: 600
+  out_heads: 8
+  edge_sampling_ratio: 0.5030357607832597
+  l2_lambda: 0.0407014219526219
+  att_lambda: 0.00016746130730858905
+  attention_type: "prob_mask"
+  attention_pretraining_epoch: 41
+
+GAT-PubMed-EV12O8:  # No pretraining
+  <<: *GAT-PubMed-E
+  out_heads: 8
+  edge_sampling_ratio: 0.8626322691750812
+  l2_lambda: 0.03866305390334028
+  att_lambda: 0.01019006831591324
+  attention_type: "prob_mask"
+
+GAT-PubMed-NEV12O8-500:  # No pretraining
+  <<: *GAT-PubMed-E
+  epochs: 500
+  out_heads: 8
+  edge_sampling_ratio: 0.8626322691750812
+  l2_lambda: 0.03866305390334028
+  att_lambda: 0  # NEV
+  attention_type: "prob_mask"
+
 GAT-PubMed-EV12O8-500:  # No pretraining
   <<: *GAT-PubMed-E
   epochs: 500
+  out_heads: 8
+  edge_sampling_ratio: 0.8626322691750812
+  l2_lambda: 0.03866305390334028
+  att_lambda: 0.01019006831591324
+  attention_type: "prob_mask"
+
+GAT-PubMed-EV12O8-600:  # No pretraining
+  <<: *GAT-PubMed-E
+  epochs: 600
   out_heads: 8
   edge_sampling_ratio: 0.8626322691750812
   l2_lambda: 0.03866305390334028
