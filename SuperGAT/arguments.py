@@ -98,12 +98,13 @@ def save_args(model_dir_path: str, _args: argparse.Namespace):
 
 def pprint_args(_args: argparse.Namespace):
     cprint("Args PPRINT", "yellow")
-    for k, v in _args.__dict__.items():
+    for k, v in sorted(_args.__dict__.items()):
         print("\t- {}: {}".format(k, v))
 
 
 if __name__ == '__main__':
-    test_args = get_args("explictGA", "TUDataset", "ENZYME", "TEST")
+    test_args = get_args("GAT", "Planetoid", "Cora", "NE")
     print(type(test_args))
     print(test_args)
     print(get_important_args(test_args))
+    pprint_args(test_args)
