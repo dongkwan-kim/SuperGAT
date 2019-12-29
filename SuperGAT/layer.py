@@ -167,7 +167,7 @@ class SupervisedGAT(MessagePassing):
                 neg_edge_index = negative_sampling(
                     edge_index=edge_index,
                     num_nodes=x.size(0),
-                    num_neg_samples=x.size(0),
+                    num_neg_samples=edge_index.size(1),
                 )
             else:
                 neg_edge_index = batched_negative_sampling(
