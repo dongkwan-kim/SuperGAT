@@ -92,6 +92,9 @@ class SupervisedGAT(MessagePassing):
                 self.att_scaling_2 = Parameter(torch.Tensor(heads))
                 self.att_bias_2 = Parameter(torch.Tensor(heads))
 
+            elif self.attention_type.endswith("mask_only"):
+                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
+
             elif self.attention_type == "general":
                 self.att_mh_1 = Parameter(torch.Tensor(heads, out_channels, out_channels))
                 self.att_scaling = Parameter(torch.Tensor(heads))
@@ -248,7 +251,7 @@ class SupervisedGAT(MessagePassing):
             # [E, heads, F] * [E, heads, F] -> [E, heads]
             alpha = torch.einsum("ehf,ehf->eh", x_i, x_j)
 
-        elif self.attention_type.endswith("mask"):
+        elif self.attention_type.endswith("mask") or self.attention_type.endswith("mask_only"):
 
             # [E, heads, F] * [E, heads, F] -> [E, heads]
             logits = torch.einsum("ehf,ehf->eh", x_i, x_j)
@@ -261,11 +264,11 @@ class SupervisedGAT(MessagePassing):
                                  self.att_mh_1)
 
             # [E, heads] * [E, heads] -> [E, heads]
-            if self.attention_type == "logit_mask":
+            if self.attention_type.startswith("logit_mask"):
                 alpha = torch.einsum("eh,eh->eh", alpha, logits)
-            elif self.attention_type == "prob_mask":
+            elif self.attention_type.startswith("prob_mask"):
                 alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
-            elif self.attention_type == "tanh_mask":
+            elif self.attention_type.startswith("tanh_mask"):
                 alpha = torch.einsum("eh,eh->eh", alpha, torch.tanh(logits))
             else:
                 raise ValueError
