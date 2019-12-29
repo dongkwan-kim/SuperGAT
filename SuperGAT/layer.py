@@ -85,11 +85,6 @@ class SupervisedGAT(MessagePassing):
                 self.att_scaling_2 = Parameter(torch.Tensor(heads))
                 self.att_bias_2 = Parameter(torch.Tensor(heads))
 
-            elif self.attention_type == "divided_head":
-                self.att_mh_1 = Parameter(torch.Tensor(heads, out_channels, 2 * out_channels))
-                self.att_mh_2_not_neg = Parameter(torch.Tensor(1, heads, out_channels))
-                self.att_mh_2_neg = Parameter(torch.Tensor(1, heads, out_channels))
-
             elif self.attention_type.endswith("mask"):
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
                 self.att_scaling = Parameter(torch.Tensor(heads))
@@ -274,20 +269,6 @@ class SupervisedGAT(MessagePassing):
                 alpha = torch.einsum("eh,eh->eh", alpha, torch.tanh(logits))
             else:
                 raise ValueError
-
-        elif self.attention_type == "divided_head":
-            # [E, heads, 2F] * [heads, F(=x), 2F] -> [F(=x), E, heads]
-            alpha = torch.einsum("ehf,hxf->xeh",
-                                 torch.cat([x_i, x_j], dim=-1),
-                                 self.att_mh_1)
-            alpha = F.elu(alpha)
-            alpha = F.dropout(alpha, training=self.training)
-
-            # [F, E, heads] * [1, heads, F] -> [E, heads]
-            if not with_negatives:
-                alpha = torch.einsum("feh,xhf->eh", alpha, self.att_mh_2_not_neg)
-            else:
-                alpha = torch.einsum("feh,xhf->eh", alpha, self.att_mh_2_neg)
 
         elif self.attention_type == "general":  # s^T * W * h
             # [E, heads, F] * [heads, F, o=F] -> [E, heads, o=F]
