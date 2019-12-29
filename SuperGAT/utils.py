@@ -137,8 +137,9 @@ def debug_with_exit(func):
     return wrapped
 
 
-def cprint_multi_lines(prefix, color, **kwargs):
-    for k, v in kwargs.items():
+def cprint_multi_lines(prefix, color, is_sorted=True, **kwargs):
+    kwargs_items = sorted(kwargs.items()) if is_sorted else kwargs.items()
+    for k, v in kwargs_items:
         cprint("{}{}: {}".format(prefix, k, v), color)
 
 
