@@ -138,7 +138,7 @@ class SupervisedGATNet(BaseSupervisedGATNet):
 
         pprint(next(self.modules()))
 
-    def forward(self, x, edge_index, batch=None) -> Tuple[torch.Tensor, None or List[torch.Tensor]]:
+    def forward(self, x, edge_index, batch=None) -> torch.Tensor:
 
         x = F.dropout(x, p=self.args.dropout, training=self.training)
         x = self.conv1(x, edge_index)
@@ -195,7 +195,7 @@ class SupervisedGATNetPPI(BaseSupervisedGATNet):
 
         pprint(next(self.modules()))
 
-    def forward(self, x, edge_index, batch=None) -> Tuple[torch.Tensor, None or List[torch.Tensor]]:
+    def forward(self, x, edge_index, batch=None) -> torch.Tensor:
 
         x = self.conv1(x, edge_index) + self.lin1(x)
         x = F.elu(x)
