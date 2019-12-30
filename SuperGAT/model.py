@@ -123,6 +123,7 @@ class SupervisedGATNet(BaseSupervisedGATNet):
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
             super_gat_criterion=args.super_gat_criterion,
+            neg_sample_ratio=args.neg_sample_ratio,
         )
 
         self.conv2 = gat_cls(
@@ -130,6 +131,7 @@ class SupervisedGATNet(BaseSupervisedGATNet):
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
             super_gat_criterion=args.super_gat_criterion,
+            neg_sample_ratio=args.neg_sample_ratio,
         )
 
         if args.pool_name is not None:
@@ -173,6 +175,7 @@ class SupervisedGATNetPPI(BaseSupervisedGATNet):
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
             super_gat_criterion=args.super_gat_criterion,
+            neg_sample_ratio=args.neg_sample_ratio,
         )
         self.lin1 = nn.Linear(num_input_features, args.num_hidden_features * args.heads)
 
@@ -181,6 +184,7 @@ class SupervisedGATNetPPI(BaseSupervisedGATNet):
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
             super_gat_criterion=args.super_gat_criterion,
+            neg_sample_ratio=args.neg_sample_ratio,
         )
         if self.args.use_skip_connect_for_2:
             self.lin2 = nn.Linear(args.num_hidden_features * args.heads, args.num_hidden_features * args.heads)
@@ -190,6 +194,7 @@ class SupervisedGATNetPPI(BaseSupervisedGATNet):
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
             super_gat_criterion=args.super_gat_criterion,
+            neg_sample_ratio=args.neg_sample_ratio,
         )
         self.lin3 = nn.Linear(args.num_hidden_features * args.heads, num_classes)
 

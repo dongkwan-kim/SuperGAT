@@ -55,7 +55,7 @@ def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
 class SupervisedGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_super_gat=True, attention_type="basic", super_gat_criterion=None, **kwargs):
+                 is_super_gat=True, attention_type="basic", super_gat_criterion=None, neg_sample_ratio=0.0, **kwargs):
         super(SupervisedGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
@@ -67,6 +67,7 @@ class SupervisedGAT(MessagePassing):
         self.is_super_gat = is_super_gat
         self.attention_type = attention_type
         self.super_gat_criterion = super_gat_criterion
+        self.neg_sample_ratio = neg_sample_ratio
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
 
@@ -164,10 +165,13 @@ class SupervisedGAT(MessagePassing):
 
         if self.training and self.is_super_gat:
             if batch is None:
+                # For compatibility, use x.size(0) if neg_sample_ratio is not given
+                num_neg_samples = x.size(0) if self.neg_sample_ratio <= 0.0 \
+                    else int(self.neg_sample_ratio * edge_index.size(1))
                 neg_edge_index = negative_sampling(
                     edge_index=edge_index,
                     num_nodes=x.size(0),
-                    num_neg_samples=edge_index.size(1),
+                    num_neg_samples=num_neg_samples,
                 )
             else:
                 neg_edge_index = batched_negative_sampling(
