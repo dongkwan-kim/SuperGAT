@@ -96,7 +96,7 @@ def save_args(model_dir_path: str, _args: argparse.Namespace):
         raise NotADirectoryError("Cannot save arguments, there's no {}".format(model_dir_path))
 
     with open(os.path.join(model_dir_path, "args.txt"), "w") as arg_file:
-        for k, v in _args.__dict__.items():
+        for k, v in sorted(_args.__dict__.items()):
             arg_file.write("{}: {}\n".format(k, v))
 
 
