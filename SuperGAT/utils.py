@@ -10,7 +10,11 @@ from termcolor import cprint
 
 
 def sigmoid(x):
-    return float(1. / (1. + np.exp(-x)))
+    return float(np_sigmoid(x))
+
+
+def np_sigmoid(x):
+    return 1. / (1. + np.exp(-x))
 
 
 def get_cartesian(x, y):
