@@ -8,9 +8,8 @@ from pprint import pprint
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch_geometric
-import numpy as np
 
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -20,7 +19,8 @@ from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
-from model import SupervisedGATNet, SupervisedGATNetPPI
+from model import SuperGATNet, SuperGATNetPPI
+from layer import SuperGAT
 from model_baseline import BaselineGNNet
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
 
@@ -105,7 +105,10 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
             else:
                 p, q = 1.0, 1.0
 
-            loss = p * loss + q * model.get_supervised_attention_loss(
+            loss = p * loss + q * SuperGAT.get_supervised_attention_loss(
+                model=model,
+                mixing_weight=_args.att_lambda,
+                edge_sampling_ratio=_args.edge_sampling_ratio,
                 criterion=_args.super_gat_criterion,
             )
 
@@ -139,7 +142,7 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
                 loss = criterion(outputs[val_or_test_mask], batch.y[val_or_test_mask])
                 outputs_ndarray = outputs[val_or_test_mask].cpu().numpy()
                 ys_ndarray = to_one_hot(batch.y[val_or_test_mask], num_classes)
-            elif model.__class__.__name__ == SupervisedGATNetPPI.__name__:  # PPI task
+            elif model.__class__.__name__ == SuperGATNetPPI.__name__:  # PPI task
                 loss = criterion(outputs, batch.y)
                 outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), batch.y.cpu().numpy()
             else:
@@ -187,9 +190,9 @@ def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
 
 def _get_model_cls(model_name: str):
     if model_name == "GAT":
-        return SupervisedGATNet
+        return SuperGATNet
     elif model_name == "GATPPI":
-        return SupervisedGATNetPPI
+        return SuperGATNetPPI
     elif model_name.startswith("BaselineG"):
         return BaselineGNNet
     else:

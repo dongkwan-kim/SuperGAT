@@ -1,8 +1,7 @@
-from typing import Tuple
-
 import numpy as np
-import torch
 from termcolor import cprint
+import torch
+import torch.nn as nn
 from torch.nn import Parameter, Linear
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
@@ -52,11 +51,11 @@ def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
     return torch.cat(neg_edge_indices, dim=1)
 
 
-class SupervisedGAT(MessagePassing):
+class SuperGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
                  is_super_gat=True, attention_type="basic", super_gat_criterion=None, neg_sample_ratio=0.0, **kwargs):
-        super(SupervisedGAT, self).__init__(aggr='add', **kwargs)
+        super(SuperGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -322,3 +321,34 @@ class SupervisedGAT(MessagePassing):
     def _update_residuals(self, key, val):
         self.residuals[key] = val
         self.residuals["num_updated"] += 1
+
+    @staticmethod
+    def get_supervised_attention_loss(model, mixing_weight, edge_sampling_ratio=1.0, criterion=None):
+
+        assert model.args.is_super_gat
+        if mixing_weight == 0:
+            return 0
+
+        loss_list = []
+        att_residuals_list = [(m, m.residuals) for m in model.modules()
+                              if m.__class__.__name__ == SuperGAT.__name__]
+
+        device = next(model.parameters()).device
+        criterion = nn.BCEWithLogitsLoss() if criterion is None else eval(criterion)
+        for module, att_res in att_residuals_list:
+
+            # Attention (X)
+            att = att_res["att_with_negatives"]  # [E + neg_E, heads]
+            num_total_samples = att.size(0)
+            num_to_sample = int(num_total_samples * edge_sampling_ratio)
+
+            # Labels (Y)
+            label = att_res["att_label"]  # [E + neg_E]
+
+            att = att.mean(dim=-1)  # [E + neg_E]
+            permuted = torch.randperm(num_total_samples).to(device)
+            loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
+            loss_list.append(loss)
+
+        total_loss = mixing_weight * sum(loss_list)
+        return total_loss

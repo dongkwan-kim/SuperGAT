@@ -1,5 +1,3 @@
-from pprint import pprint
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -8,15 +6,16 @@ from termcolor import cprint
 import torch_geometric.transforms as T
 import torch_geometric.nn as pygnn
 
-from layer import SupervisedGAT
+from layer import SuperGAT
 from data import get_dataset_or_loader, getattr_d
 
+from pprint import pprint
 from typing import Tuple, List
 
 
 def _get_gat_cls(attention_name: str):
     if attention_name == "GAT" or attention_name == "GATPPI":
-        return SupervisedGAT
+        return SuperGAT
     else:
         raise ValueError("{} is not proper name".format(attention_name))
 
@@ -57,57 +56,11 @@ def to_pool_cls(pool_name):
         raise ValueError("{} is not in {} or {}".format(pool_name, pygnn.glob.__all__, pygnn.pool.__all__))
 
 
-class BaseSupervisedGATNet(nn.Module):
+class SuperGATNet(nn.Module):
 
     def __init__(self, args, dataset_or_loader):
         super().__init__()
         self.args = args
-
-    def forward(self, x, edge_index, batch=None):
-        raise NotImplementedError
-
-    def get_supervised_attention_loss(self, criterion=None):
-
-        assert self.args.is_super_gat
-        if self.args.att_lambda == 0:
-            return 0
-
-        device = next(self.parameters()).device
-
-        if criterion is None:
-            criterion = nn.BCEWithLogitsLoss()
-        else:
-            criterion = eval(criterion)
-
-        loss_list = []
-        att_residuals_list = [(m, m.residuals) for m in self.modules()
-                              if m.__class__.__name__ == SupervisedGAT.__name__]
-
-        for module, att_res in att_residuals_list:
-
-            # Attention (X)
-            att = att_res["att_with_negatives"]  # [E + neg_E, heads]
-            num_total_samples = att.size(0)
-            num_to_sample = int(num_total_samples * self.args.edge_sampling_ratio)
-
-            # Labels (Y)
-            label = att_res["att_label"]  # [E + neg_E]
-
-            permuted = torch.randperm(num_total_samples).to(device)
-
-            att = att.mean(dim=-1)  # [E + neg_E]
-            loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
-
-            loss_list.append(loss)
-
-        total_loss = self.args.att_lambda * sum(loss_list)
-        return total_loss
-
-
-class SupervisedGATNet(BaseSupervisedGATNet):
-
-    def __init__(self, args, dataset_or_loader):
-        super(SupervisedGATNet, self).__init__(args, dataset_or_loader)
 
         gat_cls = _get_gat_cls(self.args.model_name)
 
@@ -130,10 +83,6 @@ class SupervisedGATNet(BaseSupervisedGATNet):
             neg_sample_ratio=args.neg_sample_ratio,
         )
 
-        if args.pool_name is not None:
-            self.pool = to_pool_cls(args.pool_name)
-            self.fc = nn.Linear(num_classes, num_classes)
-
         pprint(next(self.modules()))
 
     def forward(self, x, edge_index, batch=None, **kwargs) -> torch.Tensor:
@@ -151,10 +100,11 @@ class SupervisedGATNet(BaseSupervisedGATNet):
         return x
 
 
-class SupervisedGATNetPPI(BaseSupervisedGATNet):
+class SuperGATNetPPI(nn.Module):
 
     def __init__(self, args, dataset_or_loader):
-        super(SupervisedGATNetPPI, self).__init__(args, dataset_or_loader)
+        super().__init__()
+        self.args = args
 
         gat_cls = _get_gat_cls(self.args.model_name)
 
