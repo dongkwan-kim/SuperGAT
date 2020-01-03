@@ -314,9 +314,10 @@ class SupervisedGAT(MessagePassing):
         return attention_eh
 
     def __repr__(self):
-        return '{}({}, {}, heads={})'.format(self.__class__.__name__,
-                                             self.in_channels,
-                                             self.out_channels, self.heads)
+        return '{}({}, {}, heads={}, attention_type={}, neg_sample_ratio={})'.format(
+            self.__class__.__name__, self.in_channels, self.out_channels,
+            self.heads, self.attention_type, self.neg_sample_ratio,
+        )
 
     def _update_residuals(self, key, val):
         self.residuals[key] = val
