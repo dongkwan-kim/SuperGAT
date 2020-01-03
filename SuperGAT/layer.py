@@ -71,7 +71,7 @@ class SupervisedGAT(MessagePassing):
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
 
-        if self.is_super_gat and not self.is_kld_sup_loss():
+        if self.is_super_gat:
 
             if self.attention_type == "gat_originated":
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
@@ -96,22 +96,12 @@ class SupervisedGAT(MessagePassing):
             elif self.attention_type.endswith("mask_only"):
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
-            elif self.attention_type == "general":
-                self.att_mh_1 = Parameter(torch.Tensor(heads, out_channels, out_channels))
-                self.att_scaling = Parameter(torch.Tensor(heads))
-                self.att_bias = Parameter(torch.Tensor(heads))
-                self.att_scaling_2 = Parameter(torch.Tensor(heads))
-                self.att_bias_2 = Parameter(torch.Tensor(heads))
-
             else:
                 raise ValueError
 
         else:
             if self.attention_type == "gat_originated" or self.attention_type == "basic":
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
-
-            elif self.attention_type == "general":
-                self.att_mh_1 = Parameter(torch.Tensor(heads, out_channels, out_channels))
 
             elif self.attention_type == "dot_product":
                 pass
@@ -186,10 +176,9 @@ class SupervisedGAT(MessagePassing):
 
             # att_with_negatives = self._degree_scaling(att_with_negatives, edge_index, neg_edge_index, x.size(0))
 
-            if not self.is_kld_sup_loss() and \
-                (self.attention_type in [
-                    "gat_originated", "dot_product", "logit_mask", "prob_mask", "tanh_mask", "general",
-                ]):
+            if self.attention_type in [
+                "gat_originated", "dot_product", "logit_mask", "prob_mask", "tanh_mask",
+            ]:
                 att_with_negatives = self.att_scaling * att_with_negatives + self.att_bias
                 att_with_negatives = F.elu(att_with_negatives)
                 att_with_negatives = self.att_scaling_2 * att_with_negatives + self.att_bias_2
@@ -277,16 +266,10 @@ class SupervisedGAT(MessagePassing):
             else:
                 raise ValueError
 
-        elif self.attention_type == "general":  # s^T * W * h
-            # [E, heads, F] * [heads, F, o=F] -> [E, heads, o=F]
-            alpha = torch.einsum("ehf,hfo->eho", x_i, self.att_mh_1)
-            # [E, heads, F] * [E, heads, F] -> [E, heads]
-            alpha = torch.einsum("ehf,ehf->eh", alpha, x_j)
-
         else:
             raise ValueError
 
-        if normalize or (with_negatives and self.is_kld_sup_loss()):
+        if normalize:
             alpha = F.leaky_relu(alpha, self.negative_slope)
             alpha = softmax(alpha, edge_index_i, size_i)
 
@@ -321,8 +304,6 @@ class SupervisedGAT(MessagePassing):
         att_label = torch.zeros(alpha.size(0)).float().to(device)
         att_label[:edge_index.size(1)] = 1.
 
-        if self.is_kld_sup_loss():
-            att_label = softmax(att_label, total_edge_index[1], size_i)
         self._update_residuals("att_label", att_label)
 
         return alpha
@@ -334,9 +315,6 @@ class SupervisedGAT(MessagePassing):
         attention_eh = torch.einsum("e,eh->eh", total_edge_degree, attention_eh)  # [E + neg_E, heads]
         attention_eh /= node_degree.mean()
         return attention_eh
-
-    def is_kld_sup_loss(self):
-        return self.super_gat_criterion is not None and "KLDivLoss" in self.super_gat_criterion
 
     def __repr__(self):
         return '{}({}, {}, heads={})'.format(self.__class__.__name__,

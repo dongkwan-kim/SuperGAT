@@ -95,12 +95,8 @@ class BaseSupervisedGATNet(nn.Module):
 
             permuted = torch.randperm(num_total_samples).to(device)
 
-            if module.is_kld_sup_loss():
-                raise NotImplementedError
-
-            else:  # L1, MSE, CE
-                att = att.mean(dim=-1)  # [E + neg_E]
-                loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
+            att = att.mean(dim=-1)  # [E + neg_E]
+            loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
 
             loss_list.append(loss)
 
