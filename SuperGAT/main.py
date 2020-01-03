@@ -339,21 +339,24 @@ def summary_results(results_dict: Dict[str, list or float]):
 
 
 if __name__ == '__main__':
+
+    num_total_runs = 10
     main_args = get_args(
-        model_name="GAT",  # GAT, BaselineGAT
+        model_name="GAT",  # GAT
         dataset_class="Planetoid",
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV10",  # NE, EV
+        custom_key="EV9O8",  # NE, EV
     )
     pprint_args(main_args)
 
     alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
                                  num_gpus_to_use=main_args.num_gpus_to_use,
                                  black_list=main_args.black_list)
-    if alloc_gpu:
-        cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
-    alloc_gpu_id = alloc_gpu[0] if alloc_gpu else None
+    if not alloc_gpu:
+        alloc_gpu = [int(np.random.choice([g for g in range(main_args.num_gpus_total)
+                                           if g not in main_args.black_list], 1))]
+    cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
     # noinspection PyTypeChecker
-    many_seeds_result = run_with_many_seeds(main_args, 10, gpu_id=alloc_gpu_id)
+    many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
     summary_results(many_seeds_result)
