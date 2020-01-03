@@ -136,22 +136,17 @@ class SupervisedGATNet(BaseSupervisedGATNet):
 
         pprint(next(self.modules()))
 
-    def forward(self, x, edge_index, batch=None) -> torch.Tensor:
+    def forward(self, x, edge_index, batch=None, **kwargs) -> torch.Tensor:
 
         x = F.dropout(x, p=self.args.dropout, training=self.training)
-        x = self.conv1(x, edge_index)
+        x = self.conv1(x, edge_index, **kwargs)
         x = F.elu(x)
 
         x = F.dropout(x, p=self.args.dropout, training=self.training)
-        x = self.conv2(x, edge_index)
-        x = F.elu(x)
+        x = self.conv2(x, edge_index, **kwargs)
 
         if self.training and self.args.verbose >= 2:
             _inspect_attention_tensor(x, edge_index, self.conv2.residuals)
-
-        if self.args.pool_name is not None:
-            x = self.pool(x, batch)
-            x = self.fc(x)
 
         return x
 

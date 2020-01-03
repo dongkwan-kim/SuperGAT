@@ -174,14 +174,11 @@ class SupervisedGAT(MessagePassing):
                 x=x,
             )  # [E + neg_E, heads]
 
-            # att_with_negatives = self._degree_scaling(att_with_negatives, edge_index, neg_edge_index, x.size(0))
-
             if self.attention_type in [
                 "gat_originated", "dot_product", "logit_mask", "prob_mask", "tanh_mask",
             ]:
-                att_with_negatives = self.att_scaling * att_with_negatives + self.att_bias
-                att_with_negatives = F.elu(att_with_negatives)
-                att_with_negatives = self.att_scaling_2 * att_with_negatives + self.att_bias_2
+                att_with_negatives = self.att_scaling * F.elu(att_with_negatives) + self.att_bias
+                att_with_negatives = self.att_scaling_2 * F.elu(att_with_negatives) + self.att_bias_2
 
             self._update_residuals("att_with_negatives", att_with_negatives)
 
