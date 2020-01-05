@@ -329,7 +329,7 @@ def run_with_many_seeds(args, num_seeds, gpu_id=None, **kwargs):
 def summary_results(results_dict: Dict[str, list or float]):
     cprint("## RESULTS SUMMARY ##", "yellow")
     is_value_list = False
-    for rk, rv in results_dict.items():
+    for rk, rv in sorted(results_dict.items()):
         if isinstance(rv, list):
             print("{}: {} +- {}".format(rk, round(float(np.mean(rv)), 5), round(float(np.std(rv)), 5)))
             is_value_list = True
@@ -337,7 +337,7 @@ def summary_results(results_dict: Dict[str, list or float]):
             print("{}: {}".format(rk, rv))
     cprint("## RESULTS DETAILS ##", "yellow")
     if is_value_list:
-        for rk, rv in results_dict.items():
+        for rk, rv in sorted(results_dict.items()):
             print("{}: {}".format(rk, rv))
 
 
