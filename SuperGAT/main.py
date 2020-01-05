@@ -11,8 +11,6 @@ import torch.optim as optim
 
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from termcolor import cprint
 from tqdm import tqdm
 from sklearn.metrics import f1_score
@@ -171,6 +169,8 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
 
 
 def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
+    import seaborn as sns
+    import matplotlib.pyplot as plt
     sns.set(style="whitegrid")
     sz = len(list_of_list[0])
     columns = columns or ["col_{}".format(i) for i in range(sz)]
