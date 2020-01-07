@@ -327,11 +327,7 @@ class SuperGAT(MessagePassing):
         self.residuals["num_updated"] += 1
 
     @staticmethod
-    def get_supervised_attention_loss(model, mixing_weight, edge_sampling_ratio=1.0, criterion=None):
-
-        assert model.args.is_super_gat
-        if mixing_weight == 0:
-            return 0
+    def get_supervised_attention_loss(model, edge_sampling_ratio=1.0, criterion=None):
 
         loss_list = []
         att_residuals_list = [(m, m.residuals) for m in model.modules()
@@ -354,8 +350,26 @@ class SuperGAT(MessagePassing):
             loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
             loss_list.append(loss)
 
-        total_loss = mixing_weight * sum(loss_list)
-        return total_loss
+        return sum(loss_list)
+
+    @staticmethod
+    def mix_supervised_attention_loss_with_pretraining(loss, model, mixing_weight,
+                                                       edge_sampling_ratio=1.0, criterion=None,
+                                                       current_epoch=None, pretraining_epoch=None):
+        if mixing_weight == 0:
+            return loss
+
+        if (current_epoch is None or pretraining_epoch is None) or (current_epoch >= pretraining_epoch):
+            w1, w2 = 1.0, mixing_weight  # Normal-training
+        else:
+            w1, w2 = 0.0, 1.0  # Pre-training
+
+        loss = w1 * loss + w2 * SuperGAT.get_supervised_attention_loss(
+            model=model,
+            edge_sampling_ratio=edge_sampling_ratio,
+            criterion=criterion,
+        )
+        return loss
 
     @staticmethod
     def get_link_pred_acc_by_attention(model, edge_y, layer_idx=-1):

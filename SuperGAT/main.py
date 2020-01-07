@@ -96,24 +96,17 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
         else:
             loss = criterion(outputs, batch.y)
 
-        # Supervision Loss
+        # Supervision Loss w/ pretraining
         if _args.is_super_gat:
-
-            # Pretraining
-            if epoch < _args.attention_pretraining_epoch:
-                p, q = 0.0, 1.0 / _args.att_lambda
-            else:
-                p, q = 1.0, 1.0
-
-            loss = p * loss + q * SuperGAT.get_supervised_attention_loss(
+            loss = SuperGAT.mix_supervised_attention_loss_with_pretraining(
+                loss=loss,
                 model=model,
                 mixing_weight=_args.att_lambda,
                 edge_sampling_ratio=_args.edge_sampling_ratio,
                 criterion=_args.super_gat_criterion,
+                current_epoch=epoch,
+                pretraining_epoch=_args.attention_pretraining_epoch,
             )
-
-        if _args.is_reconstructed:
-            loss += model.get_reconstruction_loss(batch.edge_index)
 
         loss.backward()
         optimizer.step()
@@ -353,9 +346,9 @@ if __name__ == '__main__':
     num_total_runs = 10
     main_args = get_args(
         model_name="GAT",  # GAT
-        dataset_class="LinkPlanetoid",  # LinkPlanetoid, Planetoid
+        dataset_class="Planetoid",  # LinkPlanetoid, Planetoid
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV2-Link",  # NE, EV
+        custom_key="EV9O8",  # NE, EV
     )
     pprint_args(main_args)
 
