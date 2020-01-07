@@ -86,7 +86,9 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
         optimizer.zero_grad()
 
         # Forward
-        outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+        outputs = model(batch.x, batch.edge_index,
+                        batch=getattr(batch, "batch", None),
+                        attention_edge_index=getattr(batch, "train_edge_index", None))
 
         # Loss
         if "train_mask" in batch.__dict__:
@@ -126,13 +128,15 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     num_classes = getattr_d(dataset_or_loader, "num_classes")
 
     total_loss = 0.
-    outputs_list, ys_list = [], []
+    outputs_list, ys_list, batch = [], [], None
     with torch.no_grad():
         for batch in dataset_or_loader:
             batch = batch.to(device)
 
             # Forward
-            outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+            outputs = model(batch.x, batch.edge_index,
+                            batch=getattr(batch, "batch", None),
+                            attention_edge_index=getattr(batch, "{}_edge_index".format(val_or_test), None))
 
             # Loss
             if "train_mask" in batch.__dict__:
@@ -158,6 +162,9 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
         perfs = f1_score(ys_total, preds, average="micro") if preds.sum() > 0 else 0
     elif _args.task_type == "Node_Transductive":
         perfs = get_accuracy(outputs_total, ys_total)
+    elif _args.task_type == "Link_Prediction":
+        val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
+        perfs = SuperGAT.get_link_pred_acc_by_attention(model=model, edge_y=val_or_test_edge_y)
     else:
         raise ValueError
 
@@ -346,9 +353,9 @@ if __name__ == '__main__':
     num_total_runs = 10
     main_args = get_args(
         model_name="GAT",  # GAT
-        dataset_class="Planetoid",
+        dataset_class="LinkPlanetoid",  # LinkPlanetoid, Planetoid
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV9O8",  # NE, EV
+        custom_key="EV2-Link",  # NE, EV
     )
     pprint_args(main_args)
 

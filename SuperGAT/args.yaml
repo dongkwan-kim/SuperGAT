@@ -1,5 +1,5 @@
 DEFAULT: &DEFAULT
-  black_list: [0, 2, 3]
+  black_list: [0, 1, 2]
   num_gpus_total: 4
   num_gpus_to_use: 1
   heads: 8
@@ -53,19 +53,29 @@ GAT-Cora-E: &GAT-Cora-E
   epochs: 500
   is_super_gat: True
 
-GAT-Cora-EV1:
+GAT-Cora-EV1: &GAT-Cora-EV1
   <<: *GAT-Cora-E
   edge_sampling_ratio: 0.65491644887445
   l2_lambda: 0.011833069233159986
   att_lambda: 3.8805693322191623
   attention_type: "gat_originated"
 
-GAT-Cora-EV2:
+GAT-Cora-EV2: &GAT-Cora-EV2
   <<: *GAT-Cora-E
   edge_sampling_ratio: 0.6057244078117906
   l2_lambda: 0.016754183821929596
   att_lambda: 5.449370600039373
   attention_type: "dot_product"
+
+GAT-Cora-EV1-Link:
+  <<: *GAT-Cora-EV1
+  att_lambda: 5.449370600039373
+  task_type: Link_Prediction
+
+GAT-Cora-EV2-Link:
+  <<: *GAT-Cora-EV2
+  att_lambda: 5.449370600039373
+  task_type: Link_Prediction
 
 GAT-Cora-EV9:
   <<: *GAT-Cora-E
@@ -75,7 +85,7 @@ GAT-Cora-EV9:
   attention_type: "prob_mask"
   attention_pretraining_epoch: 30
 
-GAT-Cora-EV9O8:  # 0.8507
+GAT-Cora-EV9O8: &GAT-Cora-EV9O8 # 0.8507
   <<: *GAT-Cora-E
   out_heads: 8
   edge_sampling_ratio: 0.9415869989676415

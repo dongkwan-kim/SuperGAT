@@ -11,6 +11,8 @@ import torch_geometric.nn.inits as tgi
 import time
 import random
 
+from utils import get_accuracy, to_one_hot, np_sigmoid
+
 
 def negative_sampling(edge_index, num_nodes=None, num_neg_samples=None):
     num_neg_samples = num_neg_samples or edge_index.size(1)
@@ -130,12 +132,13 @@ class SuperGAT(MessagePassing):
             elif name.startswith("att_mh"):
                 tgi.glorot(param)
 
-    def forward(self, x, edge_index, size=None, batch=None):
+    def forward(self, x, edge_index, size=None, batch=None, attention_edge_index=None):
         """
         :param x: [N, F]
         :param edge_index: [2, E]
         :param size:
         :param batch: None or [B]
+        :param attention_edge_index: [2, E'], Use for link prediction
         :return:
         """
 
@@ -152,8 +155,12 @@ class SuperGAT(MessagePassing):
 
         propagated = self.propagate(edge_index, size=size, x=x)
 
-        if self.training and self.is_super_gat:
-            if batch is None:
+        if (self.is_super_gat and self.training) or (attention_edge_index is not None):
+
+            if attention_edge_index is not None:
+                neg_edge_index = None
+
+            elif batch is None:
                 # For compatibility, use x.size(0) if neg_sample_ratio is not given
                 num_neg_samples = x.size(0) if self.neg_sample_ratio <= 0.0 \
                     else int(self.neg_sample_ratio * edge_index.size(1))
@@ -168,10 +175,20 @@ class SuperGAT(MessagePassing):
                     batch=batch)
 
             att_with_negatives = self._get_attention_with_negatives(
+                x=x,
                 edge_index=edge_index,
                 neg_edge_index=neg_edge_index,
-                x=x,
+                total_edge_index=attention_edge_index,
             )  # [E + neg_E, heads]
+
+            # Labels
+            if self.training:
+                device = next(self.parameters()).device
+                att_label = torch.zeros(att_with_negatives.size(0)).float().to(device)
+                att_label[:edge_index.size(1)] = 1.
+            else:
+                att_label = None
+            self._update_residuals("att_label", att_label)
 
             if self.attention_type in [
                 "gat_originated", "dot_product", "logit_mask", "prob_mask", "tanh_mask",
@@ -271,18 +288,21 @@ class SuperGAT(MessagePassing):
 
         return alpha
 
-    def _get_attention_with_negatives(self, edge_index, neg_edge_index, x):
+    def _get_attention_with_negatives(self, x, edge_index, neg_edge_index, total_edge_index=None):
         """
+        :param x: [N, heads * F]
         :param edge_index: [2, E]
         :param neg_edge_index: [2, neg_E]
-        :param x: [N, heads * F]
+        :param total_edge_index: [2, E + neg_E], if total_edge_index is given, use it.
         :return: [E + neg_E, heads]
         """
 
-        if neg_edge_index.size(1) <= 0:
+        if neg_edge_index is not None and neg_edge_index.size(1) <= 0:
             neg_edge_index = torch.zeros((2, 0, self.heads))
 
-        total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
+        if total_edge_index is None:
+            total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
+
         total_edge_index_j, total_edge_index_i = total_edge_index  # [E + neg_E]
         x_i = torch.index_select(x, 0, total_edge_index_i)  # [E + neg_E, heads * F]
         x_j = torch.index_select(x, 0, total_edge_index_j)  # [E + neg_E, heads * F]
@@ -294,23 +314,7 @@ class SuperGAT(MessagePassing):
 
         alpha = self._get_attention(total_edge_index_i, x_i, x_j, size_i,
                                     normalize=False, with_negatives=True)
-
-        # Labels
-        device = next(self.parameters()).device
-        att_label = torch.zeros(alpha.size(0)).float().to(device)
-        att_label[:edge_index.size(1)] = 1.
-
-        self._update_residuals("att_label", att_label)
-
         return alpha
-
-    def _degree_scaling(self, attention_eh, edge_index, neg_edge_index, num_nodes):
-        total_edge_index = torch.cat([edge_index, neg_edge_index], dim=1)  # [2, E + neg_E]
-        node_degree = degree(total_edge_index[1], num_nodes)  # [N]
-        total_edge_degree = node_degree[total_edge_index[1]]  # [E + neg_E]
-        attention_eh = torch.einsum("e,eh->eh", total_edge_degree, attention_eh)  # [E + neg_E, heads]
-        attention_eh /= node_degree.mean()
-        return attention_eh
 
     def __repr__(self):
         return '{}({}, {}, heads={}, attention_type={}, neg_sample_ratio={})'.format(
@@ -352,3 +356,22 @@ class SuperGAT(MessagePassing):
 
         total_loss = mixing_weight * sum(loss_list)
         return total_loss
+
+    @staticmethod
+    def get_link_pred_acc_by_attention(model, edge_y, layer_idx=-1):
+        """
+        :param model: GNN model (nn.Module)
+        :param edge_y: [E_pred] tensor
+        :param layer_idx: layer idx of GNN models
+        :return:
+        """
+        att_residuals_list = [m.residuals for m in model.modules() if m.__class__.__name__ == SuperGAT.__name__]
+        att_res = att_residuals_list[layer_idx]
+
+        att = att_res["att_with_negatives"]  # [E + neg_E, heads]
+        att = att.mean(dim=-1)  # [E + neg_E]
+
+        edge_probs = 1. - np_sigmoid(att.cpu().numpy())
+        edge_outputs = np.transpose(np.vstack([1. - edge_probs, edge_probs]))
+        pred_acc = get_accuracy(edge_outputs, to_one_hot(edge_y.cpu().int(), 2))
+        return pred_acc
