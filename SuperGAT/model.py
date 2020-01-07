@@ -28,22 +28,18 @@ def _inspect_attention_tensor(x, edge_index, att_res) -> bool:
                  num_pos_samples == 12431 or
                  num_pos_samples == 0):
 
-        att_with_negatives = att_res["att_with_negatives"]
+        att_with_negatives = att_res["att_with_negatives"].mean(dim=-1)
         att_with_negatives_cloned = att_with_negatives.clone()
         att_with_negatives_cloned = torch.sigmoid(att_with_negatives_cloned)
 
-        if len(att_with_negatives.size()) == 2:
-            pos_samples = att_with_negatives_cloned[:num_pos_samples, 0]
-            neg_samples = att_with_negatives_cloned[num_pos_samples:, 0]
-        else:
-            pos_samples = att_with_negatives_cloned[:num_pos_samples]
-            neg_samples = att_with_negatives_cloned[num_pos_samples:]
+        pos_samples = att_with_negatives_cloned[:num_pos_samples]
+        neg_samples = att_with_negatives_cloned[num_pos_samples:]
 
         print()
         pos_m, pos_s = float(pos_samples.mean()), float(pos_samples.std())
-        cprint("TPos: {} +- {}".format(pos_m, pos_s), "blue")
+        cprint("TPos: {} +- {} ({})".format(pos_m, pos_s, pos_samples.size()), "blue")
         neg_m, neg_s = float(neg_samples.mean()), float(neg_samples.std())
-        cprint("TNeg: {} +- {}".format(neg_m, neg_s), "blue")
+        cprint("TNeg: {} +- {} ({})".format(neg_m, neg_s, neg_samples.size()), "blue")
         return True
     else:
         return False
