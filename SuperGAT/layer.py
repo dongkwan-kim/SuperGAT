@@ -5,7 +5,8 @@ import torch.nn as nn
 from torch.nn import Parameter, Linear
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
-from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph, degree
+from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph, degree, dropout_adj, \
+    is_undirected
 import torch_geometric.nn.inits as tgi
 
 import time
@@ -53,10 +54,15 @@ def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
     return torch.cat(neg_edge_indices, dim=1)
 
 
+def is_pretraining(current_epoch, pretraining_epoch):
+    return current_epoch is not None and pretraining_epoch is not None and current_epoch < pretraining_epoch
+
+
 class SuperGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_super_gat=True, attention_type="basic", super_gat_criterion=None, neg_sample_ratio=0.0, **kwargs):
+                 is_super_gat=True, attention_type="basic", super_gat_criterion=None,
+                 neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False, **kwargs):
         super(SuperGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
@@ -69,6 +75,8 @@ class SuperGAT(MessagePassing):
         self.attention_type = attention_type
         self.super_gat_criterion = super_gat_criterion
         self.neg_sample_ratio = neg_sample_ratio
+        self.pretraining_noise_ratio = pretraining_noise_ratio
+        self.pretraining = None if not use_pretraining else True
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
 
@@ -141,6 +149,10 @@ class SuperGAT(MessagePassing):
         :param attention_edge_index: [2, E'], Use for link prediction
         :return:
         """
+        if self.pretraining and self.pretraining_noise_ratio > 0.0:
+            edge_index, _ = dropout_adj(edge_index, p=self.pretraining_noise_ratio,
+                                        force_undirected=is_undirected(edge_index),
+                                        num_nodes=x.size(0), training=self.training)
 
         if size is None and torch.is_tensor(x):
             edge_index, _ = remove_self_loops(edge_index)
@@ -317,9 +329,10 @@ class SuperGAT(MessagePassing):
         return alpha
 
     def __repr__(self):
-        return '{}({}, {}, heads={}, attention_type={}, neg_sample_ratio={})'.format(
+        return '{}({}, {}, heads={}, concat={}, att_type={}, nsr={}, pnr={})'.format(
             self.__class__.__name__, self.in_channels, self.out_channels,
-            self.heads, self.attention_type, self.neg_sample_ratio,
+            self.heads, self.concat, self.attention_type,
+            self.neg_sample_ratio, self.pretraining_noise_ratio
         )
 
     def _update_residuals(self, key, val):
@@ -336,7 +349,6 @@ class SuperGAT(MessagePassing):
         device = next(model.parameters()).device
         criterion = nn.BCEWithLogitsLoss() if criterion is None else eval(criterion)
         for module, att_res in att_residuals_list:
-
             # Attention (X)
             att = att_res["att_with_negatives"]  # [E + neg_E, heads]
             num_total_samples = att.size(0)
@@ -359,8 +371,16 @@ class SuperGAT(MessagePassing):
         if mixing_weight == 0:
             return loss
 
-        if (current_epoch is None or pretraining_epoch is None) or (current_epoch >= pretraining_epoch):
-            w1, w2 = 1.0, mixing_weight  # Normal-training
+        current_pretraining = is_pretraining(current_epoch, pretraining_epoch)
+        next_pretraining = is_pretraining(current_epoch + 1, pretraining_epoch)
+
+        for m in model.modules():
+            if m.__class__.__name__ == SuperGAT.__name__:
+                current_pretraining = current_pretraining if m.pretraining is not None else None
+                m.pretraining = next_pretraining if m.pretraining is not None else None
+
+        if (current_pretraining is None) or (not current_pretraining):
+            w1, w2 = 1.0, mixing_weight  # Forbid pre-training or normal-training
         else:
             w1, w2 = 0.0, 1.0  # Pre-training
 
