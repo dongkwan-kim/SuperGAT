@@ -8,20 +8,18 @@ from pprint import pprint
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch_geometric
-import numpy as np
 
+import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from termcolor import cprint
 from tqdm import tqdm
 from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
-from model import SupervisedGATNet, SupervisedGATNetPPI
-from model_baseline import BaselineGNNet
+from model import SuperGATNet, SuperGATNetPPI
+from layer import SuperGAT
+from model_baseline import LinkGNN
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
 
 
@@ -88,7 +86,9 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
         optimizer.zero_grad()
 
         # Forward
-        outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+        outputs = model(batch.x, batch.edge_index,
+                        batch=getattr(batch, "batch", None),
+                        attention_edge_index=getattr(batch, "train_edge_index", None))
 
         # Loss
         if "train_mask" in batch.__dict__:
@@ -96,21 +96,28 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
         else:
             loss = criterion(outputs, batch.y)
 
-        # Supervision Loss
+        # Supervision Loss w/ pretraining
         if _args.is_super_gat:
-
-            # Pretraining
-            if epoch < _args.attention_pretraining_epoch:
-                p, q = 0.0, 1.0 / _args.att_lambda
-            else:
-                p, q = 1.0, 1.0
-
-            loss = p * loss + q * model.get_supervised_attention_loss(
+            loss = SuperGAT.mix_supervised_attention_loss_with_pretraining(
+                loss=loss,
+                model=model,
+                mixing_weight=_args.att_lambda,
+                edge_sampling_ratio=_args.edge_sampling_ratio,
                 criterion=_args.super_gat_criterion,
+                current_epoch=epoch,
+                pretraining_epoch=_args.total_pretraining_epoch,
             )
 
-        if _args.is_reconstructed:
-            loss += model.get_reconstruction_loss(batch.edge_index)
+        if _args.is_link_gnn:
+            loss = LinkGNN.mix_reconstruction_loss_with_pretraining(
+                loss=loss,
+                model=model,
+                edge_index=batch.edge_index,
+                mixing_weight=_args.link_lambda,
+                edge_sampling_ratio=_args.edge_sampling_ratio,
+                criterion=None,
+                pretraining_epoch=_args.total_pretraining_epoch,
+            )
 
         loss.backward()
         optimizer.step()
@@ -125,13 +132,15 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     num_classes = getattr_d(dataset_or_loader, "num_classes")
 
     total_loss = 0.
-    outputs_list, ys_list = [], []
+    outputs_list, ys_list, batch = [], [], None
     with torch.no_grad():
         for batch in dataset_or_loader:
             batch = batch.to(device)
 
             # Forward
-            outputs = model(batch.x, batch.edge_index, getattr(batch, "batch", None))
+            outputs = model(batch.x, batch.edge_index,
+                            batch=getattr(batch, "batch", None),
+                            attention_edge_index=getattr(batch, "{}_edge_index".format(val_or_test), None))
 
             # Loss
             if "train_mask" in batch.__dict__:
@@ -139,7 +148,7 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
                 loss = criterion(outputs[val_or_test_mask], batch.y[val_or_test_mask])
                 outputs_ndarray = outputs[val_or_test_mask].cpu().numpy()
                 ys_ndarray = to_one_hot(batch.y[val_or_test_mask], num_classes)
-            elif model.__class__.__name__ == SupervisedGATNetPPI.__name__:  # PPI task
+            elif model.__class__.__name__ == SuperGATNetPPI.__name__:  # PPI task
                 loss = criterion(outputs, batch.y)
                 outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), batch.y.cpu().numpy()
             else:
@@ -157,6 +166,9 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
         perfs = f1_score(ys_total, preds, average="micro") if preds.sum() > 0 else 0
     elif _args.task_type == "Node_Transductive":
         perfs = get_accuracy(outputs_total, ys_total)
+    elif _args.task_type == "Link_Prediction":
+        val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
+        perfs = SuperGAT.get_link_pred_acc_by_attention(model=model, edge_y=val_or_test_edge_y)
     else:
         raise ValueError
 
@@ -168,6 +180,8 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
 
 
 def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
+    import seaborn as sns
+    import matplotlib.pyplot as plt
     sns.set(style="whitegrid")
     sz = len(list_of_list[0])
     columns = columns or ["col_{}".format(i) for i in range(sz)]
@@ -187,11 +201,11 @@ def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
 
 def _get_model_cls(model_name: str):
     if model_name == "GAT":
-        return SupervisedGATNet
+        return SuperGATNet
     elif model_name == "GATPPI":
-        return SupervisedGATNetPPI
-    elif model_name.startswith("BaselineG"):
-        return BaselineGNNet
+        return SuperGATNetPPI
+    elif model_name.startswith("LinkG"):
+        return LinkGNN
     else:
         raise ValueError
 
@@ -326,7 +340,7 @@ def run_with_many_seeds(args, num_seeds, gpu_id=None, **kwargs):
 def summary_results(results_dict: Dict[str, list or float]):
     cprint("## RESULTS SUMMARY ##", "yellow")
     is_value_list = False
-    for rk, rv in results_dict.items():
+    for rk, rv in sorted(results_dict.items()):
         if isinstance(rv, list):
             print("{}: {} +- {}".format(rk, round(float(np.mean(rv)), 5), round(float(np.std(rv)), 5)))
             is_value_list = True
@@ -334,26 +348,29 @@ def summary_results(results_dict: Dict[str, list or float]):
             print("{}: {}".format(rk, rv))
     cprint("## RESULTS DETAILS ##", "yellow")
     if is_value_list:
-        for rk, rv in results_dict.items():
+        for rk, rv in sorted(results_dict.items()):
             print("{}: {}".format(rk, rv))
 
 
 if __name__ == '__main__':
+
+    num_total_runs = 10
     main_args = get_args(
-        model_name="GAT",  # GAT, BaselineGAT
-        dataset_class="Planetoid",
+        model_name="GAT",  # GAT
+        dataset_class="Planetoid",  # LinkPlanetoid, Planetoid
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV10",  # NE, EV
+        custom_key="LVO8",  # NE, EV
     )
     pprint_args(main_args)
 
     alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
                                  num_gpus_to_use=main_args.num_gpus_to_use,
                                  black_list=main_args.black_list)
-    if alloc_gpu:
-        cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
-    alloc_gpu_id = alloc_gpu[0] if alloc_gpu else None
+    if not alloc_gpu:
+        alloc_gpu = [int(np.random.choice([g for g in range(main_args.num_gpus_total)
+                                           if g not in main_args.black_list], 1))]
+    cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
     # noinspection PyTypeChecker
-    many_seeds_result = run_with_many_seeds(main_args, 10, gpu_id=alloc_gpu_id)
+    many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
     summary_results(many_seeds_result)

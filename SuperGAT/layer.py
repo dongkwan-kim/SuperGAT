@@ -1,16 +1,18 @@
-from typing import Tuple
-
 import numpy as np
-import torch
 from termcolor import cprint
+import torch
+import torch.nn as nn
 from torch.nn import Parameter, Linear
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
-from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph, degree
+from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph, degree, dropout_adj, \
+    is_undirected
 import torch_geometric.nn.inits as tgi
 
 import time
 import random
+
+from utils import get_accuracy, to_one_hot, np_sigmoid
 
 
 def negative_sampling(edge_index, num_nodes=None, num_neg_samples=None):
@@ -52,11 +54,16 @@ def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
     return torch.cat(neg_edge_indices, dim=1)
 
 
-class SupervisedGAT(MessagePassing):
+def is_pretraining(current_epoch, pretraining_epoch):
+    return current_epoch is not None and pretraining_epoch is not None and current_epoch < pretraining_epoch
+
+
+class SuperGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_super_gat=True, attention_type="basic", super_gat_criterion=None, **kwargs):
-        super(SupervisedGAT, self).__init__(aggr='add', **kwargs)
+                 is_super_gat=True, attention_type="basic", super_gat_criterion=None,
+                 neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False, **kwargs):
+        super(SuperGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -67,10 +74,13 @@ class SupervisedGAT(MessagePassing):
         self.is_super_gat = is_super_gat
         self.attention_type = attention_type
         self.super_gat_criterion = super_gat_criterion
+        self.neg_sample_ratio = neg_sample_ratio
+        self.pretraining_noise_ratio = pretraining_noise_ratio
+        self.pretraining = None if not use_pretraining else True
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
 
-        if self.is_super_gat and not self.is_kld_sup_loss():
+        if self.is_super_gat:
 
             if self.attention_type == "gat_originated":
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
@@ -85,11 +95,6 @@ class SupervisedGAT(MessagePassing):
                 self.att_scaling_2 = Parameter(torch.Tensor(heads))
                 self.att_bias_2 = Parameter(torch.Tensor(heads))
 
-            elif self.attention_type == "divided_head":
-                self.att_mh_1 = Parameter(torch.Tensor(heads, out_channels, 2 * out_channels))
-                self.att_mh_2_not_neg = Parameter(torch.Tensor(1, heads, out_channels))
-                self.att_mh_2_neg = Parameter(torch.Tensor(1, heads, out_channels))
-
             elif self.attention_type.endswith("mask"):
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
                 self.att_scaling = Parameter(torch.Tensor(heads))
@@ -97,12 +102,8 @@ class SupervisedGAT(MessagePassing):
                 self.att_scaling_2 = Parameter(torch.Tensor(heads))
                 self.att_bias_2 = Parameter(torch.Tensor(heads))
 
-            elif self.attention_type == "general":
-                self.att_mh_1 = Parameter(torch.Tensor(heads, out_channels, out_channels))
-                self.att_scaling = Parameter(torch.Tensor(heads))
-                self.att_bias = Parameter(torch.Tensor(heads))
-                self.att_scaling_2 = Parameter(torch.Tensor(heads))
-                self.att_bias_2 = Parameter(torch.Tensor(heads))
+            elif self.attention_type.endswith("mask_only"):
+                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
             else:
                 raise ValueError
@@ -110,9 +111,6 @@ class SupervisedGAT(MessagePassing):
         else:
             if self.attention_type == "gat_originated" or self.attention_type == "basic":
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
-
-            elif self.attention_type == "general":
-                self.att_mh_1 = Parameter(torch.Tensor(heads, out_channels, out_channels))
 
             elif self.attention_type == "dot_product":
                 pass
@@ -142,14 +140,19 @@ class SupervisedGAT(MessagePassing):
             elif name.startswith("att_mh"):
                 tgi.glorot(param)
 
-    def forward(self, x, edge_index, size=None, batch=None):
+    def forward(self, x, edge_index, size=None, batch=None, attention_edge_index=None):
         """
         :param x: [N, F]
         :param edge_index: [2, E]
         :param size:
         :param batch: None or [B]
+        :param attention_edge_index: [2, E'], Use for link prediction
         :return:
         """
+        if self.pretraining and self.pretraining_noise_ratio > 0.0:
+            edge_index, _ = dropout_adj(edge_index, p=self.pretraining_noise_ratio,
+                                        force_undirected=is_undirected(edge_index),
+                                        num_nodes=x.size(0), training=self.training)
 
         if size is None and torch.is_tensor(x):
             edge_index, _ = remove_self_loops(edge_index)
@@ -164,12 +167,19 @@ class SupervisedGAT(MessagePassing):
 
         propagated = self.propagate(edge_index, size=size, x=x)
 
-        if self.training and self.is_super_gat:
-            if batch is None:
+        if (self.is_super_gat and self.training) or (attention_edge_index is not None):
+
+            if attention_edge_index is not None:
+                neg_edge_index = None
+
+            elif batch is None:
+                # For compatibility, use x.size(0) if neg_sample_ratio is not given
+                num_neg_samples = x.size(0) if self.neg_sample_ratio <= 0.0 \
+                    else int(self.neg_sample_ratio * edge_index.size(1))
                 neg_edge_index = negative_sampling(
                     edge_index=edge_index,
                     num_nodes=x.size(0),
-                    num_neg_samples=x.size(0),
+                    num_neg_samples=num_neg_samples,
                 )
             else:
                 neg_edge_index = batched_negative_sampling(
@@ -177,20 +187,26 @@ class SupervisedGAT(MessagePassing):
                     batch=batch)
 
             att_with_negatives = self._get_attention_with_negatives(
+                x=x,
                 edge_index=edge_index,
                 neg_edge_index=neg_edge_index,
-                x=x,
+                total_edge_index=attention_edge_index,
             )  # [E + neg_E, heads]
 
-            # att_with_negatives = self._degree_scaling(att_with_negatives, edge_index, neg_edge_index, x.size(0))
+            # Labels
+            if self.training:
+                device = next(self.parameters()).device
+                att_label = torch.zeros(att_with_negatives.size(0)).float().to(device)
+                att_label[:edge_index.size(1)] = 1.
+            else:
+                att_label = None
+            self._update_residuals("att_label", att_label)
 
-            if not self.is_kld_sup_loss() and \
-                (self.attention_type in [
-                    "gat_originated", "dot_product", "logit_mask", "prob_mask", "tanh_mask", "general",
-                ]):
-                att_with_negatives = self.att_scaling * att_with_negatives + self.att_bias
-                att_with_negatives = F.elu(att_with_negatives)
-                att_with_negatives = self.att_scaling_2 * att_with_negatives + self.att_bias_2
+            if self.attention_type in [
+                "gat_originated", "dot_product", "logit_mask", "prob_mask", "tanh_mask",
+            ]:
+                att_with_negatives = self.att_scaling * F.elu(att_with_negatives) + self.att_bias
+                att_with_negatives = self.att_scaling_2 * F.elu(att_with_negatives) + self.att_bias_2
 
             self._update_residuals("att_with_negatives", att_with_negatives)
 
@@ -253,7 +269,7 @@ class SupervisedGAT(MessagePassing):
             # [E, heads, F] * [E, heads, F] -> [E, heads]
             alpha = torch.einsum("ehf,ehf->eh", x_i, x_j)
 
-        elif self.attention_type.endswith("mask"):
+        elif self.attention_type.endswith("mask") or self.attention_type.endswith("mask_only"):
 
             # [E, heads, F] * [E, heads, F] -> [E, heads]
             logits = torch.einsum("ehf,ehf->eh", x_i, x_j)
@@ -266,56 +282,39 @@ class SupervisedGAT(MessagePassing):
                                  self.att_mh_1)
 
             # [E, heads] * [E, heads] -> [E, heads]
-            if self.attention_type == "logit_mask":
+            if self.attention_type.startswith("logit_mask"):
                 alpha = torch.einsum("eh,eh->eh", alpha, logits)
-            elif self.attention_type == "prob_mask":
+            elif self.attention_type.startswith("prob_mask"):
                 alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
-            elif self.attention_type == "tanh_mask":
+            elif self.attention_type.startswith("tanh_mask"):
                 alpha = torch.einsum("eh,eh->eh", alpha, torch.tanh(logits))
             else:
                 raise ValueError
 
-        elif self.attention_type == "divided_head":
-            # [E, heads, 2F] * [heads, F(=x), 2F] -> [F(=x), E, heads]
-            alpha = torch.einsum("ehf,hxf->xeh",
-                                 torch.cat([x_i, x_j], dim=-1),
-                                 self.att_mh_1)
-            alpha = F.elu(alpha)
-            alpha = F.dropout(alpha, training=self.training)
-
-            # [F, E, heads] * [1, heads, F] -> [E, heads]
-            if not with_negatives:
-                alpha = torch.einsum("feh,xhf->eh", alpha, self.att_mh_2_not_neg)
-            else:
-                alpha = torch.einsum("feh,xhf->eh", alpha, self.att_mh_2_neg)
-
-        elif self.attention_type == "general":  # s^T * W * h
-            # [E, heads, F] * [heads, F, o=F] -> [E, heads, o=F]
-            alpha = torch.einsum("ehf,hfo->eho", x_i, self.att_mh_1)
-            # [E, heads, F] * [E, heads, F] -> [E, heads]
-            alpha = torch.einsum("ehf,ehf->eh", alpha, x_j)
-
         else:
             raise ValueError
 
-        if normalize or (with_negatives and self.is_kld_sup_loss()):
+        if normalize:
             alpha = F.leaky_relu(alpha, self.negative_slope)
             alpha = softmax(alpha, edge_index_i, size_i)
 
         return alpha
 
-    def _get_attention_with_negatives(self, edge_index, neg_edge_index, x):
+    def _get_attention_with_negatives(self, x, edge_index, neg_edge_index, total_edge_index=None):
         """
+        :param x: [N, heads * F]
         :param edge_index: [2, E]
         :param neg_edge_index: [2, neg_E]
-        :param x: [N, heads * F]
+        :param total_edge_index: [2, E + neg_E], if total_edge_index is given, use it.
         :return: [E + neg_E, heads]
         """
 
-        if neg_edge_index.size(1) <= 0:
+        if neg_edge_index is not None and neg_edge_index.size(1) <= 0:
             neg_edge_index = torch.zeros((2, 0, self.heads))
 
-        total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
+        if total_edge_index is None:
+            total_edge_index = torch.cat([edge_index, neg_edge_index], dim=-1)  # [2, E + neg_E]
+
         total_edge_index_j, total_edge_index_i = total_edge_index  # [E + neg_E]
         x_i = torch.index_select(x, 0, total_edge_index_i)  # [E + neg_E, heads * F]
         x_j = torch.index_select(x, 0, total_edge_index_j)  # [E + neg_E, heads * F]
@@ -327,34 +326,86 @@ class SupervisedGAT(MessagePassing):
 
         alpha = self._get_attention(total_edge_index_i, x_i, x_j, size_i,
                                     normalize=False, with_negatives=True)
-
-        # Labels
-        device = next(self.parameters()).device
-        att_label = torch.zeros(alpha.size(0)).float().to(device)
-        att_label[:edge_index.size(1)] = 1.
-
-        if self.is_kld_sup_loss():
-            att_label = softmax(att_label, total_edge_index[1], size_i)
-        self._update_residuals("att_label", att_label)
-
         return alpha
 
-    def _degree_scaling(self, attention_eh, edge_index, neg_edge_index, num_nodes):
-        total_edge_index = torch.cat([edge_index, neg_edge_index], dim=1)  # [2, E + neg_E]
-        node_degree = degree(total_edge_index[1], num_nodes)  # [N]
-        total_edge_degree = node_degree[total_edge_index[1]]  # [E + neg_E]
-        attention_eh = torch.einsum("e,eh->eh", total_edge_degree, attention_eh)  # [E + neg_E, heads]
-        attention_eh /= node_degree.mean()
-        return attention_eh
-
-    def is_kld_sup_loss(self):
-        return self.super_gat_criterion is not None and "KLDivLoss" in self.super_gat_criterion
-
     def __repr__(self):
-        return '{}({}, {}, heads={})'.format(self.__class__.__name__,
-                                             self.in_channels,
-                                             self.out_channels, self.heads)
+        return '{}({}, {}, heads={}, concat={}, att_type={}, nsr={}, pnr={})'.format(
+            self.__class__.__name__, self.in_channels, self.out_channels,
+            self.heads, self.concat, self.attention_type,
+            self.neg_sample_ratio, self.pretraining_noise_ratio
+        )
 
     def _update_residuals(self, key, val):
         self.residuals[key] = val
         self.residuals["num_updated"] += 1
+
+    @staticmethod
+    def get_supervised_attention_loss(model, edge_sampling_ratio=1.0, criterion=None):
+
+        loss_list = []
+        att_residuals_list = [(m, m.residuals) for m in model.modules()
+                              if m.__class__.__name__ == SuperGAT.__name__]
+
+        device = next(model.parameters()).device
+        criterion = nn.BCEWithLogitsLoss() if criterion is None else eval(criterion)
+        for module, att_res in att_residuals_list:
+            # Attention (X)
+            att = att_res["att_with_negatives"]  # [E + neg_E, heads]
+            num_total_samples = att.size(0)
+            num_to_sample = int(num_total_samples * edge_sampling_ratio)
+
+            # Labels (Y)
+            label = att_res["att_label"]  # [E + neg_E]
+
+            att = att.mean(dim=-1)  # [E + neg_E]
+            permuted = torch.randperm(num_total_samples).to(device)
+            loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
+            loss_list.append(loss)
+
+        return sum(loss_list)
+
+    @staticmethod
+    def mix_supervised_attention_loss_with_pretraining(loss, model, mixing_weight,
+                                                       edge_sampling_ratio=1.0, criterion=None,
+                                                       current_epoch=None, pretraining_epoch=None):
+        if mixing_weight == 0:
+            return loss
+
+        current_pretraining = is_pretraining(current_epoch, pretraining_epoch)
+        next_pretraining = is_pretraining(current_epoch + 1, pretraining_epoch)
+
+        for m in model.modules():
+            if m.__class__.__name__ == SuperGAT.__name__:
+                current_pretraining = current_pretraining if m.pretraining is not None else None
+                m.pretraining = next_pretraining if m.pretraining is not None else None
+
+        if (current_pretraining is None) or (not current_pretraining):
+            w1, w2 = 1.0, mixing_weight  # Forbid pre-training or normal-training
+        else:
+            w1, w2 = 0.0, 1.0  # Pre-training
+
+        loss = w1 * loss + w2 * SuperGAT.get_supervised_attention_loss(
+            model=model,
+            edge_sampling_ratio=edge_sampling_ratio,
+            criterion=criterion,
+        )
+        return loss
+
+    @staticmethod
+    def get_link_pred_acc_by_attention(model, edge_y, layer_idx=-1):
+        """
+        :param model: GNN model (nn.Module)
+        :param edge_y: [E_pred] tensor
+        :param layer_idx: layer idx of GNN models
+        :return:
+        """
+        att_residuals_list = [m.residuals for m in model.modules() if m.__class__.__name__ == SuperGAT.__name__]
+        att_res = att_residuals_list[layer_idx]
+
+        att = att_res["att_with_negatives"]  # [E + neg_E, heads]
+        att = att.mean(dim=-1)  # [E + neg_E]
+
+        edge_probs = 1. - np_sigmoid(att.cpu().numpy())
+        edge_outputs = np.transpose(np.vstack([1. - edge_probs, edge_probs]))
+        pred_acc = get_accuracy(edge_outputs, to_one_hot(edge_y.cpu().int(), 2))
+        return pred_acc

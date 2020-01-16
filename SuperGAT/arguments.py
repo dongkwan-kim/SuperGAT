@@ -43,16 +43,27 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--early-stop", default=True, type=bool)
     parser.add_argument("--early-stop-threshold", default=1e-04, type=float)
 
-    # Graph (w/ Attention)
+    # Graph
     parser.add_argument("--num-hidden-features", default=64, type=int)
     parser.add_argument("--heads", default=8, type=int)
     parser.add_argument("--out-heads", default=None, type=int)
     parser.add_argument("--pool-name", default=None)
+
+    # Attention
     parser.add_argument("--is-super-gat", default=True, type=bool)
     parser.add_argument("--attention-type", default="basic", type=str)
+    parser.add_argument("--att-lambda", default=0., type=float)
     parser.add_argument("--super-gat-criterion", default=None, type=str)
-    parser.add_argument("--attention-pretraining-epoch", default=0, type=int)
-    parser.add_argument("--is-reconstructed", default=False, type=bool)
+    parser.add_argument("--neg-sample-ratio", default=0.0, type=float)
+
+    # Pretraining
+    parser.add_argument("--use-pretraining", default=False, type=bool)
+    parser.add_argument("--total-pretraining-epoch", default=0, type=int)
+    parser.add_argument("--pretraining-noise-ratio", default=0.0, type=float)
+
+    # Baseline
+    parser.add_argument("--is-link-gnn", default=False, type=bool)
+    parser.add_argument("--link-lambda", default=0., type=float)
 
     # Test
     parser.add_argument("--val-interval", default=10)
@@ -63,7 +74,8 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
         try:
             parser.set_defaults(**dict(YAML().load(args_file)[args_key].items()))
         except KeyError:
-            cprint("Warning: there's no {} in yamls".format(args_key), "red")
+            cprint("KeyError: there's no {} in yamls".format(args_key), "red")
+            exit()
 
     return parser.parse_args()
 
@@ -73,11 +85,18 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "lr",
         "l1_lambda",
         "l2_lambda",
-        "is_super_gat",
-        "head",
-        "dropout",
         "att_lambda",
-        "attention-pretraining-epoch",
+        "link_lambda",
+        "heads",
+        "out_heads",
+        "dropout",
+        "is_super_gat",
+        "is_link-gnn",
+        "attention_type",
+        "use_pretraining",
+        "total_pretraining_epoch",
+        "pretraining_noise_ratio",
+        "neg_sample_ratio",
     ]
     ret = {}
     for ia_key in important_args:
@@ -92,18 +111,19 @@ def save_args(model_dir_path: str, _args: argparse.Namespace):
         raise NotADirectoryError("Cannot save arguments, there's no {}".format(model_dir_path))
 
     with open(os.path.join(model_dir_path, "args.txt"), "w") as arg_file:
-        for k, v in _args.__dict__.items():
+        for k, v in sorted(_args.__dict__.items()):
             arg_file.write("{}: {}\n".format(k, v))
 
 
 def pprint_args(_args: argparse.Namespace):
     cprint("Args PPRINT", "yellow")
-    for k, v in _args.__dict__.items():
+    for k, v in sorted(_args.__dict__.items()):
         print("\t- {}: {}".format(k, v))
 
 
 if __name__ == '__main__':
-    test_args = get_args("explictGA", "TUDataset", "ENZYME", "TEST")
+    test_args = get_args("GAT", "Planetoid", "Cora", "NE")
     print(type(test_args))
     print(test_args)
     print(get_important_args(test_args))
+    pprint_args(test_args)
