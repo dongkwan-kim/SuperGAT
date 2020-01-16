@@ -65,16 +65,15 @@ def get_gpu_utility(gpu_id_or_ids: int or list) -> List[int]:
     out_str = sp.communicate()
     out_list = out_str[0].decode("utf-8").split("\n")
 
-    seen_id = -1
     gpu_utilities = []
     for item in out_list:
         items = [x.strip() for x in item.split(':')]
         if len(items) == 2:
             key, val = items
             if key == "Minor Number":
-                seen_id = int(val)
-            if seen_id in gpu_ids and key == "Gpu":
-                gpu_utilities.append(int(val.split(" ")[0]))
+                gpu_utilities.append(int(val))
+
+    gpu_utilities = [g - min(gpu_utilities) for g in gpu_utilities]
 
     if len(gpu_utilities) != len(gpu_ids):
         raise EnvironmentError(
