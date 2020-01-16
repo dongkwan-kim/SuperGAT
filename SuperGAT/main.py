@@ -19,7 +19,7 @@ from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
 from model import SuperGATNet, SuperGATNetPPI
 from layer import SuperGAT
-from model_baseline import BaselineGNNet
+from model_baseline import LinkGNN
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
 
 
@@ -105,7 +105,18 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
                 edge_sampling_ratio=_args.edge_sampling_ratio,
                 criterion=_args.super_gat_criterion,
                 current_epoch=epoch,
-                pretraining_epoch=_args.attention_pretraining_epoch,
+                pretraining_epoch=_args.total_pretraining_epoch,
+            )
+
+        if _args.is_link_gnn:
+            loss = LinkGNN.mix_reconstruction_loss_with_pretraining(
+                loss=loss,
+                model=model,
+                edge_index=batch.edge_index,
+                mixing_weight=_args.link_lambda,
+                edge_sampling_ratio=_args.edge_sampling_ratio,
+                criterion=None,
+                pretraining_epoch=_args.total_pretraining_epoch,
             )
 
         loss.backward()
@@ -193,8 +204,8 @@ def _get_model_cls(model_name: str):
         return SuperGATNet
     elif model_name == "GATPPI":
         return SuperGATNetPPI
-    elif model_name.startswith("BaselineG"):
-        return BaselineGNNet
+    elif model_name.startswith("LinkG"):
+        return LinkGNN
     else:
         raise ValueError
 
@@ -348,7 +359,7 @@ if __name__ == '__main__':
         model_name="GAT",  # GAT
         dataset_class="Planetoid",  # LinkPlanetoid, Planetoid
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV9O8",  # NE, EV
+        custom_key="LVO8",  # NE, EV
     )
     pprint_args(main_args)
 

@@ -43,19 +43,27 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--early-stop", default=True, type=bool)
     parser.add_argument("--early-stop-threshold", default=1e-04, type=float)
 
-    # Graph (w/ Attention)
+    # Graph
     parser.add_argument("--num-hidden-features", default=64, type=int)
     parser.add_argument("--heads", default=8, type=int)
     parser.add_argument("--out-heads", default=None, type=int)
     parser.add_argument("--pool-name", default=None)
+
+    # Attention
     parser.add_argument("--is-super-gat", default=True, type=bool)
     parser.add_argument("--attention-type", default="basic", type=str)
+    parser.add_argument("--att-lambda", default=0., type=float)
     parser.add_argument("--super-gat-criterion", default=None, type=str)
-    parser.add_argument("--use-pretraining", default=False, type=bool)
-    parser.add_argument("--attention-pretraining-epoch", default=0, type=int)
-    parser.add_argument("--pretraining-noise-ratio", default=0.0, type=float)
     parser.add_argument("--neg-sample-ratio", default=0.0, type=float)
-    parser.add_argument("--is-reconstructed", default=False, type=bool)
+
+    # Pretraining
+    parser.add_argument("--use-pretraining", default=False, type=bool)
+    parser.add_argument("--total-pretraining-epoch", default=0, type=int)
+    parser.add_argument("--pretraining-noise-ratio", default=0.0, type=float)
+
+    # Baseline
+    parser.add_argument("--is-link-gnn", default=False, type=bool)
+    parser.add_argument("--link-lambda", default=0., type=float)
 
     # Test
     parser.add_argument("--val-interval", default=10)
@@ -78,13 +86,15 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "l1_lambda",
         "l2_lambda",
         "att_lambda",
+        "link_lambda",
         "heads",
         "out_heads",
         "dropout",
         "is_super_gat",
+        "is_link-gnn",
         "attention_type",
         "use_pretraining",
-        "attention_pretraining_epoch",
+        "total_pretraining_epoch",
         "pretraining_noise_ratio",
         "neg_sample_ratio",
     ]
