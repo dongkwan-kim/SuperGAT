@@ -5,7 +5,8 @@ import os
 
 import numpy as np
 import torch
-from sklearn.metrics import roc_curve, auc
+import torch.nn.functional as F
+from sklearn.metrics import roc_auc_score
 from termcolor import cprint
 
 
@@ -27,7 +28,6 @@ def to_one_hot(labels_integer_tensor: torch.Tensor, n_classes: int) -> np.ndarra
 
 
 def create_hash(o: dict):
-
     def preprocess(v):
         if isinstance(v, torch.Tensor):
             return v.shape
@@ -44,17 +44,39 @@ def get_accuracy(preds_mat: np.ndarray, labels_mat: np.ndarray):
             / preds_mat.shape[0])
 
 
-def get_roc_auc(probs, y):
-    fpr, tpr, th = roc_curve(y, probs)
-    _auc = auc(fpr, tpr)
-    _roc = (fpr, tpr)
-    return _roc, _auc
+def get_roc_auc(preds_mat: np.ndarray, labels_mat: np.ndarray):
+    return roc_auc_score(labels_mat, preds_mat)
+
+
+def get_entropy_tensor(x: torch.Tensor, is_prob_dist=False):
+    """
+    :param x: tensor the shape of which is [*, C]
+    :param is_prob_dist: if is_prob_dist == False: apply softmax
+    :return:
+    """
+    x = x if is_prob_dist else F.softmax(x, dim=-1)
+    assert abs(x.sum() - x.size(0)) < 1e-5, "{} is not {}".format(x.sum(), x.size(0))
+    not_entropy_yet = x * torch.log(x)
+    return -1.0 * not_entropy_yet.sum(dim=-1)
+
+
+def get_entropy_tensor_by_iter(x_list: List[torch.Tensor], is_prob_dist=False):
+    """
+    :param x_list: List of tensors [*, X, C_i]
+    :param is_prob_dist:
+    :return:
+    """
+    entropy_list = []
+    for x in x_list:
+        entropy = get_entropy_tensor(x, is_prob_dist)  # [X,]
+        entropy_list.append(entropy)
+    entropy_tensor = torch.stack(entropy_list)
+    return entropy_tensor.to(x_list[0].device)
 
 
 # GPU
 
 def get_gpu_utility(gpu_id_or_ids: int or list) -> List[int]:
-
     if isinstance(gpu_id_or_ids, int):
         gpu_ids = [gpu_id_or_ids]
     else:
@@ -137,6 +159,7 @@ def debug_with_exit(func):
         func(*args, **kwargs)
         cprint("=====   END  =====", "red", "on_yellow")
         exit()
+
     return wrapped
 
 
