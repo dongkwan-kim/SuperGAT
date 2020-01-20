@@ -52,26 +52,44 @@ def get_entropy_tensor(x: torch.Tensor, is_prob_dist=False):
     """
     :param x: tensor the shape of which is [*, C]
     :param is_prob_dist: if is_prob_dist == False: apply softmax
-    :return:
+    :return: tensor the shape of which is [] (reduction=batchmean like F.kl_div)
     """
     x = x if is_prob_dist else F.softmax(x, dim=-1)
     assert abs(x.sum() - x.size(0)) < 1e-5, "{} is not {}".format(x.sum(), x.size(0))
     not_entropy_yet = x * torch.log(x)
-    return -1.0 * not_entropy_yet.sum(dim=-1)
+    return -1.0 * not_entropy_yet.sum(dim=-1).mean()
 
 
-def get_entropy_tensor_by_iter(x_list: List[torch.Tensor], is_prob_dist=False):
+def get_entropy_tensor_by_iter(x_list: List[torch.Tensor], is_prob_dist=False) -> torch.Tensor:
     """
     :param x_list: List of tensors [*, X, C_i]
     :param is_prob_dist:
-    :return:
+    :return: [*]
     """
     entropy_list = []
     for x in x_list:
-        entropy = get_entropy_tensor(x, is_prob_dist)  # [X,]
+        entropy = get_entropy_tensor(x, is_prob_dist)  # []
         entropy_list.append(entropy)
-    entropy_tensor = torch.stack(entropy_list)
+    entropy_tensor = torch.stack(entropy_list)  # [*]
     return entropy_tensor.to(x_list[0].device)
+
+
+def get_kld_tensor_by_iter(pd_list: List[torch.Tensor], qd_list: List[torch.Tensor]) -> torch.Tensor:
+    """
+    :param pd_list: List of tensors [*, X, C_i]
+    :param qd_list: List of tensors [*, X, C_i]
+    :return: [*]
+    """
+    kld_list = []
+    for pd, qd in zip(pd_list, qd_list):
+        # input given is expected to contain log-probabilities.
+        # The targets are given as probabilities (i.e. without taking the logarithm).
+        log_pd = torch.log(pd)
+        # pd, qd: [X, C_i] -> []
+        kld = F.kl_div(log_pd, qd, reduction="batchmean")  # []
+        kld_list.append(kld)
+    kld_tensor = torch.stack(kld_list)
+    return kld_tensor.to(pd_list[0].device)
 
 
 # GPU
