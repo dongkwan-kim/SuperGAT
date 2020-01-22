@@ -55,7 +55,8 @@ def get_entropy_tensor(x: torch.Tensor, is_prob_dist=False):
     :return: tensor the shape of which is [] (reduction=batchmean like F.kl_div)
     """
     x = x if is_prob_dist else F.softmax(x, dim=-1)
-    assert abs(x.sum() - x.size(0)) < 1e-5, "{} is not {}".format(x.sum(), x.size(0))
+    prob_sum = x.size(0) if len(x.size()) > 1 else 1
+    assert abs(x.sum() - prob_sum) < 1e-5, "{} is not {}".format(x.sum(), prob_sum)
     not_entropy_yet = x * torch.log(x)
     return -1.0 * not_entropy_yet.sum(dim=-1).mean()
 
