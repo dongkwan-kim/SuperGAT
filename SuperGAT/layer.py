@@ -6,11 +6,12 @@ from torch.nn import Parameter, Linear
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph, degree, dropout_adj, \
-    is_undirected
+    is_undirected, sort_edge_index
 import torch_geometric.nn.inits as tgi
 
 import time
 import random
+from typing import List
 
 from utils import get_accuracy, to_one_hot, np_sigmoid
 
@@ -62,7 +63,8 @@ class SuperGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
                  is_super_gat=True, attention_type="basic", super_gat_criterion=None,
-                 neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False, **kwargs):
+                 neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False,
+                 cache_attention=False, **kwargs):
         super(SuperGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
@@ -77,6 +79,7 @@ class SuperGAT(MessagePassing):
         self.neg_sample_ratio = neg_sample_ratio
         self.pretraining_noise_ratio = pretraining_noise_ratio
         self.pretraining = None if not use_pretraining else True
+        self.cache_attention = cache_attention
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
 
@@ -118,7 +121,7 @@ class SuperGAT(MessagePassing):
             else:
                 raise ValueError
 
-        self.residuals = {"num_updated": 0, "att_with_negatives": None, "att_label": None}
+        self.residuals = {"num_updated": 0, "att": None, "att_with_negatives": None, "att_label": None}
 
         if bias and concat:
             self.bias = Parameter(torch.Tensor(heads * out_channels))
@@ -226,6 +229,8 @@ class SuperGAT(MessagePassing):
 
         # Compute attention coefficients. [E, heads]
         alpha = self._get_attention(edge_index_i, x_i, x_j, size_i)
+        if self.cache_attention:
+            self._update_residuals("att", alpha)
 
         # Sample attention coefficients stochastically.
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
@@ -409,3 +414,23 @@ class SuperGAT(MessagePassing):
         edge_outputs = np.transpose(np.vstack([1. - edge_probs, edge_probs]))
         pred_acc = get_accuracy(edge_outputs, to_one_hot(edge_y.cpu().int(), 2))
         return pred_acc
+
+    def get_attention_dist(self, edge_index: torch.Tensor, num_nodes: int) -> List[torch.Tensor]:
+        """
+        :param edge_index: tensor the shape of which is [2, E]
+        :param num_nodes: number of nodes
+        :return: Tensor list L the length of which is N.
+            L[i] = a_ji for e_{ji} \in {E}
+                - a_ji = normalized attention coefficient of e_{ji} (shape: [heads, #neighbors])
+        """
+        edge_index, _ = remove_self_loops(edge_index)
+        edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)  # [2, E]
+
+        att = self.residuals["att"]  # [E, heads]
+
+        att_dist_list = []
+        for node_idx in range(num_nodes):
+            att_neighbors = att[edge_index[1] == node_idx, :].t()  # [heads, #neighbors]
+            att_dist_list.append(att_neighbors)
+
+        return att_dist_list

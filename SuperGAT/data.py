@@ -3,14 +3,67 @@ import torch_geometric as pyg
 from termcolor import cprint
 from torch_geometric.datasets import *
 from torch_geometric.data import DataLoader, InMemoryDataset
-from torch_geometric.utils import is_undirected, to_undirected
-import torch_geometric.transforms as T
+from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
+    add_self_loops
 
 import os
 from pprint import pprint
-from typing import Tuple, Callable
+from typing import Tuple, Callable, List
 
 from layer import negative_sampling
+
+
+def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor, epsilon=1e-11) -> List[torch.Tensor]:
+    """
+    :param edge_index: tensor the shape of which is [2, E]
+    :param y: tensor the shape of which is [N]
+    :param epsilon: small float number for stability.
+    :return: Tensor list L the length of which is N.
+        L[i] = tensor([..., a(y_j, y_i), ...]) for e_{ji} \in {E}
+            - a(y_j, y_i) = 1 / L[i].sum() if y_j = y_i,
+            - a(y_j, y_i) = 0 otherwise.
+    """
+    num_nodes = y.size(0)
+
+    # Add self-loops and sort by index
+    edge_index, _ = remove_self_loops(edge_index)
+    edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)  # [2, E + N]
+    edge_index, _ = sort_edge_index(edge_index, num_nodes=num_nodes)
+
+    agree_dist_list = []
+    for node_idx, label in enumerate(y):
+        neighbors, _ = edge_index[:, edge_index[1] == node_idx]
+        y_neighbors = y[neighbors]
+        agree_dist = (y_neighbors == label).float()
+        agree_dist[agree_dist == 0] = epsilon  # For KLD
+        agree_dist = agree_dist / agree_dist.sum()
+        agree_dist_list.append(agree_dist)
+
+    return agree_dist_list  # [N, #neighbors]
+
+
+def get_uniform_dist_like(dist_list: List[torch.Tensor]) -> List[torch.Tensor]:
+    uniform_dist_list = []
+    for dist in dist_list:
+        ones = torch.ones_like(dist)  # [#neighbors]
+        ones = ones / ones.size(0)
+        uniform_dist_list.append(ones)
+    return uniform_dist_list  # [N, #neighbors]
+
+
+class ADPlanetoid(Planetoid):
+
+    def __init__(self, root, name):
+        super().__init__(root, name)
+        y, edge_index = self.data.y, self.data.edge_index
+        self.agreement_dist = get_agreement_dist(edge_index, y)
+        self.uniform_att_dist = get_uniform_dist_like(self.agreement_dist)
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        datum.__setitem__("agreement_dist", self.agreement_dist)
+        datum.__setitem__("uniform_att_dist", self.uniform_att_dist)
+        return datum
 
 
 def get_one_link_edge_index(edge_index):
@@ -134,14 +187,14 @@ def get_dataset_class_name(dataset_name: str) -> str:
 
 
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
-    assert dataset_class in (pyg.datasets.__all__ + ["LinkPlanetoid"])
+    assert dataset_class in (pyg.datasets.__all__ + ["LinkPlanetoid", "ADPlanetoid"])
     return eval(dataset_class)
 
 
 def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: str,
                           batch_size: int = 128,
                           train_val_test: Tuple[float, float, float] = (0.9 * 0.9, 0.9 * 0.1, 0.1),
-                          seed: int = 42, **kwargs)\
+                          seed: int = 42, **kwargs) \
         -> Tuple[InMemoryDataset or DataLoader, DataLoader or None, DataLoader or None]:
     """
     Note that datasets structure in torch_geometric varies.
@@ -181,14 +234,14 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         train_samples = int(n_samples * train_val_test[0])
         val_samples = int(n_samples * train_val_test[1])
         train_dataset = dataset[:train_samples]
-        val_dataset = dataset[train_samples:train_samples+val_samples]
-        test_dataset = dataset[train_samples+val_samples:]
+        val_dataset = dataset[train_samples:train_samples + val_samples]
+        test_dataset = dataset[train_samples + val_samples:]
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         return train_loader, val_loader, test_loader
 
-    elif dataset_class in ["Planetoid", "LinkPlanetoid"]:  # Node or Link (One graph with given mask)
+    elif dataset_class in ["Planetoid", "LinkPlanetoid", "ADPlanetoid"]:  # Node or Link (One graph with given mask)
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
@@ -248,6 +301,7 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+    _test_data("ADPlanetoid", "Cora", '~/graph-data')
 
     # Link Prediction
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
