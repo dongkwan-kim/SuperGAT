@@ -97,6 +97,21 @@ class SuperGATNet(nn.Module):
 
         return x
 
+    def set_layer_attrs(self, name, value):
+        setattr(self.conv1, name, value)
+        setattr(self.conv2, name, value)
+
+    def get_attention_dist_by_layer(self, edge_index, num_nodes) -> List[List[torch.Tensor]]:
+        """
+        :param edge_index: tensor the shape of which is [2, E]
+        :param num_nodes: number of nodes
+        :return List[List[torch.Tensor]]: [L, N, [#neighbors, heads]]
+        """
+        return [
+            self.conv1.get_attention_dist(edge_index, num_nodes),
+            self.conv2.get_attention_dist(edge_index, num_nodes),
+        ]
+
 
 class SuperGATNetPPI(nn.Module):
 
