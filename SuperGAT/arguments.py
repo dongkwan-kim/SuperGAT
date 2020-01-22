@@ -40,8 +40,14 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--loss", default=None, type=str)
     parser.add_argument("--l1-lambda", default=0., type=float)
     parser.add_argument("--l2-lambda", default=0., type=float)
-    parser.add_argument("--early-stop", default=True, type=bool)
-    parser.add_argument("--early-stop-threshold", default=1e-04, type=float)
+    parser.add_argument("--num-layers", default=2, type=int)
+
+    # Early stop
+    parser.add_argument("--use-early-stop", default=False, type=bool)
+    parser.add_argument("--early-stop-patience", default=-1, type=int)
+    parser.add_argument("--early-stop-queue-length", default=100, type=int)
+    parser.add_argument("--early-stop-threshold-loss", default=-1.0, type=float)
+    parser.add_argument("--early-stop-threshold-perf", default=-1.0, type=float)
 
     # Graph
     parser.add_argument("--num-hidden-features", default=64, type=int)
@@ -97,6 +103,7 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "total_pretraining_epoch",
         "pretraining_noise_ratio",
         "neg_sample_ratio",
+        "use_early_stop",
     ]
     ret = {}
     for ia_key in important_args:

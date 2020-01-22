@@ -126,8 +126,12 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
     return total_loss
 
 
-def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="val", verbose=0):
+def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="val", verbose=0, **kwargs):
     model.eval()
+    try:
+        model.set_layer_attrs("cache_attention", _args.task_type == "Attention_Dist")
+    except AttributeError:
+        pass
 
     num_classes = getattr_d(dataset_or_loader, "num_classes")
 
@@ -164,7 +168,7 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     if _args.task_type == "Node_Inductive":
         preds = (outputs_total > 0).astype(int)
         perfs = f1_score(ys_total, preds, average="micro") if preds.sum() > 0 else 0
-    elif _args.task_type == "Node_Transductive":
+    elif _args.task_type == "Node_Transductive" or _args.task_type == "Attention_Dist":
         perfs = get_accuracy(outputs_total, ys_total)
     elif _args.task_type == "Link_Prediction":
         val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
@@ -174,7 +178,7 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
 
     if verbose >= 2:
         cprint("\n{}: {}".format(val_or_test, model.__class__.__name__), "yellow")
-        cprint("\t- Accuracy: {}".format(perfs), "yellow")
+        cprint("\t- Perfs: {}".format(perfs), "yellow")
 
     return perfs, total_loss
 
@@ -218,7 +222,8 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    dev = "cpu" if gpu_id is None else torch.device('cuda:{}'.format(gpu_id) if torch.cuda.is_available() else 'cpu')
+    running_device = "cpu" if gpu_id is None \
+        else torch.device('cuda:{}'.format(gpu_id) if torch.cuda.is_available() else 'cpu')
 
     best_val_perf = 0.
     test_perf_at_best_val = 0.
@@ -227,7 +232,8 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     best_test_perf_at_best_val = 0.
     best_test_perf_at_best_val_weak = 0.
 
-    val_loss_deque = deque(maxlen=50)
+    val_loss_deque = deque(maxlen=args.early_stop_queue_length)
+    val_perf_deque = deque(maxlen=args.early_stop_queue_length)
 
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
@@ -236,7 +242,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
 
     net_cls = _get_model_cls(args.model_name)
     net = net_cls(args, train_d)
-    net = net.to(dev)
+    net = net.to(running_device)
 
     loaded = load_model(net, args, target_epoch=None)
     if loaded is not None:
@@ -251,7 +257,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     val_perf_list, test_perf_list, val_loss_list = [], [], []
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
-        train_loss = train_model(dev, net, train_d, loss_func, adam_optim, epoch=epoch, _args=args)
+        train_loss = train_model(running_device, net, train_d, loss_func, adam_optim, epoch=epoch, _args=args)
 
         if args.verbose >= 2 and epoch % args.val_interval == 0:
             print("\n\t- Train loss: {}".format(train_loss))
@@ -259,9 +265,9 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
         # Validation.
         if epoch % args.val_interval == 0:
 
-            val_perf, val_loss = test_model(dev, net, val_d or train_d, loss_func,
+            val_perf, val_loss = test_model(running_device, net, val_d or train_d, loss_func,
                                             _args=args, val_or_test="val", verbose=args.verbose)
-            test_perf, test_loss = test_model(dev, net, test_d or train_d, loss_func,
+            test_perf, test_loss = test_model(running_device, net, test_d or train_d, loss_func,
                                               _args=args, val_or_test="test", verbose=0)
             if args.save_plot:
                 val_perf_list.append(val_perf)
@@ -299,19 +305,27 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
                 cprint_multi_lines("\t- ", print_color, **ret)
 
             # Check early stop condition
-            if args.early_stop and current_iter > 0:
+            if args.use_early_stop and current_iter > args.early_stop_patience:
                 recent_val_loss_mean = float(np.mean(val_loss_deque))
                 val_loss_change = abs(recent_val_loss_mean - val_loss) / recent_val_loss_mean
+                recent_val_perf_mean = float(np.mean(val_perf_deque))
+                val_perf_change = abs(recent_val_perf_mean - val_perf) / recent_val_perf_mean
 
-                if val_loss_change < args.early_stop_threshold and current_iter > args.epochs // 3:
+                if (val_loss_change < args.early_stop_threshold_loss) or \
+                   (val_perf_change < args.early_stop_threshold_perf):
                     if args.verbose >= 1:
-                        cprint("Early stopped: val_loss_change is {}% < {}% at {} | {} -> {}".format(
-                            round(val_loss_change, 6), args.early_stop_threshold,
-                            epoch, recent_val_loss_mean, val_loss,
+                        cprint("Early Stopped at epoch {}".format(epoch), "red")
+                        cprint("\t- val_loss_change is {} (thres: {}) | {} -> {}".format(
+                            round(val_loss_change, 6), round(args.early_stop_threshold_loss, 6),
+                            recent_val_loss_mean, val_loss,
+                        ), "red")
+                        cprint("\t- val_perf_change is {} (thres: {}) | {} -> {}".format(
+                            round(val_perf_change, 6), round(args.early_stop_threshold_perf, 6),
+                            recent_val_perf_mean, val_perf,
                         ), "red")
                     break
-
             val_loss_deque.append(val_loss)
+            val_perf_deque.append(val_perf)
 
     if args.save_plot:
         save_loss_and_perf_plot([val_loss_list, val_perf_list, test_perf_list], ret, args,
@@ -354,12 +368,12 @@ def summary_results(results_dict: Dict[str, list or float]):
 
 if __name__ == '__main__':
 
-    num_total_runs = 10
+    num_total_runs = 1  # 10
     main_args = get_args(
         model_name="GAT",  # GAT
-        dataset_class="Planetoid",  # LinkPlanetoid, Planetoid
+        dataset_class="ADPlanetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="LVO8",  # NE, EV
+        custom_key="NEO8-ES",  # NEO8, NEDPO8, EV12NSO8, EV1O8
     )
     pprint_args(main_args)
 
