@@ -1,8 +1,10 @@
 import torch
 import torch_geometric as pyg
+from copy import deepcopy
 from termcolor import cprint
 from torch_geometric.datasets import *
-from torch_geometric.data import DataLoader, InMemoryDataset
+from torch_geometric.data import DataLoader, InMemoryDataset, Data
+from torch_geometric.nn import GAE
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops
 
@@ -66,25 +68,17 @@ class ADPlanetoid(Planetoid):
         return datum
 
 
-def get_one_link_edge_index(edge_index):
-    """Remove (j, i) if there are (i, j) and (j, i)
-    :param edge_index: undirected edge_index the size of which is [2, 2E]
-    :return: one_link_edge_index the size of which is [2, X] (E <= X < 2E)
-    """
-    one_link_edge_index = torch.sort(edge_index.t())[0].t()
-    one_link_edge_index = torch.unique(one_link_edge_index, dim=1)
-    return one_link_edge_index
-
-
 class LinkPlanetoid(Planetoid):
 
-    def __init__(self, root, name, train_val_test_ratio=None):
+    def __init__(self, root, name, train_val_test_ratio=None, seed=42):
         super().__init__(root, name)
-        self.train_val_test_ratio = train_val_test_ratio or (0.8, 0.1, 0.1)
+        self.train_val_test_ratio = train_val_test_ratio or (0.85, 0.05, 0.1)
+        self.seed = seed
+        self.data_spliter = GAE(None)
 
         tpei, vei, tei = self.train_val_test_split()
-        self.train_pos_edge_index = tpei  # undirected [2, E * 0.8]
-        self.val_edge_index = vei  # undirected [2, E * 0.1 * 2]
+        self.train_pos_edge_index = tpei  # undirected [2, E * 0.85]
+        self.val_edge_index = vei  # undirected [2, E * 0.05 * 2]
         self.test_edge_index = tei  # undirected [2, E * 0.1 * 2]
 
         self.val_edge_y = self.get_edge_y(self.val_edge_index.size(1))
@@ -93,56 +87,36 @@ class LinkPlanetoid(Planetoid):
         # Remove validation/test pos edges from self.edge_index
         self.data.edge_index = self.train_pos_edge_index
 
-    def _sample_train_neg_edge_index(self, is_undirected_edges=True):
-        must_not_tnei = torch.cat([self.train_pos_edge_index, self.val_edge_index, self.test_edge_index], dim=1)
-        neg_edge_index = negative_sampling(
-            edge_index=must_not_tnei,
-            num_nodes=self.data.x.size(0),
-            num_neg_samples=self.train_pos_edge_index.size(1) // 2,
-        )
-        if is_undirected_edges:
-            neg_edge_index = to_undirected(neg_edge_index)
-        return neg_edge_index
-
     def train_val_test_split(self):
         x, edge_index = self.data.x, self.data.edge_index
+
         edge_index, _ = remove_self_loops(edge_index)
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
-        num_nodes, num_edges = x.size(0), edge_index.size(1)  # [N], [2, uE]
 
+        data = deepcopy(self.data)
+        data.edge_index = edge_index
+
+        # train_pos_edge_index=[2, E * 0.85] (undirected)
+        # val_neg/pos_edge_index=[2, E/2 * 0.05] (not undirected)
+        # test_neg/pos_edge_index: [2, E/2 * 0.1] (not undirected)
+        data = self.data_spliter.split_edges(data, *self.train_val_test_ratio[1:])
+        data.__delattr__("train_neg_adj_mask")
+
+        val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
+                                    to_undirected(data.val_neg_edge_index)], dim=1)
+        test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
+                                    to_undirected(data.test_neg_edge_index)], dim=1)
+        return data.train_pos_edge_index, val_edge_index, test_edge_index
+
+    def _sample_train_neg_edge_index(self, is_undirected_edges=True):
+        num_pos_samples = self.train_pos_edge_index.size(1)
+        num_neg_samples = num_pos_samples // 2 if is_undirected_edges else num_pos_samples
         neg_edge_index = negative_sampling(
-            edge_index=edge_index,
-            num_nodes=x.size(0),
-            num_neg_samples=int(edge_index.size(1) * 1.5),
+            edge_index=self.train_pos_edge_index,
+            num_nodes=self.data.x.size(0),
+            num_neg_samples=num_neg_samples,
         )
-        neg_edge_index = get_one_link_edge_index(neg_edge_index)[:, :num_edges // 2]  # [2, dE]
-
-        # Remove (j, i) if there are (i, j) and (j, i): is_undirected
-        if is_undirected(edge_index):
-            edge_index = get_one_link_edge_index(edge_index)  # [2, dE]
-            num_edges = num_edges // 2
-
-        num_pos_train, num_pos_val, _ = [round(num_edges * r) for r in self.train_val_test_ratio]
-
-        pos_permuted = torch.randperm(edge_index.size(1))  # [dE]
-        neg_permuted = torch.randperm(neg_edge_index.size(1))  # [dE]
-
-        train_pos_edge_index = edge_index[:, pos_permuted][:, :num_pos_train]
-        val_pos_edge_index = edge_index[:, pos_permuted][:, num_pos_train:num_pos_train + num_pos_val]
-        test_pos_edge_index = edge_index[:, pos_permuted][:, num_pos_train + num_pos_val:]
-        num_pos_test = test_pos_edge_index.size(1)
-
-        test_neg_edge_index = neg_edge_index[:, neg_permuted][:, :num_pos_test]
-        val_neg_edge_index = neg_edge_index[:, neg_permuted][:, num_pos_test:num_pos_test + num_pos_val]
-
-        val_edge_index = torch.cat([val_pos_edge_index, val_neg_edge_index], dim=1)
-        test_edge_index = torch.cat([test_pos_edge_index, test_neg_edge_index], dim=1)
-
-        if is_undirected(self.data.edge_index):
-            train_pos_edge_index = to_undirected(train_pos_edge_index)
-            val_edge_index = to_undirected(val_edge_index)
-            test_edge_index = to_undirected(test_edge_index)
-        return train_pos_edge_index, val_edge_index, test_edge_index
+        return to_undirected(neg_edge_index) if is_undirected_edges else neg_edge_index
 
     @staticmethod
     def get_edge_y(num_edges, pos_num_or_ratio=0.5, device=None):
@@ -168,10 +142,10 @@ class LinkPlanetoid(Planetoid):
 
         # Add attributes for edge prediction
         datum.__setitem__("train_edge_index", train_edge_index)
-        datum.__setitem__("val_edge_index", self.val_edge_index)
-        datum.__setitem__("test_edge_index", self.test_edge_index)
         datum.__setitem__("train_edge_y", train_edge_y)
+        datum.__setitem__("val_edge_index", self.val_edge_index)
         datum.__setitem__("val_edge_y", self.val_edge_y)
+        datum.__setitem__("test_edge_index", self.test_edge_index)
         datum.__setitem__("test_edge_y", self.test_edge_y)
         return datum
 
@@ -303,12 +277,14 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
-    _test_data("ADPlanetoid", "Cora", '~/graph-data')
 
     # Link Prediction
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
     _test_data("LinkPlanetoid", "CiteSeer", "~/graph-data")
     _test_data("LinkPlanetoid", "PubMed", "~/graph-data")
+
+    # Attention Dist
+    _test_data("ADPlanetoid", "Cora", '~/graph-data')
 
     # Node Classification
     _test_data("Planetoid", "Cora", '~/graph-data')
