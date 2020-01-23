@@ -32,7 +32,8 @@ def plot_kld_jsd_ent(kld_agree_att_by_layer, kld_att_agree_by_layer, jsd_by_laye
         except KeyError:
             return None
 
-    name_list = ["{}-layer-{}".format(name_prefix, i) for name_prefix in name_prefix_list for i in range(num_layers)]
+    name_list = ["{}-layer-{}".format(name_prefix, i + 1)
+                 for name_prefix in name_prefix_list for i in range(num_layers)]
 
     plot_multiple_dist(kld_agree_att_by_layer + [kld_agree_unifatt],
                        name_list=name_list + ["Uniform"],
@@ -465,7 +466,10 @@ if __name__ == '__main__':
     MODE = "attention_metric_for_multiple_models"
 
     if MODE == "attention_metric_for_multiple_models":
-        vis_kwargs["dataset_name"] = "PubMed"  # This
+
+        vis_kwargs["model_name"] = "LargeGAT"  # This
+        vis_kwargs["dataset_name"] = "Cora"  # This
+
         main_name_prefix_list = ["GO", "DP"]
         if vis_kwargs["dataset_name"] != "PubMed":
             main_custom_key_list = ["NEO8-ES-ATT", "NEDPO8-ES-ATT"]
