@@ -1,9 +1,13 @@
+import logging
 from collections import defaultdict
+from pprint import pprint
 from typing import List, Dict, Tuple
+from datetime import datetime
+import os
 
-from arguments import get_args, pprint_args
+from arguments import get_args, pprint_args, pdebug_args
 from data import get_dataset_or_loader
-from main import run
+from main import run, run_with_many_seeds, summary_results
 from utils import blind_other_gpus, sigmoid, get_entropy_tensor_by_iter, get_kld_tensor_by_iter
 from visualize import plot_graph_layout, _get_key, plot_multiple_dist
 from layer import negative_sampling
@@ -16,8 +20,31 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from termcolor import cprint
+import coloredlogs
 
-import os
+
+def analyze_link_pred_perfs_for_multiple_models(name_and_kwargs: List[Tuple[str, Dict]], num_total_runs=10):
+
+    logger = logging.getLogger("LPP")
+    logging.basicConfig(filename='../logs/{}-{}.log'.format("link_pred_perfs", str(datetime.now())),
+                        level=logging.DEBUG)
+    coloredlogs.install(level='DEBUG')
+
+    result_list = []
+    for _, kwargs in name_and_kwargs:
+        args = get_args(**kwargs)
+        gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total) if g not in args.black_list], 1))][0]
+        if args.verbose >= 1:
+            pdebug_args(args, logger)
+            cprint("Use GPU the ID of which is {}".format(gpu_id), "yellow")
+
+        many_seeds_result = run_with_many_seeds(args, num_total_runs, gpu_id=gpu_id)
+        result_list.append(many_seeds_result)
+
+    for results, (name, _) in zip(result_list, name_and_kwargs):
+        logger.debug("\n--- {} ---".format(name))
+        for line in summary_results(results):
+            logger.debug(line)
 
 
 def plot_kld_jsd_ent(kld_agree_att_by_layer, kld_att_agree_by_layer, jsd_by_layer, entropy_by_layer,
@@ -102,11 +129,11 @@ def get_attention_metric_for_single_model(model, batch, device):
            kld_agree_unifatt, kld_unifatt_agree, jsd_uniform, entropy_agreement, entropy_uniform
 
 
-def visualize_attention_metric_for_multiple_models(name_prefix_to_kwargs: List[Tuple[str, Dict]], extension="png"):
+def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[Tuple[str, Dict]], extension="png"):
     res = None
     total_args, num_layers, custom_key_list, name_prefix_list = None, None, [], []
     kld1_list, kld2_list, jsd_list, ent_list = [], [], [], []  # [L * M, N]
-    for name_prefix, kwargs in name_prefix_to_kwargs:
+    for name_prefix, kwargs in name_prefix_and_kwargs:
         args = get_args(**kwargs)
         custom_key_list.append(args.custom_key)
         num_layers = args.num_layers
@@ -454,7 +481,7 @@ if __name__ == '__main__':
     sns.set(style="whitegrid")
     sns.set_context("talk")
 
-    vis_kwargs = dict(
+    main_kwargs = dict(
         model_name="GAT",  # GAT, BaselineGAT
         dataset_class="Planetoid",
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
@@ -462,35 +489,50 @@ if __name__ == '__main__':
     )
 
     os.makedirs("../figs", exist_ok=True)
+    os.makedirs("../logs", exist_ok=True)
 
-    MODE = "attention_metric_for_multiple_models"
+    MODE = "link_pred_perfs_for_multiple_models"
 
-    if MODE == "attention_metric_for_multiple_models":
+    if MODE == "link_pred_perfs_for_multiple_models":
 
-        vis_kwargs["model_name"] = "LargeGAT"  # This
-        vis_kwargs["dataset_name"] = "Cora"  # This
+        main_kwargs["dataset_class"] = "LinkPlanetoid"
+        dataset_name_list = ["Cora", "CiteSeer", "PubMed"]
+
+        def get_main_custom_key_list(dataset_name):
+            return ["EV1O8-ES-Link", "EV2O8-ES-Link"] if dataset_name != "PubMed" \
+                    else ["EV1-500-ES-Link", "EV2-500-ES-Link"]
+
+        main_name_and_kwargs = [("{}-{}".format(d, ck), {**main_kwargs, "custom_key": ck})
+                                for d in dataset_name_list for ck in get_main_custom_key_list(d)]
+
+        analyze_link_pred_perfs_for_multiple_models(main_name_and_kwargs, num_total_runs=10)
+
+    elif MODE == "attention_metric_for_multiple_models":
+
+        main_kwargs["model_name"] = "LargeGAT"  # This
+        main_kwargs["dataset_name"] = "Cora"  # This
 
         main_name_prefix_list = ["GO", "DP"]
-        if vis_kwargs["dataset_name"] != "PubMed":
+        if main_kwargs["dataset_name"] != "PubMed":
             main_custom_key_list = ["NEO8-ES-ATT", "NEDPO8-ES-ATT"]
         else:
             main_custom_key_list = ["NE-500-ES-ATT", "NEDP-500-ES-ATT"]
-        vis_npx_and_kwargs = [(npx, {**vis_kwargs, "custom_key": ck}) for npx, ck in zip(main_name_prefix_list,
-                                                                                         main_custom_key_list)]
-        visualize_attention_metric_for_multiple_models(vis_npx_and_kwargs, extension="pdf")
+        main_npx_and_kwargs = [(npx, {**main_kwargs, "custom_key": ck}) for npx, ck in zip(main_name_prefix_list,
+                                                                                           main_custom_key_list)]
+        visualize_attention_metric_for_multiple_models(main_npx_and_kwargs, extension="pdf")
 
     elif MODE == "glayout_without_training":
-        visualize_glayout_without_training(**vis_kwargs)
+        visualize_glayout_without_training(**main_kwargs)
 
     elif MODE == "glayout_with_training_and_attention":
-        visualize_glayout_with_training_and_attention(**vis_kwargs)
+        visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "attention_dist_by_sample_type":
         data_frame_list = []
         for dn in ["Cora", "CiteSeer", "PubMed"]:
             for ck in ["NE", "EV1"]:
                 for with_norm in [True, False]:
-                    vis_kwargs = dict(
+                    main_kwargs = dict(
                         model_name="GAT",  # GAT, BaselineGAT
                         dataset_class="Planetoid",
                         dataset_name=dn,  # Cora, CiteSeer, PubMed
@@ -498,7 +540,7 @@ if __name__ == '__main__':
                     )
                     with_neg = not with_norm
                     data_frame_list.append(visualize_attention_dist_by_sample_type(
-                        **vis_kwargs,
+                        **main_kwargs,
                         with_negatives=with_neg,
                         with_normalized=with_norm,
                     ))
@@ -517,13 +559,13 @@ if __name__ == '__main__':
 
     elif MODE == "edge_fnn":
         for dn in ["Cora", "CiteSeer", "PubMed"]:
-            vis_kwargs = dict(
+            main_kwargs = dict(
                 model_name="GAT",  # GAT, BaselineGAT
                 dataset_class="Planetoid",
                 dataset_name=dn,  # Cora, CiteSeer, PubMed
                 custom_key="EV1",  # NE, EV1, EV2, NR, RV1
             )
-            visualize_edge_fnn(extension="pdf", **vis_kwargs)
+            visualize_edge_fnn(extension="pdf", **main_kwargs)
 
     else:
         raise ValueError
