@@ -4,6 +4,10 @@ from ruamel.yaml import YAML
 from termcolor import cprint
 
 
+def get_args_key(args):
+    return "-".join([args.model_name, args.dataset_name, args.custom_key])
+
+
 def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="./args.yaml") -> argparse.Namespace:
 
     custom_key = custom_key.split("+")[0]
@@ -123,9 +127,16 @@ def save_args(model_dir_path: str, _args: argparse.Namespace):
 
 
 def pprint_args(_args: argparse.Namespace):
-    cprint("Args PPRINT", "yellow")
+    cprint("Args PPRINT: {}".format(get_args_key(_args)), "yellow")
     for k, v in sorted(_args.__dict__.items()):
         print("\t- {}: {}".format(k, v))
+
+
+def pdebug_args(_args: argparse.Namespace, logger):
+    logger.debug("Args LOGGING-PDEBUG: {}".format(get_args_key(_args)))
+    for k, v in sorted(_args.__dict__.items()):
+        logger.debug("\t- {}: {}".format(k, v))
+
 
 
 if __name__ == '__main__':
