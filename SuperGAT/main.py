@@ -17,7 +17,7 @@ from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args
 from data import getattr_d, get_dataset_or_loader
-from model import SuperGATNet, SuperGATNetPPI
+from model import SuperGATNet, SuperGATNetPPI, LargeSuperGATNet
 from layer import SuperGAT
 from model_baseline import LinkGNN
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
@@ -210,6 +210,8 @@ def _get_model_cls(model_name: str):
         return SuperGATNetPPI
     elif model_name.startswith("LinkG"):
         return LinkGNN
+    elif model_name == "LargeGAT":
+        return LargeSuperGATNet
     else:
         raise ValueError
 
@@ -370,10 +372,10 @@ if __name__ == '__main__':
 
     num_total_runs = 1  # 10
     main_args = get_args(
-        model_name="GAT",  # GAT
-        dataset_class="ADPlanetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid
+        model_name="LargeGAT",  # GAT, LargeGAT
+        dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="NEO8-ES",  # NEO8, NEDPO8, EV12NSO8, EV1O8
+        custom_key="NEO8",  # NEO8, NEDPO8, EV12NSO8, EV1O8
     )
     pprint_args(main_args)
 
