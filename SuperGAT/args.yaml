@@ -490,7 +490,7 @@ GAT-CiteSeer-NEDPO8-ES-ATT:
 
 
 GAT-PubMed: &GAT-PubMed
-  <<: *DEFAULT
+  <<: *GAT
   lr: 0.01
   out_heads: 8
   task_type: Node_Transductive
@@ -707,3 +707,80 @@ GAT-PubMed-NE-500-ES-ATT:
 GAT-PubMed-NEDP-500-ES-ATT:
   <<: *GAT-PubMed-NEDP-500-ES
   task_type: Attention_Dist
+
+
+LargeGAT: &LargeGAT
+  <<: *DEFAULT
+  model_name: LargeGAT
+  num_layers: 4
+
+LargeGAT-Cora: &LargeGAT-Cora
+  <<: *LargeGAT
+  lr: 0.005
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+
+LargeGAT-Cora-NEO8: &LargeGAT-Cora-NEO8
+  <<: *LargeGAT-Cora
+  epochs: 500
+  out_heads: 8
+  l2_lambda: 0.0
+  is_super_gat: False
+
+LargeGAT-Cora-NEDPO8: &LargeGAT-Cora-NEDPO8
+  <<: *LargeGAT-Cora
+  epochs: 500
+  out_heads: 8
+  l2_lambda: 0.03772977329580155
+  is_super_gat: False
+  attention_type: "dot_product"
+
+LargeGAT-CiteSeer: &LargeGAT-CiteSeer
+  <<: *LargeGAT
+  lr: 0.005
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+
+LargeGAT-CiteSeer-NEO8: &LargeGAT-CiteSeer-NEO8
+  <<: *LargeGAT-CiteSeer
+  epochs: 400
+  is_super_gat: False
+  out_heads: 8
+  l2_lambda: 0.04086304658243455
+
+LargeGAT-CiteSeer-NEDPO8: &LargeGAT-CiteSeer-NEDPO8
+  <<: *LargeGAT-CiteSeer
+  epochs: 400
+  is_super_gat: False
+  out_heads: 8
+  l2_lambda: 0.048631720493287324
+  attention_type: "dot_product"
+
+LargeGAT-PubMed: &LargeGAT-PubMed
+  <<: *LargeGAT
+  lr: 0.01
+  out_heads: 8
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+
+LargeGAT-PubMed-NE: &LargeGAT-PubMed-NE
+  <<: *LargeGAT-PubMed
+  epochs: 300
+  l2_lambda: 0.0006334814661840428
+  is_super_gat: False
+
+LargeGAT-PubMed-NE-600: &LargeGAT-PubMed-NE-500
+  <<: *LargeGAT-PubMed-NE
+  epochs: 600
+  l2_lambda: 0.0009634368245244388
+
+LargeGAT-PubMed-NEDP-600: &LargeGAT-PubMed-NEDP-500
+  <<: *LargeGAT-PubMed-NE
+  epochs: 600
+  l2_lambda: 0.0009233229073574351
+  attention_type: "dot_product"
