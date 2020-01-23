@@ -106,6 +106,8 @@ class LinkPlanetoid(Planetoid):
 
     def train_val_test_split(self):
         x, edge_index = self.data.x, self.data.edge_index
+        edge_index, _ = remove_self_loops(edge_index)
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
         num_nodes, num_edges = x.size(0), edge_index.size(1)  # [N], [2, uE]
 
         neg_edge_index = negative_sampling(
