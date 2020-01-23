@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.metrics import roc_auc_score, average_precision_score
 from termcolor import cprint
 import torch
 import torch.nn as nn
@@ -6,7 +7,7 @@ from torch.nn import Parameter, Linear
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph, degree, dropout_adj, \
-    is_undirected, sort_edge_index
+    is_undirected, sort_edge_index, accuracy
 import torch_geometric.nn.inits as tgi
 
 import time
@@ -397,11 +398,12 @@ class SuperGAT(MessagePassing):
         return loss
 
     @staticmethod
-    def get_link_pred_acc_by_attention(model, edge_y, layer_idx=-1):
+    def get_link_pred_perfs_by_attention(model, edge_y, layer_idx=-1, metric="roc_auc"):
         """
         :param model: GNN model (nn.Module)
         :param edge_y: [E_pred] tensor
         :param layer_idx: layer idx of GNN models
+        :param metric: metric for perfs
         :return:
         """
         att_residuals_list = [m.residuals for m in model.modules() if m.__class__.__name__ == SuperGAT.__name__]
@@ -410,10 +412,18 @@ class SuperGAT(MessagePassing):
         att = att_res["att_with_negatives"]  # [E + neg_E, heads]
         att = att.mean(dim=-1)  # [E + neg_E]
 
-        edge_probs = 1. - np_sigmoid(att.cpu().numpy())
-        edge_outputs = np.transpose(np.vstack([1. - edge_probs, edge_probs]))
-        pred_acc = get_accuracy(edge_outputs, to_one_hot(edge_y.cpu().int(), 2))
-        return pred_acc
+        edge_probs, edge_y = np_sigmoid(att.cpu().numpy()), edge_y.cpu().numpy()
+
+        perfs = None
+        if metric == "roc_auc":
+            perfs = roc_auc_score(edge_y, edge_probs)
+        elif metric == "average_precision":
+            perfs = average_precision_score(edge_y, edge_probs)
+        elif metric == "accuracy":
+            perfs = accuracy(edge_probs, edge_y)
+        else:
+            ValueError("Inappropriate metric: {}".format(metric))
+        return perfs
 
     def get_attention_dist(self, edge_index: torch.Tensor, num_nodes: int) -> List[torch.Tensor]:
         """

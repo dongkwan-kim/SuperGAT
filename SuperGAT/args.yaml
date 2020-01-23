@@ -1,5 +1,5 @@
 DEFAULT: &DEFAULT
-  black_list: [1, 2, 3]
+  black_list: [0, 2, 3]
   num_gpus_total: 4
   num_gpus_to_use: 1
   heads: 8
@@ -139,14 +139,30 @@ GAT-Cora-EV2O8: &GAT-Cora-EV2O8  # 0.8372
   att_lambda: 10.074546446345932
   neg_sample_ratio: 0.1
 
-GAT-Cora-EV1-Link:
-  <<: *GAT-Cora-EV1
-  att_lambda: 5.449370600039373
+GAT-Cora-EV1O8-ES: &GAT-Cora-EV1O8-ES
+  <<: *GAT-Cora-EV1O8
+  use_early_stop: True
+  early_stop_patience: 352
+  early_stop_queue_length: 308
+  early_stop_threshold_loss: 0.00013429815804964846
+  early_stop_threshold_perf: 0.00014674084822235376
+  epochs: 392
+
+GAT-Cora-EV2O8-ES: &GAT-Cora-EV2O8-ES
+  <<: *GAT-Cora-EV2O8
+  use_early_stop: True
+  early_stop_patience: 406
+  early_stop_queue_length: 488
+  early_stop_threshold_loss: 0.000648935073002874
+  early_stop_threshold_perf: 0.016100316954081262
+  epochs: 498
+
+GAT-Cora-EV1O8-ES-Link:
+  <<: *GAT-Cora-EV1O8-ES
   task_type: Link_Prediction
 
-GAT-Cora-EV2-Link:
-  <<: *GAT-Cora-EV2
-  att_lambda: 5.449370600039373
+GAT-Cora-EV2O8-ES-Link:
+  <<: *GAT-Cora-EV2O8-ES
   task_type: Link_Prediction
 
 GAT-Cora-EV9: &GAT-Cora-EV9
@@ -359,7 +375,7 @@ GAT-CiteSeer-EV1: &GAT-CiteSeer-EV1
   l2_lambda: 0.03794579277540424
   att_lambda: 0.045071824873627146
 
-GAT-CiteSeer-EV1O8:  # 0.7336
+GAT-CiteSeer-EV1O8: &GAT-CiteSeer-EV1O8  # 0.7336
   <<: *GAT-CiteSeer-EV1
   out_heads: 8
   edge_sampling_ratio: 0.570813536606956
@@ -374,7 +390,7 @@ GAT-CiteSeer-EV2: &GAT-CiteSeer-EV2
   l2_lambda: 0.04777495641265913
   att_lambda: 0.6183687430239637
 
-GAT-CiteSeer-EV2O8:  # 0.7339
+GAT-CiteSeer-EV2O8: &GAT-CiteSeer-EV2O8  # 0.7339
   <<: *GAT-CiteSeer-EV2
   out_heads: 8
   edge_sampling_ratio: 0.9499077941001473
@@ -382,13 +398,39 @@ GAT-CiteSeer-EV2O8:  # 0.7339
   att_lambda: 0.00656621522138879
   neg_sample_ratio: 0.5
 
-GAT-CiteSeer-EV2O8-nsr01:  # 0.7339
+GAT-CiteSeer-EV2O8-nsr01: &GAT-CiteSeer-EV2O8-nsr01  # *0.7339
   <<: *GAT-CiteSeer-EV2
   out_heads: 8
   edge_sampling_ratio: 0.9484953787205146
   l2_lambda: 0.04917687091495481
   att_lambda: 0.003379453260583774
   neg_sample_ratio: 0.1
+
+GAT-CiteSeer-EV1O8-ES: &GAT-CiteSeer-EV1O8-ES
+  <<: *GAT-CiteSeer-EV1O8
+  use_early_stop: True
+  early_stop_patience: 293
+  early_stop_queue_length: 193
+  early_stop_threshold_loss: 2.21409652087418e-05
+  early_stop_threshold_perf: 1.0611796736673805e-05
+  epochs: 398
+
+GAT-CiteSeer-EV2O8-ES: &GAT-CiteSeer-EV2O8-ES
+  <<: *GAT-CiteSeer-EV2O8-nsr01  # nsr01
+  use_early_stop: True
+  early_stop_patience: 332
+  early_stop_queue_length: 183
+  early_stop_threshold_loss: 0.0008226686175855574
+  early_stop_threshold_perf: 1.7087646436781336e-05
+  epochs: 245
+
+GAT-CiteSeer-EV1O8-ES-Link:
+  <<: *GAT-CiteSeer-EV1O8-ES
+  task_type: Link_Prediction
+
+GAT-CiteSeer-EV2O8-ES-Link:
+  <<: *GAT-CiteSeer-EV2O8-ES
+  task_type: Link_Prediction
 
 GAT-CiteSeer-EV9: &GAT-CiteSeer-EV9
   <<: *GAT-CiteSeer-E
@@ -490,7 +532,7 @@ GAT-CiteSeer-NEDPO8-ES-ATT:
 
 
 GAT-PubMed: &GAT-PubMed
-  <<: *DEFAULT
+  <<: *GAT
   lr: 0.01
   out_heads: 8
   task_type: Node_Transductive
@@ -574,7 +616,7 @@ GAT-PubMed-E: &GAT-PubMed-E
   epochs: 300
   is_super_gat: True
 
-GAT-PubMed-EV1-500:  # 0.7945
+GAT-PubMed-EV1-500: &GAT-PubMed-EV1-500  # 0.7945
   <<: *GAT-PubMed-E
   epochs: 500
   edge_sampling_ratio: 0.784384051946587
@@ -583,7 +625,7 @@ GAT-PubMed-EV1-500:  # 0.7945
   attention_type: "gat_originated"
   neg_sample_ratio: 0.5
 
-GAT-PubMed-EV2-500:  # 0.8234
+GAT-PubMed-EV2-500: &GAT-PubMed-EV2-500  # 0.8234
   <<: *GAT-PubMed-E
   epochs: 500
   edge_sampling_ratio: 0.7974461865152842
@@ -591,6 +633,32 @@ GAT-PubMed-EV2-500:  # 0.8234
   att_lambda: 14.961085652013855
   attention_type: "dot_product"
   neg_sample_ratio: 0.3
+
+GAT-PubMed-EV1-500-ES: &GAT-PubMed-EV1-500-ES
+  <<: *GAT-PubMed-EV1-500
+  use_early_stop: True
+  early_stop_patience: 458
+  early_stop_queue_length: 439
+  early_stop_threshold_loss: 0.06289549939447833
+  early_stop_threshold_perf: 2.170172856731627e-05
+  epochs: 499
+
+GAT-PubMed-EV2-500-ES: &GAT-PubMed-EV2-500-ES
+  <<: *GAT-PubMed-EV2-500
+  use_early_stop: True
+  early_stop_patience: 159
+  early_stop_queue_length: 497
+  early_stop_threshold_loss: 0.0010989950819125678
+  early_stop_threshold_perf: 2.7004566842241986e-05
+  epochs: 499
+
+GAT-PubMed-EV1-500-ES-Link:
+  <<: *GAT-PubMed-EV1-500-ES
+  task_type: Link_Prediction
+
+GAT-PubMed-EV2-500-ES-Link:
+  <<: *GAT-PubMed-EV2-500-ES
+  task_type: Link_Prediction
 
 GAT-PubMed-EV9O8: &GAT-PubMed-EV9O8
   <<: *GAT-PubMed-E
@@ -707,3 +775,94 @@ GAT-PubMed-NE-500-ES-ATT:
 GAT-PubMed-NEDP-500-ES-ATT:
   <<: *GAT-PubMed-NEDP-500-ES
   task_type: Attention_Dist
+
+
+LargeGAT: &LargeGAT
+  <<: *DEFAULT
+  model_name: LargeGAT
+  num_layers: 4
+
+LargeGAT-Cora: &LargeGAT-Cora
+  <<: *LargeGAT
+  lr: 0.005
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+
+LargeGAT-Cora-NEO8: &LargeGAT-Cora-NEO8  # 0.82
+  <<: *LargeGAT-Cora
+  epochs: 500
+  out_heads: 8
+  l2_lambda: 0.010470372487516526
+  is_super_gat: False
+
+LargeGAT-Cora-NEDPO8: &LargeGAT-Cora-NEDPO8  # 0.7906
+  <<: *LargeGAT-Cora
+  epochs: 500
+  out_heads: 8
+  l2_lambda: 0.0054978677529362125
+  is_super_gat: False
+  attention_type: "dot_product"
+
+LargeGAT-Cora-NEO8-ES: &LargeGAT-Cora-NEO8-ES
+  <<: *LargeGAT-Cora-NEO8
+
+LargeGAT-Cora-NEDPO8-ES: &LargeGAT-Cora-NEDPO8-ES
+  <<: *LargeGAT-Cora-NEDPO8
+
+LargeGAT-Cora-NEO8-ES-ATT:
+  <<: *LargeGAT-Cora-NEO8-ES
+  task_type: Attention_Dist
+
+LargeGAT-Cora-NEDPO8-ES-ATT:
+  <<: *LargeGAT-Cora-NEDPO8-ES
+  task_type: Attention_Dist
+
+LargeGAT-CiteSeer: &LargeGAT-CiteSeer
+  <<: *LargeGAT
+  lr: 0.005
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+
+LargeGAT-CiteSeer-NEO8: &LargeGAT-CiteSeer-NEO8
+  <<: *LargeGAT-CiteSeer
+  epochs: 400
+  is_super_gat: False
+  out_heads: 8
+  l2_lambda: 0.04086304658243455
+
+LargeGAT-CiteSeer-NEDPO8: &LargeGAT-CiteSeer-NEDPO8
+  <<: *LargeGAT-CiteSeer
+  epochs: 400
+  is_super_gat: False
+  out_heads: 8
+  l2_lambda: 0.048631720493287324
+  attention_type: "dot_product"
+
+LargeGAT-PubMed: &LargeGAT-PubMed
+  <<: *LargeGAT
+  lr: 0.01
+  out_heads: 8
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+
+LargeGAT-PubMed-NE: &LargeGAT-PubMed-NE
+  <<: *LargeGAT-PubMed
+  epochs: 300
+  l2_lambda: 0.0006334814661840428
+  is_super_gat: False
+
+LargeGAT-PubMed-NE-600: &LargeGAT-PubMed-NE-500
+  <<: *LargeGAT-PubMed-NE
+  epochs: 600
+  l2_lambda: 0.0009634368245244388
+
+LargeGAT-PubMed-NEDP-600: &LargeGAT-PubMed-NEDP-500
+  <<: *LargeGAT-PubMed-NE
+  epochs: 600
+  l2_lambda: 0.0009233229073574351
+  attention_type: "dot_product"
