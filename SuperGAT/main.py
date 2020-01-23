@@ -15,7 +15,7 @@ from termcolor import cprint
 from tqdm import tqdm
 from sklearn.metrics import f1_score
 
-from arguments import get_important_args, save_args, get_args, pprint_args
+from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
 from model import SuperGATNet, SuperGATNetPPI, LargeSuperGATNet
 from layer import SuperGAT
@@ -24,7 +24,7 @@ from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, bli
 
 
 def get_model_path(target_epoch, _args, **kwargs):
-    args_key = "-".join([_args.model_name, _args.dataset_name, _args.custom_key])
+    args_key = get_args_key(_args)
 
     dir_path = os.path.join(
         _args.checkpoint_dir, args_key,
@@ -172,7 +172,7 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
         perfs = get_accuracy(outputs_total, ys_total)
     elif _args.task_type == "Link_Prediction":
         val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
-        perfs = SuperGAT.get_link_pred_acc_by_attention(model=model, edge_y=val_or_test_edge_y)
+        perfs = SuperGAT.get_link_pred_perfs_by_attention(model=model, edge_y=val_or_test_edge_y)
     else:
         raise ValueError
 
@@ -354,28 +354,36 @@ def run_with_many_seeds(args, num_seeds, gpu_id=None, **kwargs):
 
 
 def summary_results(results_dict: Dict[str, list or float]):
-    cprint("## RESULTS SUMMARY ##", "yellow")
+
+    line_list = []
+
+    def cprint_and_append(x, color=None):
+        cprint(x, color)
+        line_list.append(x)
+
+    cprint_and_append("## RESULTS SUMMARY ##", "yellow")
     is_value_list = False
     for rk, rv in sorted(results_dict.items()):
         if isinstance(rv, list):
-            print("{}: {} +- {}".format(rk, round(float(np.mean(rv)), 5), round(float(np.std(rv)), 5)))
+            cprint_and_append("{}: {} +- {}".format(rk, round(float(np.mean(rv)), 5), round(float(np.std(rv)), 5)))
             is_value_list = True
         else:
-            print("{}: {}".format(rk, rv))
-    cprint("## RESULTS DETAILS ##", "yellow")
+            cprint_and_append("{}: {}".format(rk, rv))
+    cprint_and_append("## RESULTS DETAILS ##", "yellow")
     if is_value_list:
         for rk, rv in sorted(results_dict.items()):
-            print("{}: {}".format(rk, rv))
+            cprint_and_append("{}: {}".format(rk, rv))
+    return line_list
 
 
 if __name__ == '__main__':
 
-    num_total_runs = 1  # 10
+    num_total_runs = 5  # 10
     main_args = get_args(
-        model_name="LargeGAT",  # GAT, LargeGAT
-        dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid
+        model_name="GAT",  # GAT, LargeGAT
+        dataset_class="LinkPlanetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid
         dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="NEO8",  # NEO8, NEDPO8, EV12NSO8, EV1O8
+        custom_key="EV2O8-ES-Link",  # NEO8, NEDPO8, EV12NSO8, EV1O8, EV1O8-ES-Link, EV2O8-ES-Link
     )
     pprint_args(main_args)
 
