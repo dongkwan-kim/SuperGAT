@@ -1,6 +1,7 @@
 log_*
-deprecated
-figs
+logs
+*deprecated
+figs*
 test_*.py
 
 # Created by https://www.gitignore.io/api/git,macos,python,virtualenv,pycharm+all
