@@ -24,7 +24,6 @@ import coloredlogs
 
 
 def analyze_link_pred_perfs_for_multiple_models(name_and_kwargs: List[Tuple[str, Dict]], num_total_runs=10):
-
     logger = logging.getLogger("LPP")
     logging.basicConfig(filename='../logs/{}-{}.log'.format("link_pred_perfs", str(datetime.now())),
                         level=logging.DEBUG)
@@ -51,8 +50,8 @@ def plot_kld_jsd_ent(kld_agree_att_by_layer, kld_att_agree_by_layer, jsd_by_laye
                      kld_agree_unifatt, kld_unifatt_agree, jsd_uniform, entropy_agreement, entropy_uniform,
                      num_layers, model_args, epoch, name_prefix_list,
                      ylim_dict=None, width=0.6, extension="png"):
-
     ylim_dict = ylim_dict or dict()
+
     def _ylim(plot_type):
         try:
             return ylim_dict[plot_type]
@@ -495,15 +494,17 @@ if __name__ == '__main__':
 
     if MODE == "link_pred_perfs_for_multiple_models":
 
+        def get_main_custom_key_list(dataset_name):
+            return ["EV1O8-ES-Link", "EV2O8-ES-Link"] if dataset_name != "PubMed" \
+                else ["EV1-500-ES-Link", "EV2-500-ES-Link"]
+
+
         main_kwargs["dataset_class"] = "LinkPlanetoid"
         dataset_name_list = ["Cora", "CiteSeer", "PubMed"]
 
-        def get_main_custom_key_list(dataset_name):
-            return ["EV1O8-ES-Link", "EV2O8-ES-Link"] if dataset_name != "PubMed" \
-                    else ["EV1-500-ES-Link", "EV2-500-ES-Link"]
-
-        main_name_and_kwargs = [("{}-{}".format(d, ck), {**main_kwargs, "custom_key": ck})
+        main_name_and_kwargs = [("{}-{}".format(d, ck), {**main_kwargs, "dataset_name": d, "custom_key": ck})
                                 for d in dataset_name_list for ck in get_main_custom_key_list(d)]
+        pprint(main_name_and_kwargs)
 
         analyze_link_pred_perfs_for_multiple_models(main_name_and_kwargs, num_total_runs=10)
 
