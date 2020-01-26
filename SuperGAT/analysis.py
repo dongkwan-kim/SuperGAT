@@ -49,7 +49,7 @@ def analyze_link_pred_perfs_for_multiple_models(name_and_kwargs: List[Tuple[str,
 def plot_kld_jsd_ent(kld_agree_att_by_layer, kld_att_agree_by_layer, jsd_by_layer, entropy_by_layer,
                      kld_agree_unifatt, kld_unifatt_agree, jsd_uniform, entropy_agreement, entropy_uniform,
                      num_layers, model_args, epoch, name_prefix_list,
-                     ylim_dict=None, width=0.6, extension="png"):
+                     ylim_dict=None, width=0.6, extension="png", **kwargs):
     ylim_dict = ylim_dict or dict()
 
     def _ylim(plot_type):
@@ -66,25 +66,25 @@ def plot_kld_jsd_ent(kld_agree_att_by_layer, kld_att_agree_by_layer, jsd_by_laye
                        x="Attention Type", y="KLD(AGR, ATT)",
                        args=model_args,
                        custom_key="KLD_AGR_ATT_{:03d}".format(epoch),
-                       ylim=_ylim("KLD_AGR_ATT"), width=width, extension=extension)
+                       ylim=_ylim("KLD_AGR_ATT"), width=width, extension=extension, **kwargs)
     plot_multiple_dist(kld_att_agree_by_layer + [kld_unifatt_agree],
                        name_list=name_list + ["Uniform"],
                        x="Attention Type", y="KLD(ATT, AGR)",
                        args=model_args,
                        custom_key="KLD_ATT_AGR_{:03d}".format(epoch),
-                       ylim=_ylim("KLD_ATT_AGR"), width=width, extension=extension)
+                       ylim=_ylim("KLD_ATT_AGR"), width=width, extension=extension, **kwargs)
     plot_multiple_dist(jsd_by_layer + [jsd_uniform],
                        name_list=name_list + ["Uniform"],
                        x="Attention Type", y="JSD",
                        args=model_args,
                        custom_key="JSD_{:03d}".format(epoch),
-                       ylim=_ylim("JSD"), width=width, extension=extension)
+                       ylim=_ylim("JSD"), width=width, extension=extension, **kwargs)
     plot_multiple_dist(entropy_by_layer + [entropy_agreement, entropy_uniform],
                        name_list=name_list + ["Agreement", "Uniform"],
                        x="Attention Type", y="Entropy",
                        args=model_args,
                        custom_key="ENT_{:03d}".format(epoch),
-                       ylim=_ylim("ENT"), width=width, extension=extension)
+                       ylim=_ylim("ENT"), width=width, extension=extension, **kwargs)
 
 
 def get_attention_metric_for_single_model(model, batch, device):
@@ -165,7 +165,8 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
     total_args.custom_key = "-".join(sorted(custom_key_list))
     plot_kld_jsd_ent(kld1_list, kld2_list, jsd_list, ent_list, *res,
                      num_layers=num_layers, model_args=total_args, epoch=-1,
-                     name_prefix_list=name_prefix_list, extension=extension)
+                     name_prefix_list=name_prefix_list, extension=extension,
+                     flierprops={"marker": "x", "markersize": 12})
 
 
 def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_negatives=False, with_fnn=False):
@@ -490,7 +491,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "link_pred_perfs_for_multiple_models"
+    MODE = "attention_metric_for_multiple_models"
 
     if MODE == "link_pred_perfs_for_multiple_models":
 
@@ -510,8 +511,10 @@ if __name__ == '__main__':
 
     elif MODE == "attention_metric_for_multiple_models":
 
-        main_kwargs["model_name"] = "LargeGAT"  # This
-        main_kwargs["dataset_name"] = "Cora"  # This
+        sns.set_context("poster", font_scale=1.25)
+
+        main_kwargs["model_name"] = "GAT"  # GAT, LargeGAT
+        main_kwargs["dataset_name"] = "Cora"  # Cora, CiteSeer, PubMed
 
         main_name_prefix_list = ["GO", "DP"]
         if main_kwargs["dataset_name"] != "PubMed":
