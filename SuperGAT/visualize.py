@@ -36,7 +36,7 @@ def plot_multiple_dist(data_list: List[torch.Tensor], name_list: List[str], x, y
         pd_data[y] = pd_data[y] + list(data)
     df = pd.DataFrame(pd_data)
 
-    plot_func = plot_func or sns.boxenplot
+    plot_func = plot_func or sns.boxplot
     plot = plot_func(x=x, y=y, data=df, **kwargs)
 
     if ylim:
