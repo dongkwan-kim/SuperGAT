@@ -63,25 +63,25 @@ def plot_kld_jsd_ent(kld_agree_att_by_layer, kld_att_agree_by_layer, jsd_by_laye
 
     plot_multiple_dist(kld_agree_att_by_layer + [kld_agree_unifatt],
                        name_list=name_list + ["Uniform"],
-                       x="Attention Type", y="KLD(AGR, ATT)",
+                       x="Attention Type ({})".format(model_args.dataset_name), y="KLD(AGR, ATT)",
                        args=model_args,
                        custom_key="KLD_AGR_ATT_{:03d}".format(epoch),
                        ylim=_ylim("KLD_AGR_ATT"), width=width, extension=extension, **kwargs)
     plot_multiple_dist(kld_att_agree_by_layer + [kld_unifatt_agree],
                        name_list=name_list + ["Uniform"],
-                       x="Attention Type", y="KLD(ATT, AGR)",
+                       x="Attention Type ({})".format(model_args.dataset_name), y="KLD(ATT, AGR)",
                        args=model_args,
                        custom_key="KLD_ATT_AGR_{:03d}".format(epoch),
                        ylim=_ylim("KLD_ATT_AGR"), width=width, extension=extension, **kwargs)
     plot_multiple_dist(jsd_by_layer + [jsd_uniform],
                        name_list=name_list + ["Uniform"],
-                       x="Attention Type", y="JSD",
+                       x="Attention Type ({})".format(model_args.dataset_name), y="JSD",
                        args=model_args,
                        custom_key="JSD_{:03d}".format(epoch),
                        ylim=_ylim("JSD"), width=width, extension=extension, **kwargs)
     plot_multiple_dist(entropy_by_layer + [entropy_agreement, entropy_uniform],
                        name_list=name_list + ["Agreement", "Uniform"],
-                       x="Attention Type", y="Entropy",
+                       x="Attention Type ({})".format(model_args.dataset_name), y="Entropy",
                        args=model_args,
                        custom_key="ENT_{:03d}".format(epoch),
                        ylim=_ylim("ENT"), width=width, extension=extension, **kwargs)
@@ -515,12 +515,23 @@ if __name__ == '__main__':
 
         main_kwargs["model_name"] = "GAT"  # GAT, LargeGAT
         main_kwargs["dataset_name"] = "Cora"  # Cora, CiteSeer, PubMed
+        num_layers = 4  # Only for LargeGAT
 
         main_name_prefix_list = ["GO", "DP"]
-        if main_kwargs["dataset_name"] != "PubMed":
-            main_custom_key_list = ["NEO8-ES-ATT", "NEDPO8-ES-ATT"]
+        if main_kwargs["model_name"] == "GAT":
+            if main_kwargs["dataset_name"] != "PubMed":
+                main_custom_key_list = ["NEO8-ES-ATT", "NEDPO8-ES-ATT"]
+            else:
+                main_custom_key_list = ["NE-500-ES-ATT", "NEDP-500-ES-ATT"]
+        elif main_kwargs["model_name"] == "LargeGAT":
+            if main_kwargs["dataset_name"] != "PubMed":
+                main_custom_key_list = ["NEO8-L{}-ES-ATT".format(num_layers),
+                                        "NEDPO8-L{}-ES-ATT".format(num_layers)]
+            else:
+                main_custom_key_list = ["NE-600-L{}-ES-ATT".format(num_layers),
+                                        "NEDP-600-L{}-ES-ATT".format(num_layers)]
         else:
-            main_custom_key_list = ["NE-500-ES-ATT", "NEDP-500-ES-ATT"]
+            raise ValueError("Wrong model name: {}".format(main_kwargs["model_name"]))
         main_npx_and_kwargs = [(npx, {**main_kwargs, "custom_key": ck}) for npx, ck in zip(main_name_prefix_list,
                                                                                            main_custom_key_list)]
         visualize_attention_metric_for_multiple_models(main_npx_and_kwargs, extension="pdf")
