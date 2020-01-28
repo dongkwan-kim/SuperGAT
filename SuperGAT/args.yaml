@@ -1,5 +1,5 @@
 DEFAULT: &DEFAULT
-  black_list: [0, 2, 3]
+  black_list: [0, 1, 2]
   num_gpus_total: 4
   num_gpus_to_use: 1
   heads: 8
@@ -274,6 +274,18 @@ GAT-Cora-EV12O1:  # No pretraining
   l2_lambda: 0.009822681226235598
   att_lambda: 1.8490524030529658
 
+GAT-Cora-EV13: &GAT-Cora-EV13
+  <<: *GAT-Cora-E
+  attention_type: "logit_mask"
+
+GAT-Cora-EV13NSO8: &GAT-Cora-EV13NSO8
+  <<: *GAT-Cora-EV13
+  out_heads: 8
+  edge_sampling_ratio: 0.5448325408142086
+  l2_lambda: 0.009966526178313471
+  att_lambda: 3.5536667418164765
+  neg_sample_ratio: 0.7
+
 GAT-Cora-NEO8-ES-ATT:
   <<: *GAT-Cora-NEO8-ES
   task_type: Attention_Dist
@@ -341,7 +353,7 @@ GAT-CiteSeer-EVL9O8:
   edge_sampling_ratio: 0.65491644887445
   l2_lambda: 0.011374239383259618
   link_lambda: 0.1
-  neg_sample_ratio: 0.7
+  neg_sample_ratio: 0.5
 
 GAT-CiteSeer-EVL12O8:  # 0.7356
   <<: *GAT-CiteSeer-NE
@@ -686,14 +698,14 @@ GAT-PubMed-EV9O8MO-500:
   attention_type: "prob_mask_only"
   total_pretraining_epoch: 41
 
-GAT-PubMed-EV9NSO8-500:  # 0.8261
+GAT-PubMed-EV9NSO8-500:  # 0.8262
   <<: *GAT-PubMed-EV9O8
   epochs: 500
-  edge_sampling_ratio: 0.936623819585547
-  l2_lambda: 1.0101541277934328e-05
-  att_lambda: 30.691650700969998
-  total_pretraining_epoch: 94
-  neg_sample_ratio: 0.1
+  edge_sampling_ratio: 0.9112772882971971
+  l2_lambda: 0.0002003885937728024
+  att_lambda: 23.796349071053402
+  total_pretraining_epoch: 100
+  neg_sample_ratio: 0.3
 
 GAT-PubMed-EV9NSO8-500-nsr03:  # *0.8244
   <<: *GAT-PubMed-EV9O8
@@ -780,7 +792,7 @@ GAT-PubMed-NEDP-500-ES-ATT:
 LargeGAT: &LargeGAT
   <<: *DEFAULT
   model_name: LargeGAT
-  num_layers: 4
+  num_layers: 3
 
 LargeGAT-Cora: &LargeGAT-Cora
   <<: *LargeGAT
@@ -790,34 +802,89 @@ LargeGAT-Cora: &LargeGAT-Cora
   val_interval: 1
   num_hidden_features: 8
 
-LargeGAT-Cora-NEO8: &LargeGAT-Cora-NEO8  # 0.82
+LargeGAT-Cora-NEO8: &LargeGAT-Cora-NEO8
   <<: *LargeGAT-Cora
   epochs: 500
   out_heads: 8
-  l2_lambda: 0.010470372487516526
   is_super_gat: False
 
-LargeGAT-Cora-NEDPO8: &LargeGAT-Cora-NEDPO8  # 0.7906
+LargeGAT-Cora-NEDPO8: &LargeGAT-Cora-NEDPO8
   <<: *LargeGAT-Cora
   epochs: 500
   out_heads: 8
-  l2_lambda: 0.0054978677529362125
   is_super_gat: False
   attention_type: "dot_product"
 
-LargeGAT-Cora-NEO8-ES: &LargeGAT-Cora-NEO8-ES
+LargeGAT-Cora-NEO8-L3: &LargeGAT-Cora-NEO8-L3  # 0.8308
   <<: *LargeGAT-Cora-NEO8
+  l2_lambda: 0.006428762128923695
 
-LargeGAT-Cora-NEDPO8-ES: &LargeGAT-Cora-NEDPO8-ES
+LargeGAT-Cora-NEDPO8-L3: &LargeGAT-Cora-NEDPO8-L3  # 0.823
   <<: *LargeGAT-Cora-NEDPO8
+  l2_lambda: 0.01770023462303001
 
-LargeGAT-Cora-NEO8-ES-ATT:
-  <<: *LargeGAT-Cora-NEO8-ES
+LargeGAT-Cora-NEO8-L3-ES: &LargeGAT-Cora-NEO8-L3-ES
+  <<: *LargeGAT-Cora-NEO8-L3
+  use_early_stop: True
+  early_stop_patience: 249
+  early_stop_queue_length: 449
+  early_stop_threshold_loss: 0.030331900504233577
+  early_stop_threshold_perf: 4.462763147432128e-05
+  epochs: 465
+
+LargeGAT-Cora-NEDPO8-L3-ES: &LargeGAT-Cora-NEDPO8-L3-ES
+  <<: *LargeGAT-Cora-NEDPO8-L3
+  use_early_stop: True
+  early_stop_patience: 488
+  early_stop_queue_length: 497
+  early_stop_threshold_loss: 0.0025692101148647585
+  early_stop_threshold_perf: 0.014246257246819148
+  epochs: 498
+
+LargeGAT-Cora-NEO8-L3-ES-ATT:
+  <<: *LargeGAT-Cora-NEO8-L3-ES
   task_type: Attention_Dist
 
-LargeGAT-Cora-NEDPO8-ES-ATT:
-  <<: *LargeGAT-Cora-NEDPO8-ES
+LargeGAT-Cora-NEDPO8-L3-ES-ATT:
+  <<: *LargeGAT-Cora-NEDPO8-L3-ES
   task_type: Attention_Dist
+
+LargeGAT-Cora-NEO8-L4: &LargeGAT-Cora-NEO8-L4  # 0.8222
+  <<: *LargeGAT-Cora-NEO8
+  num_layers: 4
+  l2_lambda: 0.009824340163782743
+
+LargeGAT-Cora-NEDPO8-L4: &LargeGAT-Cora-NEDPO8-L4  # 0.8072
+  <<: *LargeGAT-Cora-NEDPO8
+  num_layers: 4
+  l2_lambda: 0.011813467800526988
+
+LargeGAT-Cora-NEO8-L4-ES: &LargeGAT-Cora-NEO8-L4-ES
+  <<: *LargeGAT-Cora-NEO8-L4
+  use_early_stop: True
+  early_stop_patience: 174
+  early_stop_queue_length: 272
+  early_stop_threshold_loss: 0.0001318493897646314
+  early_stop_threshold_perf: 1.602541366887225e-05
+  epochs: 465
+
+LargeGAT-Cora-NEDPO8-L4-ES: &LargeGAT-Cora-NEDPO8-L4-ES
+  <<: *LargeGAT-Cora-NEDPO8-L4
+  use_early_stop: True
+  early_stop_patience: 148
+  early_stop_queue_length: 384
+  early_stop_threshold_loss: 0.0026746348392852675
+  early_stop_threshold_perf: 1.4946229762768595e-05
+  epochs: 482
+
+LargeGAT-Cora-NEO8-L4-ES-ATT:
+  <<: *LargeGAT-Cora-NEO8-L4-ES
+  task_type: Attention_Dist
+
+LargeGAT-Cora-NEDPO8-L4-ES-ATT:
+  <<: *LargeGAT-Cora-NEDPO8-L4-ES
+  task_type: Attention_Dist
+
 
 LargeGAT-CiteSeer: &LargeGAT-CiteSeer
   <<: *LargeGAT
@@ -832,15 +899,84 @@ LargeGAT-CiteSeer-NEO8: &LargeGAT-CiteSeer-NEO8
   epochs: 400
   is_super_gat: False
   out_heads: 8
-  l2_lambda: 0.04086304658243455
 
 LargeGAT-CiteSeer-NEDPO8: &LargeGAT-CiteSeer-NEDPO8
   <<: *LargeGAT-CiteSeer
   epochs: 400
   is_super_gat: False
   out_heads: 8
-  l2_lambda: 0.048631720493287324
   attention_type: "dot_product"
+
+LargeGAT-CiteSeer-NEO8-L3: &LargeGAT-CiteSeer-NEO8-L3  # 0.7268
+  <<: *LargeGAT-CiteSeer-NEO8
+  l2_lambda: 0.024134487716072506
+
+LargeGAT-CiteSeer-NEDPO8-L3: &LargeGAT-CiteSeer-NEDPO8-L3  # 0.7082
+  <<: *LargeGAT-CiteSeer-NEDPO8
+  l2_lambda: 0.016152133182094127
+
+LargeGAT-CiteSeer-NEO8-L3-ES: &LargeGAT-CiteSeer-NEO8-L3-ES
+  <<: *LargeGAT-CiteSeer-NEO8-L3
+  use_early_stop: True
+  early_stop_patience: 44
+  early_stop_queue_length: 375
+  early_stop_threshold_loss: 0.0019784271190451505
+  early_stop_threshold_perf: 0.005360379511569824
+  epochs: 257
+
+LargeGAT-CiteSeer-NEDPO8-L3-ES: &LargeGAT-CiteSeer-NEDPO8-L3-ES
+  <<: *LargeGAT-CiteSeer-NEDPO8-L3
+  use_early_stop: True
+  early_stop_patience: 105
+  early_stop_queue_length: 124
+  early_stop_threshold_loss: 1.604244922257533e-05
+  early_stop_threshold_perf: 0.00014854046251276697
+  epochs: 354
+
+LargeGAT-CiteSeer-NEO8-L3-ES-ATT:
+  <<: *LargeGAT-CiteSeer-NEO8-L3-ES
+  task_type: Attention_Dist
+
+LargeGAT-CiteSeer-NEDPO8-L3-ES-ATT:
+  <<: *LargeGAT-CiteSeer-NEDPO8-L3-ES
+  task_type: Attention_Dist
+
+LargeGAT-CiteSeer-NEO8-L4: &LargeGAT-CiteSeer-NEO8-L4  # 0.6852
+  <<: *LargeGAT-CiteSeer-NEO8
+  num_layers: 4
+  l2_lambda: 0.014003666964529557
+
+LargeGAT-CiteSeer-NEDPO8-L4: &LargeGAT-CiteSeer-NEDPO8-L4  # 0.6678
+  <<: *LargeGAT-CiteSeer-NEDPO8
+  num_layers: 4
+  l2_lambda: 0.018662017147701108
+
+LargeGAT-CiteSeer-NEO8-L4-ES: &LargeGAT-CiteSeer-NEO8-L4-ES
+  <<: *LargeGAT-CiteSeer-NEO8-L4
+  use_early_stop: True
+  early_stop_patience: 42
+  early_stop_queue_length: 364
+  early_stop_threshold_loss: 0.002213223581278368
+  early_stop_threshold_perf: 0.00040036223271938285
+  epochs: 359
+
+LargeGAT-CiteSeer-NEDPO8-L4-ES: &LargeGAT-CiteSeer-NEDPO8-L4-ES
+  <<: *LargeGAT-CiteSeer-NEDPO8-L4
+  use_early_stop: True
+  early_stop_patience: 152
+  early_stop_queue_length: 301
+  early_stop_threshold_loss: 0.001681844531891531
+  early_stop_threshold_perf: 5.368938415448947e-05
+  epochs: 361
+
+LargeGAT-CiteSeer-NEO8-L4-ES-ATT:
+  <<: *LargeGAT-CiteSeer-NEO8-L4-ES
+  task_type: Attention_Dist
+
+LargeGAT-CiteSeer-NEDPO8-L4-ES-ATT:
+  <<: *LargeGAT-CiteSeer-NEDPO8-L4-ES
+  task_type: Attention_Dist
+
 
 LargeGAT-PubMed: &LargeGAT-PubMed
   <<: *LargeGAT
@@ -856,13 +992,83 @@ LargeGAT-PubMed-NE: &LargeGAT-PubMed-NE
   l2_lambda: 0.0006334814661840428
   is_super_gat: False
 
-LargeGAT-PubMed-NE-600: &LargeGAT-PubMed-NE-500
+LargeGAT-PubMed-NE-600: &LargeGAT-PubMed-NE-600
   <<: *LargeGAT-PubMed-NE
   epochs: 600
   l2_lambda: 0.0009634368245244388
 
-LargeGAT-PubMed-NEDP-600: &LargeGAT-PubMed-NEDP-500
+LargeGAT-PubMed-NEDP-600: &LargeGAT-PubMed-NEDP-600
   <<: *LargeGAT-PubMed-NE
   epochs: 600
   l2_lambda: 0.0009233229073574351
   attention_type: "dot_product"
+
+LargeGAT-PubMed-NE-600-L3: &LargeGAT-PubMed-NE-600-L3  # 0.7918
+  <<: *LargeGAT-PubMed-NE-600
+  l2_lambda: 0.001506197220922868
+
+LargeGAT-PubMed-NEDP-600-L3: &LargeGAT-PubMed-NEDP-600-L3  # 0.8008
+  <<: *LargeGAT-PubMed-NEDP-600
+  l2_lambda: 0.00279223414544031
+
+LargeGAT-PubMed-NE-600-L3-ES: &LargeGAT-PubMed-NE-600-L3-ES
+  <<: *LargeGAT-PubMed-NE-600-L3
+  use_early_stop: True
+  early_stop_patience: 475
+  early_stop_queue_length: 52
+  early_stop_threshold_loss: 0.0036533000773602067
+  early_stop_threshold_perf: 2.1989136783890115e-05
+  epochs: 565
+
+LargeGAT-PubMed-NEDP-600-L3-ES: &LargeGAT-PubMed-NEDP-600-L3-ES
+  <<: *LargeGAT-PubMed-NEDP-600-L3
+  use_early_stop: True
+  early_stop_patience: 449
+  early_stop_queue_length: 42
+  early_stop_threshold_loss: 0.00018795062363329476
+  early_stop_threshold_perf: 1.885959250052512e-05
+  epochs: 558
+
+LargeGAT-PubMed-NE-600-L3-ES-ATT:
+  <<: *LargeGAT-PubMed-NE-600-L3-ES
+  task_type: Attention_Dist
+
+LargeGAT-PubMed-NEDP-600-L3-ES-ATT:
+  <<: *LargeGAT-PubMed-NEDP-600-L3-ES
+  task_type: Attention_Dist
+
+LargeGAT-PubMed-NE-600-L4: &LargeGAT-PubMed-NE-600-L4  # 0.7954
+  <<: *LargeGAT-PubMed-NE-600
+  num_layers: 4
+  l2_lambda: 0.005099949301765401
+
+LargeGAT-PubMed-NEDP-600-L4: &LargeGAT-PubMed-NEDP-600-L4  # 0.7962
+  <<: *LargeGAT-PubMed-NEDP-600
+  num_layers: 4
+  l2_lambda: 0.004699899271039919
+
+LargeGAT-PubMed-NE-600-L4-ES: &LargeGAT-PubMed-NE-600-L4-ES
+  <<: *LargeGAT-PubMed-NE-600-L4
+  use_early_stop: True
+  early_stop_patience: 443
+  early_stop_queue_length: 288
+  early_stop_threshold_loss: 0.002358617313365294
+  early_stop_threshold_perf: 3.0440330785716628e-05
+  epochs: 573
+
+LargeGAT-PubMed-NEDP-600-L4-ES: &LargeGAT-PubMed-NEDP-600-L4-ES
+  <<: *LargeGAT-PubMed-NEDP-600-L4
+  use_early_stop: True
+  early_stop_patience: 500
+  early_stop_queue_length: 178
+  early_stop_threshold_loss: 8.3669360096891e-05
+  early_stop_threshold_perf: 0.0004910605863918596
+  epochs: 478
+
+LargeGAT-PubMed-NE-600-L4-ES-ATT:
+  <<: *LargeGAT-PubMed-NE-600-L4-ES
+  task_type: Attention_Dist
+
+LargeGAT-PubMed-NEDP-600-L4-ES-ATT:
+  <<: *LargeGAT-PubMed-NEDP-600-L4-ES
+  task_type: Attention_Dist
