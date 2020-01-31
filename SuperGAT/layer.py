@@ -206,7 +206,7 @@ class SuperGAT(MessagePassing):
                 att_label = None
             self._update_residuals("att_label", att_label)
 
-            if self.attention_type in [
+            if self.is_super_gat and self.attention_type in [
                 "gat_originated", "dot_product", "logit_mask", "prob_mask", "tanh_mask",
             ]:
                 att_with_negatives = self.att_scaling * F.elu(att_with_negatives) + self.att_bias

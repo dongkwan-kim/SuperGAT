@@ -491,20 +491,21 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "attention_metric_for_multiple_models"
+    MODE = "link_pred_perfs_for_multiple_models"
 
     if MODE == "link_pred_perfs_for_multiple_models":
 
-        def get_main_custom_key_list(dataset_name):
-            return ["EV1O8-ES-Link", "EV2O8-ES-Link"] if dataset_name != "PubMed" \
-                else ["EV1-500-ES-Link", "EV2-500-ES-Link"]
+        def get_main_custom_key_list(dataset_name, prefix_1, prefix_2):
+            return ["{}O8-ES-Link".format(prefix_1), "{}O8-ES-Link".format(prefix_2)] if dataset_name != "PubMed" \
+                else ["{}-500-ES-Link".format(prefix_1), "{}-500-ES-Link".format(prefix_2)]
 
-
+        use_supervision = False  # this
         main_kwargs["dataset_class"] = "LinkPlanetoid"
         dataset_name_list = ["Cora", "CiteSeer", "PubMed"]
+        p1, p2 = ("EV1", "EV2") if use_supervision else ("NE", "NEDP")
 
         main_name_and_kwargs = [("{}-{}".format(d, ck), {**main_kwargs, "dataset_name": d, "custom_key": ck})
-                                for d in dataset_name_list for ck in get_main_custom_key_list(d)]
+                                for d in dataset_name_list for ck in get_main_custom_key_list(d, p1, p2)]
         pprint(main_name_and_kwargs)
 
         analyze_link_pred_perfs_for_multiple_models(main_name_and_kwargs, num_total_runs=10)
