@@ -76,6 +76,14 @@ class SuperGATNet(nn.Module):
 
         pprint(next(self.modules()))
 
+    def forward_for_all_layers(self, x, edge_index, batch=None, **kwargs):
+        x1 = F.dropout(x, p=self.args.dropout, training=self.training)
+        x1 = self.conv1(x1, edge_index, **kwargs)
+        x2 = F.elu(x1)
+        x2 = F.dropout(x2, p=self.args.dropout, training=self.training)
+        x2 = self.conv2(x2, edge_index, **kwargs)
+        return x1, x2
+
     def forward(self, x, edge_index, batch=None, **kwargs) -> torch.Tensor:
 
         x = F.dropout(x, p=self.args.dropout, training=self.training)

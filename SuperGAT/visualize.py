@@ -115,6 +115,6 @@ def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None
     ax.set_axis_off()
 
     _key, path = _get_key_and_makedirs(args, base_path="../figs")
-    key = key or _key
+    key = _key if key is None else "{}_{}".format(_key, key)
     plt.savefig("{}/fig_glayout_{}_{}.{}".format(path, key, layout, extension), bbox_inches='tight')
     plt.clf()

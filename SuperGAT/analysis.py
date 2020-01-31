@@ -4,6 +4,7 @@ from pprint import pprint
 from typing import List, Dict, Tuple
 from datetime import datetime
 import os
+from tqdm import tqdm
 
 from arguments import get_args, pprint_args, pdebug_args
 from data import get_dataset_or_loader
@@ -14,7 +15,7 @@ from layer import negative_sampling
 
 import torch
 import torch.nn.functional as F
-from torch_geometric.utils import subgraph, softmax
+from torch_geometric.utils import subgraph, softmax, remove_self_loops, add_self_loops
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -169,6 +170,33 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
                      flierprops={"marker": "x", "markersize": 12})
 
 
+def edge_to_sorted_tuple(e):
+    return tuple(sorted([int(e[0]), int(e[1])]))
+
+
+def get_layer_repr_and_e2att(model, data, _args) -> List[Tuple[torch.Tensor, Dict]]:
+    model.set_layer_attrs("cache_attention", True)
+    model = model.to("cpu")
+    model.eval()
+    layer_repr_and_e2att = []
+
+    # edge_index for [2, E + N]
+    edge_index, _ = remove_self_loops(data.edge_index)
+    edge_index, _ = add_self_loops(edge_index, num_nodes=data.x.size(0))
+
+    with torch.no_grad():
+        for i, x in enumerate(model.forward_for_all_layers(data.x, data.edge_index)):
+            edge_to_attention = defaultdict(list)
+            conv = getattr(model, "conv{}".format(i + 1))
+            att = conv.residuals["att"]  # [E + N, heads]
+            mean_att = att.mean(dim=-1)  # [E + N]
+            for ma, e in zip(mean_att, edge_index.t()):
+                if e[0] != e[1]:
+                    edge_to_attention[edge_to_sorted_tuple(e)].append(float(ma))
+            layer_repr_and_e2att.append((x, edge_to_attention))
+    return layer_repr_and_e2att
+
+
 def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_negatives=False, with_fnn=False):
     model = model.to("cpu")
     model.eval()
@@ -178,9 +206,6 @@ def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_ne
 
         x = torch.matmul(data.x, model.conv1.weight)
         size_i = x.size(0)
-
-        def edge_to_sorted_tuple(e):
-            return tuple(sorted([int(e[0]), int(e[1])]))
 
         if not with_negatives:
             edge_index_j, edge_index_i = data.edge_index
@@ -261,7 +286,7 @@ def visualize_glayout_without_training(layout="tsne", **kwargs):
     )
     data = train_d[0]
     plot_graph_layout(data.x.numpy(), data.y.numpy(), data.edge_index.numpy(),
-                      args=_args, edge_to_attention=None, layout=layout)
+                      args=_args, edge_to_attention=None, key="raw", layout=layout)
 
 
 def visualize_glayout_with_training_and_attention(**kwargs):
@@ -282,14 +307,15 @@ def visualize_glayout_with_training_and_attention(**kwargs):
 
     model, ret = run(_args, gpu_id=alloc_gpu[0], return_model=True)
     train_d, val_d, test_d = get_dataset_or_loader(
-        "Planetoid", _args.dataset_name, _args.data_root,
+        _args.dataset_class, _args.dataset_name, _args.data_root,
         batch_size=_args.batch_size, seed=_args.seed,
     )
     data = train_d[0]
 
-    xs_after_conv1, edge_to_attention = get_first_layer_and_e2att(model, data, _args)
-    plot_graph_layout(xs_after_conv1.numpy(), data.y.numpy(), data.edge_index.numpy(),
-                      edge_to_attention=edge_to_attention, args=_args)
+    for i, (xs_after_conv, edge_to_attention) in enumerate(tqdm(get_layer_repr_and_e2att(model, data, _args))):
+        plot_graph_layout(xs_after_conv.numpy(), data.y.numpy(), data.edge_index.numpy(),
+                          edge_to_attention=edge_to_attention, args=_args, key="layer-{}".format(i + 1))
+        print("plot_graph_layout: layer-{}".format(i + 1))
 
 
 def get_model_and_preds(data, **kwargs):
@@ -482,18 +508,17 @@ if __name__ == '__main__':
 
     sns.set(style="whitegrid")
     sns.set_context("talk")
-
-    main_kwargs = dict(
-        model_name="GAT",  # GAT, BaselineGAT
-        dataset_class="Planetoid",
-        dataset_name="PubMed",  # Cora, CiteSeer, PubMed
-        custom_key="NE-500",  # NE, EV1, EV2, NR, RV1
-    )
+    main_kwargs = {
+        "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
+        "dataset_class": "HomophilySynthetic",  # ADPlanetoid, LinkPlanetoid, Planetoid, HomophilySynthetic
+        "dataset_name": "hs-0.9",  # Cora, CiteSeer, PubMed, hs-0.1, hs-0.3, hs-0.5, hs-0.7, hs-0.9
+        "custom_key": "NEDPO8-ES",  # NE, EV1, EV2
+    }
 
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "glayout_without_training"
+    MODE = "glayout_with_training_and_attention"
 
     if MODE == "link_pred_perfs_for_multiple_models":
 
@@ -540,7 +565,7 @@ if __name__ == '__main__':
         visualize_attention_metric_for_multiple_models(main_npx_and_kwargs, extension="pdf")
 
     elif MODE == "glayout_without_training":
-        layout_shape = "spring"  # tsne, spring, kamada_kawai
+        layout_shape = "tsne"  # tsne, spring, kamada_kawai
         visualize_glayout_without_training(layout=layout_shape, **main_kwargs)
 
     elif MODE == "glayout_with_training_and_attention":
