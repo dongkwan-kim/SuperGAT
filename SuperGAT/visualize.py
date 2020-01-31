@@ -1,5 +1,6 @@
 import os
 from typing import List, Tuple
+import math
 
 from sklearn.manifold import TSNE
 import networkx as nx
@@ -77,7 +78,20 @@ def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None
         x_embed = TSNE(n_components=2).fit_transform(xs)
         pos = {xid: x_embed[xid] for xid in range(len(xs))}
     else:
-        pos = nx.layout.spring_layout(G)
+        if layout == "random":
+            pos = nx.layout.random_layout(G)
+        elif layout == "spectral":
+            pos = nx.layout.spectral_layout(G)
+        elif layout == "spring":
+            _k = 2.6
+            layout = "{}-{}".format(layout, _k)
+            pos = nx.layout.spring_layout(G, k=_k/math.sqrt(len(xs)))
+        elif layout == "kamada_kawai":
+            pos = nx.layout.kamada_kawai_layout(G)
+        elif layout == "shell":
+            pos = nx.layout.shell_layout(G)
+        else:
+            raise ValueError("{} is wrong layout".format(layout))
 
     n_classes = len(np.unique(ys))
 
@@ -102,5 +116,5 @@ def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None
 
     _key, path = _get_key_and_makedirs(args, base_path="../figs")
     key = key or _key
-    plt.savefig("{}/fig_glayout_{}.{}".format(path, key, extension), bbox_inches='tight')
+    plt.savefig("{}/fig_glayout_{}_{}.{}".format(path, key, layout, extension), bbox_inches='tight')
     plt.clf()

@@ -192,9 +192,8 @@ def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_ne
             alpha = model.conv1._get_attention(edge_index_i, x_i, x_j, size_i, normalize=True, with_negatives=False)
 
             if with_fnn:
-                fnn_alpha = model.conv1.att_scaling * alpha + model.conv1.att_bias
-                fnn_alpha = F.elu(fnn_alpha)
-                fnn_alpha = model.conv1.att_scaling_2 * fnn_alpha + model.conv1.att_bias_2
+                fnn_alpha = model.conv1.att_scaling * F.elu(alpha) + model.conv1.att_bias
+                fnn_alpha = model.conv1.att_scaling_2 * F.elu(fnn_alpha) + model.conv1.att_bias_2
                 mean_fnn_alpha = fnn_alpha.mean(dim=-1)
 
             if with_normalized:
@@ -253,32 +252,35 @@ def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_ne
                 return xs_after_conv1, edge_to_attention, edge_to_is_negative, edge_to_fnn_attention
 
 
-def visualize_glayout_without_training(**kwargs):
+def visualize_glayout_without_training(layout="tsne", **kwargs):
     _args = get_args(**kwargs)
+    pprint_args(_args)
     train_d, val_d, test_d = get_dataset_or_loader(
-        "Planetoid", _args.dataset_name, _args.data_root,
+        _args.dataset_class, _args.dataset_name, _args.data_root,
         batch_size=_args.batch_size, seed=_args.seed,
     )
     data = train_d[0]
-    plot_graph_layout(data.x.numpy(), data.y.numpy(), data.edge_index.numpy(), edge_to_attention=None)
+    plot_graph_layout(data.x.numpy(), data.y.numpy(), data.edge_index.numpy(),
+                      args=_args, edge_to_attention=None, layout=layout)
 
 
 def visualize_glayout_with_training_and_attention(**kwargs):
     _args = get_args(**kwargs)
     _args.verbose = 2
     _args.save_model = False
-    _args.epochs = 300
+    if not _args.use_early_stop:
+        _args.epochs = 300
     pprint_args(_args)
 
-    _alloc_gpu = blind_other_gpus(num_gpus_total=_args.num_gpus_total,
-                                  num_gpus_to_use=_args.num_gpus_to_use,
-                                  black_list=_args.black_list)
-    if _alloc_gpu:
-        cprint("Use GPU the ID of which is {}".format(_alloc_gpu), "yellow")
-    _alloc_gpu_id = _alloc_gpu[0] if _alloc_gpu else 1
+    alloc_gpu = blind_other_gpus(num_gpus_total=_args.num_gpus_total,
+                                 num_gpus_to_use=_args.num_gpus_to_use,
+                                 black_list=_args.black_list)
+    if not alloc_gpu:
+        alloc_gpu = [int(np.random.choice([g for g in range(_args.num_gpus_total)
+                                           if g not in _args.black_list], 1))]
+    cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
-    model, ret = run(_args, gpu_id=_alloc_gpu_id, return_model=True)
-
+    model, ret = run(_args, gpu_id=alloc_gpu[0], return_model=True)
     train_d, val_d, test_d = get_dataset_or_loader(
         "Planetoid", _args.dataset_name, _args.data_root,
         batch_size=_args.batch_size, seed=_args.seed,
@@ -484,14 +486,14 @@ if __name__ == '__main__':
     main_kwargs = dict(
         model_name="GAT",  # GAT, BaselineGAT
         dataset_class="Planetoid",
-        dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV1",  # NE, EV1, EV2, NR, RV1
+        dataset_name="PubMed",  # Cora, CiteSeer, PubMed
+        custom_key="NE-500",  # NE, EV1, EV2, NR, RV1
     )
 
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "link_pred_perfs_for_multiple_models"
+    MODE = "glayout_without_training"
 
     if MODE == "link_pred_perfs_for_multiple_models":
 
@@ -538,7 +540,8 @@ if __name__ == '__main__':
         visualize_attention_metric_for_multiple_models(main_npx_and_kwargs, extension="pdf")
 
     elif MODE == "glayout_without_training":
-        visualize_glayout_without_training(**main_kwargs)
+        layout_shape = "spring"  # tsne, spring, kamada_kawai
+        visualize_glayout_without_training(layout=layout_shape, **main_kwargs)
 
     elif MODE == "glayout_with_training_and_attention":
         visualize_glayout_with_training_and_attention(**main_kwargs)
