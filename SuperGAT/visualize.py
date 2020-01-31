@@ -69,7 +69,7 @@ def plot_nodes_by_tsne(xs, ys, args=None, extension="png"):
     plt.clf()
 
 
-def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, extension="png", layout="tsne"):
+def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None, extension="png", layout="tsne"):
     G = nx.Graph()
     G.add_edges_from([(i, j) for i, j in np.transpose(edge_index)])
 
@@ -84,7 +84,7 @@ def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, extensio
     node_sizes = 4
     node_cmap = plt.cm.get_cmap("Set1")
     class_to_node_color = {c: node_cmap(c / n_classes) for c in range(n_classes)}
-    node_color_list = [class_to_node_color[y] for y in ys]
+    node_color_list = [class_to_node_color[int(y)] for y in ys]
 
     nodes = nx.draw_networkx_nodes(G, pos, node_size=node_sizes, node_color=node_color_list, alpha=0.5)
 
@@ -100,6 +100,7 @@ def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, extensio
     ax = plt.gca()
     ax.set_axis_off()
 
-    key, path = _get_key_and_makedirs(args, base_path="../figs")
+    _key, path = _get_key_and_makedirs(args, base_path="../figs")
+    key = key or _key
     plt.savefig("{}/fig_glayout_{}.{}".format(path, key, extension), bbox_inches='tight')
     plt.clf()
