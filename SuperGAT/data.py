@@ -13,6 +13,7 @@ from pprint import pprint
 from typing import Tuple, Callable, List
 
 from layer import negative_sampling
+from data_syn import HomophilySynthetic
 
 
 def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor, epsilon=1e-11) -> List[torch.Tensor]:
@@ -163,7 +164,7 @@ def get_dataset_class_name(dataset_name: str) -> str:
 
 
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
-    assert dataset_class in (pyg.datasets.__all__ + ["LinkPlanetoid", "ADPlanetoid"])
+    assert dataset_class in (pyg.datasets.__all__ + ["LinkPlanetoid", "ADPlanetoid", "HomophilySynthetic"])
     return eval(dataset_class)
 
 
@@ -201,7 +202,10 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         kwargs["name"] = dataset_name
 
     torch.manual_seed(seed)
-    root = os.path.join(root, dataset_name or dataset_class)
+    if not dataset_class in ["HomophilySynthetic"]:
+        root = os.path.join(root, dataset_name or dataset_class)
+    else:
+        root = os.path.join(root, "synthetic")
     dataset_cls = get_dataset_class(dataset_class)
 
     if dataset_class in ["TUDataset"]:  # Graph
@@ -218,6 +222,10 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         return train_loader, val_loader, test_loader
 
     elif dataset_class in ["Planetoid", "LinkPlanetoid", "ADPlanetoid"]:  # Node or Link (One graph with given mask)
+        dataset = dataset_cls(root=root, **kwargs)
+        return dataset, None, None
+
+    elif dataset_class in ["HomophilySynthetic"]:
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
@@ -277,6 +285,10 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    # Synthetic
+    _test_data("HomophilySynthetic", "hs-0.5", "~/graph-data")
+    _test_data("HomophilySynthetic", "hs-0.9", "~/graph-data")
 
     # Link Prediction
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
