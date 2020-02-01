@@ -26,7 +26,6 @@ def plot_multiple_dist(data_list: List[torch.Tensor], name_list: List[str], x, y
                        args=None, extension="png", custom_key="",
                        ylim=None, plot_func=None,
                        **kwargs):
-
     plt.figure(figsize=(3 * len(name_list), 7))
 
     # data_list, name_list -> pd.Dataframe {x: [name...], y: [datum...]}
@@ -71,7 +70,11 @@ def plot_nodes_by_tsne(xs, ys, args=None, extension="png"):
 
 
 def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None, extension="png", layout="tsne"):
+    _key, path = _get_key_and_makedirs(args, base_path="../figs")
+    key = _key if key is None else "{}_{}".format(_key, key)
+
     G = nx.Graph()
+    G.add_nodes_from(list(range(len(xs))))
     G.add_edges_from([(i, j) for i, j in np.transpose(edge_index)])
 
     if layout == "tsne":
@@ -104,17 +107,14 @@ def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None
 
     if edge_to_attention is not None:
         edge_color = [float(np.mean(edge_to_attention[tuple(sorted(e))])) for e in G.edges]
-        edge_kwargs = dict(edge_color=edge_color, edge_cmap=plt.cm.Greys, width=1.25, alpha=0.5,
-                           vmin=np.min(edge_color) / 2, vmax=np.max(edge_color) * 2)
+        edge_kwargs = dict(edge_color=edge_color, edge_cmap=plt.cm.Greys, width=1.25, alpha=0.8,
+                           edge_vmin=0., edge_vmax=1.)
     else:
-        edge_kwargs = dict(edge_color="grey", width=0.5, alpha=0.3)
+        edge_kwargs = dict(edge_color="grey", width=0.25, alpha=0.2)
 
     edges = nx.draw_networkx_edges(G, pos, node_size=node_sizes, **edge_kwargs)
 
     ax = plt.gca()
     ax.set_axis_off()
-
-    _key, path = _get_key_and_makedirs(args, base_path="../figs")
-    key = _key if key is None else "{}_{}".format(_key, key)
     plt.savefig("{}/fig_glayout_{}_{}.{}".format(path, key, layout, extension), bbox_inches='tight')
     plt.clf()
