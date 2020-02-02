@@ -11,12 +11,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-def _get_key(args):
-    return "{}-{}-{}".format(args.model_name, args.dataset_name, args.custom_key) if args is not None else "raw"
+def _get_key(args, no_args_key=None):
+    return "{}-{}-{}".format(args.model_name, args.dataset_name, args.custom_key) if args is not None \
+        else (no_args_key or "raw")
 
 
-def _get_key_and_makedirs(args, base_path, exist_ok=True, **kwargs) -> Tuple[str, str]:
-    _key = _get_key(args)
+def _get_key_and_makedirs(args=None, no_args_key=None, base_path="./", exist_ok=True, **kwargs) -> Tuple[str, str]:
+    _key = _get_key(args, no_args_key)
     _path = os.path.join(base_path, _key)
     os.makedirs(_path, exist_ok=exist_ok, **kwargs)
     return _key, _path
