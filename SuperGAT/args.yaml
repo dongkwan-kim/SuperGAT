@@ -195,6 +195,7 @@ GAT-Cora-EV9NSO8: &GAT-Cora-EV9NSO8  # *0.8499
   att_lambda: 4.290561542173698
   total_pretraining_epoch: 58
   neg_sample_ratio: 0.2
+  logit_temperature: 1.0
 
 GAT-Cora-EV9NSO8-nsr03:  # 0.8502
   <<: *GAT-Cora-EV9
@@ -258,6 +259,7 @@ GAT-Cora-EV12NSO8-nsr05: &GAT-Cora-EV12NSO8-nsr05 # *0.8492
   l2_lambda: 0.00936213531676361
   att_lambda: 3.045489874559996
   neg_sample_ratio: 0.5
+  logit_temperature: 1.0
 
 GAT-Cora-EV12NSO8-ES: &GAT-Cora-EV12NSO8-ES
   <<: *GAT-Cora-EV12NSO8-nsr05
@@ -482,7 +484,7 @@ GAT-CiteSeer-EV9O8:
   att_lambda: 0.00016746130730858905
   total_pretraining_epoch: 41
 
-GAT-CiteSeer-EV9NSO8:  # 0.7377
+GAT-CiteSeer-EV9NSO8:  # *0.7377
   <<: *GAT-CiteSeer-EV9
   out_heads: 8
   edge_sampling_ratio: 0.5007751734094837
@@ -490,16 +492,7 @@ GAT-CiteSeer-EV9NSO8:  # 0.7377
   att_lambda: 0.00017009300368113955
   total_pretraining_epoch: 79
   neg_sample_ratio: 0.4
-
-GAT-CiteSeer-EV9NSPNO8:
-  <<: *GAT-CiteSeer-EV9
-  out_heads: 8
-  edge_sampling_ratio: 0.5007751734094837
-  l2_lambda: 0.042423217328523846
-  att_lambda: 0.00017009300368113955
-  total_pretraining_epoch: 79
-  neg_sample_ratio: 0.4
-  pretraining_noise_ratio: 0.1
+  logit_temperature: 1.0
 
 GAT-CiteSeer-EV9O8MO:
   <<: *GAT-CiteSeer-EV9
@@ -536,6 +529,7 @@ GAT-CiteSeer-EV12NSO8:  # 0.7315
   l2_lambda: 0.04420148764681786
   att_lambda: 0.4476859775367019
   neg_sample_ratio: 0.2
+  logit_temperature: 1.0
 
 GAT-CiteSeer-EV12NSO8-nsr06:  # 0.7317
   <<: *GAT-CiteSeer-EV12
@@ -755,6 +749,7 @@ GAT-PubMed-EV9NSO8-500-nsr03: &GAT-PubMed-EV9NSO8-500-nsr03  # *0.8244
   att_lambda: 24.00511704820566
   total_pretraining_epoch: 95
   neg_sample_ratio: 0.3
+  logit_temperature: 1.0
 
 GAT-PubMed-EV9NSO8-500-nsr01:  # 0.8256
   <<: *GAT-PubMed-EV9O8
@@ -810,6 +805,7 @@ GAT-PubMed-EV12NSO8-500: &GAT-PubMed-EV12NSO8-500 # *0.8239
   l2_lambda: 0.000638115051935756
   att_lambda: 10.061340672978162
   neg_sample_ratio: 0.5
+  logit_temperature: 1.0
 
 GAT-PubMed-EV12NSO8-500-ES: &GAT-PubMed-EV12NSO8-500-ES
   <<: *GAT-PubMed-EV12NSO8-500

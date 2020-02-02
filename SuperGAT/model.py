@@ -60,7 +60,7 @@ class SuperGATNet(nn.Module):
             num_input_features, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
-            super_gat_criterion=args.super_gat_criterion,
+            super_gat_criterion=args.super_gat_criterion, logit_temperature=args.logit_temperature,
             neg_sample_ratio=args.neg_sample_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio, use_pretraining=args.use_pretraining,
         )
@@ -69,7 +69,7 @@ class SuperGATNet(nn.Module):
             args.num_hidden_features * args.heads, num_classes,
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
-            super_gat_criterion=args.super_gat_criterion,
+            super_gat_criterion=args.super_gat_criterion, logit_temperature=args.logit_temperature,
             neg_sample_ratio=args.neg_sample_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio, use_pretraining=args.use_pretraining,
         )
@@ -129,7 +129,7 @@ class SuperGATNetPPI(nn.Module):
             num_input_features, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
-            super_gat_criterion=args.super_gat_criterion,
+            super_gat_criterion=args.super_gat_criterion, logit_temperature=args.logit_temperature,
             neg_sample_ratio=args.neg_sample_ratio,
         )
         self.lin1 = nn.Linear(num_input_features, args.num_hidden_features * args.heads)
@@ -138,7 +138,7 @@ class SuperGATNetPPI(nn.Module):
             args.num_hidden_features * args.heads, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
-            super_gat_criterion=args.super_gat_criterion,
+            super_gat_criterion=args.super_gat_criterion, logit_temperature=args.logit_temperature,
             neg_sample_ratio=args.neg_sample_ratio,
         )
         if self.args.use_skip_connect_for_2:
@@ -148,7 +148,7 @@ class SuperGATNetPPI(nn.Module):
             args.num_hidden_features * args.heads, num_classes,
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
-            super_gat_criterion=args.super_gat_criterion,
+            super_gat_criterion=args.super_gat_criterion, logit_temperature=args.logit_temperature,
             neg_sample_ratio=args.neg_sample_ratio,
         )
         self.lin3 = nn.Linear(args.num_hidden_features * args.heads, num_classes)
@@ -190,7 +190,7 @@ class LargeSuperGATNet(nn.Module):
             dropout=args.dropout,
             is_super_gat=args.is_super_gat,
             attention_type=args.attention_type,
-            super_gat_criterion=args.super_gat_criterion,
+            super_gat_criterion=args.super_gat_criterion, logit_temperature=args.logit_temperature,
             neg_sample_ratio=args.neg_sample_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio,
             use_pretraining=args.use_pretraining,
