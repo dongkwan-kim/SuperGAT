@@ -4,6 +4,7 @@ from pprint import pprint
 from typing import List, Dict, Tuple
 from datetime import datetime
 import os
+from tqdm import tqdm
 
 from arguments import get_args, pprint_args, pdebug_args
 from data import get_dataset_or_loader
@@ -14,7 +15,7 @@ from layer import negative_sampling
 
 import torch
 import torch.nn.functional as F
-from torch_geometric.utils import subgraph, softmax
+from torch_geometric.utils import subgraph, softmax, remove_self_loops, add_self_loops
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -169,6 +170,33 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
                      flierprops={"marker": "x", "markersize": 12})
 
 
+def edge_to_sorted_tuple(e):
+    return tuple(sorted([int(e[0]), int(e[1])]))
+
+
+def get_layer_repr_and_e2att(model, data, _args) -> List[Tuple[torch.Tensor, Dict]]:
+    model.set_layer_attrs("cache_attention", True)
+    model = model.to("cpu")
+    model.eval()
+    layer_repr_and_e2att = []
+
+    # edge_index for [2, E + N]
+    edge_index, _ = remove_self_loops(data.edge_index)
+    edge_index, _ = add_self_loops(edge_index, num_nodes=data.x.size(0))
+
+    with torch.no_grad():
+        for i, x in enumerate(model.forward_for_all_layers(data.x, data.edge_index)):
+            edge_to_attention = defaultdict(list)
+            conv = getattr(model, "conv{}".format(i + 1))
+            att = conv.residuals["att"]  # [E + N, heads]
+            mean_att = att.mean(dim=-1)  # [E + N]
+            for ma, e in zip(mean_att, edge_index.t()):
+                if e[0] != e[1]:
+                    edge_to_attention[edge_to_sorted_tuple(e)].append(float(ma))
+            layer_repr_and_e2att.append((x, edge_to_attention))
+    return layer_repr_and_e2att
+
+
 def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_negatives=False, with_fnn=False):
     model = model.to("cpu")
     model.eval()
@@ -178,9 +206,6 @@ def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_ne
 
         x = torch.matmul(data.x, model.conv1.weight)
         size_i = x.size(0)
-
-        def edge_to_sorted_tuple(e):
-            return tuple(sorted([int(e[0]), int(e[1])]))
 
         if not with_negatives:
             edge_index_j, edge_index_i = data.edge_index
@@ -192,9 +217,8 @@ def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_ne
             alpha = model.conv1._get_attention(edge_index_i, x_i, x_j, size_i, normalize=True, with_negatives=False)
 
             if with_fnn:
-                fnn_alpha = model.conv1.att_scaling * alpha + model.conv1.att_bias
-                fnn_alpha = F.elu(fnn_alpha)
-                fnn_alpha = model.conv1.att_scaling_2 * fnn_alpha + model.conv1.att_bias_2
+                fnn_alpha = model.conv1.att_scaling * F.elu(alpha) + model.conv1.att_bias
+                fnn_alpha = model.conv1.att_scaling_2 * F.elu(fnn_alpha) + model.conv1.att_bias_2
                 mean_fnn_alpha = fnn_alpha.mean(dim=-1)
 
             if with_normalized:
@@ -253,41 +277,45 @@ def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_ne
                 return xs_after_conv1, edge_to_attention, edge_to_is_negative, edge_to_fnn_attention
 
 
-def visualize_glayout_without_training(**kwargs):
+def visualize_glayout_without_training(layout="tsne", **kwargs):
     _args = get_args(**kwargs)
+    pprint_args(_args)
     train_d, val_d, test_d = get_dataset_or_loader(
-        "Planetoid", _args.dataset_name, _args.data_root,
+        _args.dataset_class, _args.dataset_name, _args.data_root,
         batch_size=_args.batch_size, seed=_args.seed,
     )
     data = train_d[0]
-    plot_graph_layout(data.x.numpy(), data.y.numpy(), data.edge_index.numpy(), edge_to_attention=None)
+    plot_graph_layout(data.x.numpy(), data.y.numpy(), data.edge_index.numpy(),
+                      args=_args, edge_to_attention=None, key="raw", layout=layout)
 
 
 def visualize_glayout_with_training_and_attention(**kwargs):
     _args = get_args(**kwargs)
     _args.verbose = 2
     _args.save_model = False
-    _args.epochs = 300
+    if not _args.use_early_stop:
+        _args.epochs = 300
     pprint_args(_args)
 
-    _alloc_gpu = blind_other_gpus(num_gpus_total=_args.num_gpus_total,
-                                  num_gpus_to_use=_args.num_gpus_to_use,
-                                  black_list=_args.black_list)
-    if _alloc_gpu:
-        cprint("Use GPU the ID of which is {}".format(_alloc_gpu), "yellow")
-    _alloc_gpu_id = _alloc_gpu[0] if _alloc_gpu else 1
+    alloc_gpu = blind_other_gpus(num_gpus_total=_args.num_gpus_total,
+                                 num_gpus_to_use=_args.num_gpus_to_use,
+                                 black_list=_args.black_list)
+    if not alloc_gpu:
+        alloc_gpu = [int(np.random.choice([g for g in range(_args.num_gpus_total)
+                                           if g not in _args.black_list], 1))]
+    cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
-    model, ret = run(_args, gpu_id=_alloc_gpu_id, return_model=True)
-
+    model, ret = run(_args, gpu_id=alloc_gpu[0], return_model=True)
     train_d, val_d, test_d = get_dataset_or_loader(
-        "Planetoid", _args.dataset_name, _args.data_root,
+        _args.dataset_class, _args.dataset_name, _args.data_root,
         batch_size=_args.batch_size, seed=_args.seed,
     )
     data = train_d[0]
 
-    xs_after_conv1, edge_to_attention = get_first_layer_and_e2att(model, data, _args)
-    plot_graph_layout(xs_after_conv1.numpy(), data.y.numpy(), data.edge_index.numpy(),
-                      edge_to_attention=edge_to_attention, args=_args)
+    for i, (xs_after_conv, edge_to_attention) in enumerate(tqdm(get_layer_repr_and_e2att(model, data, _args))):
+        plot_graph_layout(xs_after_conv.numpy(), data.y.numpy(), data.edge_index.numpy(),
+                          edge_to_attention=edge_to_attention, args=_args, key="layer-{}".format(i + 1))
+        print("plot_graph_layout: layer-{}".format(i + 1))
 
 
 def get_model_and_preds(data, **kwargs):
@@ -480,31 +508,31 @@ if __name__ == '__main__':
 
     sns.set(style="whitegrid")
     sns.set_context("talk")
-
-    main_kwargs = dict(
-        model_name="GAT",  # GAT, BaselineGAT
-        dataset_class="Planetoid",
-        dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV1",  # NE, EV1, EV2, NR, RV1
-    )
+    main_kwargs = {
+        "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
+        "dataset_class": "HomophilySynthetic",  # ADPlanetoid, LinkPlanetoid, Planetoid, HomophilySynthetic
+        "dataset_name": "hs-0.9",  # Cora, CiteSeer, PubMed, hs-0.1, hs-0.3, hs-0.5, hs-0.7, hs-0.9
+        "custom_key": "NEDPO8-ES",  # NE, EV1, EV2
+    }
 
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "attention_metric_for_multiple_models"
+    MODE = "glayout_with_training_and_attention"
 
     if MODE == "link_pred_perfs_for_multiple_models":
 
-        def get_main_custom_key_list(dataset_name):
-            return ["EV1O8-ES-Link", "EV2O8-ES-Link"] if dataset_name != "PubMed" \
-                else ["EV1-500-ES-Link", "EV2-500-ES-Link"]
+        def get_main_custom_key_list(dataset_name, prefix_1, prefix_2):
+            return ["{}O8-ES-Link".format(prefix_1), "{}O8-ES-Link".format(prefix_2)] if dataset_name != "PubMed" \
+                else ["{}-500-ES-Link".format(prefix_1), "{}-500-ES-Link".format(prefix_2)]
 
-
+        use_supervision = False  # this
         main_kwargs["dataset_class"] = "LinkPlanetoid"
         dataset_name_list = ["Cora", "CiteSeer", "PubMed"]
+        p1, p2 = ("EV1", "EV2") if use_supervision else ("NE", "NEDP")
 
         main_name_and_kwargs = [("{}-{}".format(d, ck), {**main_kwargs, "dataset_name": d, "custom_key": ck})
-                                for d in dataset_name_list for ck in get_main_custom_key_list(d)]
+                                for d in dataset_name_list for ck in get_main_custom_key_list(d, p1, p2)]
         pprint(main_name_and_kwargs)
 
         analyze_link_pred_perfs_for_multiple_models(main_name_and_kwargs, num_total_runs=10)
@@ -537,7 +565,8 @@ if __name__ == '__main__':
         visualize_attention_metric_for_multiple_models(main_npx_and_kwargs, extension="pdf")
 
     elif MODE == "glayout_without_training":
-        visualize_glayout_without_training(**main_kwargs)
+        layout_shape = "tsne"  # tsne, spring, kamada_kawai
+        visualize_glayout_without_training(layout=layout_shape, **main_kwargs)
 
     elif MODE == "glayout_with_training_and_attention":
         visualize_glayout_with_training_and_attention(**main_kwargs)
