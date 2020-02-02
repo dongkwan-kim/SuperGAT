@@ -1,5 +1,5 @@
 import logging
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from pprint import pprint
 from typing import List, Dict, Tuple
 from datetime import datetime
@@ -7,21 +7,83 @@ import os
 from tqdm import tqdm
 
 from arguments import get_args, pprint_args, pdebug_args
-from data import get_dataset_or_loader
+from data import get_dataset_or_loader, get_agreement_dist
 from main import run, run_with_many_seeds, summary_results
 from utils import blind_other_gpus, sigmoid, get_entropy_tensor_by_iter, get_kld_tensor_by_iter
-from visualize import plot_graph_layout, _get_key, plot_multiple_dist
+from visualize import plot_graph_layout, _get_key, plot_multiple_dist, _get_key_and_makedirs
 from layer import negative_sampling
 
 import torch
 import torch.nn.functional as F
-from torch_geometric.utils import subgraph, softmax, remove_self_loops, add_self_loops
+from torch_geometric.utils import subgraph, softmax, remove_self_loops, add_self_loops, degree
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from termcolor import cprint
 import coloredlogs
+
+
+def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarray:
+    """
+    :param dataset_class: str
+    :param dataset_name: str
+    :param data_root: str
+    :return: np.ndarray the shape of which is [N, 2] (degree, homophily) for Ns
+    """
+
+    def get_h(agr_dist):
+        agr_dist = agr_dist.cpu().numpy()
+        agr_counts = (agr_dist == np.max(agr_dist)).sum()
+        return agr_counts / len(agr_dist)
+
+    train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42)
+    data = train_d[0]
+
+    x, y, edge_index = data.x, data.y, data.edge_index
+
+    deg = degree(edge_index[0])
+    agr = get_agreement_dist(edge_index, y, epsilon=0)
+
+    degree_and_homophily = []
+    for i, (d, a) in enumerate(zip(deg, agr)):
+        h = get_h(a)
+        degree_and_homophily.append([d, h])
+    return np.asarray(degree_and_homophily)
+
+
+def analyze_degree_and_homophily(extension="png", **data_kwargs):
+
+    dn_to_dg_and_h = OrderedDict()
+
+    for dataset_name in tqdm(["rpg-10-500-{}-0.025".format(r) for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
+        degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name, data_root="~/graph-data")
+        dn_to_dg_and_h[dataset_name] = degree_and_homophily
+
+    for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
+        degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
+        dn_to_dg_and_h[dataset_name] = degree_and_homophily
+
+    for dataset_name in tqdm(["hs-0.1", "hs-0.3", "hs-0.5", "hs-0.7", "hs-0.9"]):
+        degree_and_homophily = get_degree_and_homophily("HomophilySynthetic", dataset_name, data_root="~/graph-data")
+        dn_to_dg_and_h[dataset_name] = degree_and_homophily
+
+    for dataset_name, degree_and_homophily in dn_to_dg_and_h.items():
+        df = pd.DataFrame({
+            "degree": degree_and_homophily[:, 0],
+            "homophily": degree_and_homophily[:, 1],
+        })
+        plot = sns.scatterplot(x="homophily", y="degree", data=df,
+                               legend=False, palette="Set1")
+        sns.despine(left=False, right=False, bottom=False, top=False)
+
+        _key, _path = _get_key_and_makedirs(args=None, no_args_key="degree_homophily", base_path="../figs")
+        plot.get_figure().savefig("{}/fig_{}_{}.{}".format(_path, _key, dataset_name, extension),
+                                  bbox_inches='tight')
+        plt.clf()
+        print("-- {} --".format(dataset_name))
+        print("Degree: {} +- {}".format(degree_and_homophily[:, 0].mean(), degree_and_homophily[:, 0].std()))
+        print("Homophily: {} +- {}".format(degree_and_homophily[:, 1].mean(), degree_and_homophily[:, 1].std()))
 
 
 def analyze_link_pred_perfs_for_multiple_models(name_and_kwargs: List[Tuple[str, Dict]], num_total_runs=10):
@@ -510,15 +572,15 @@ if __name__ == '__main__':
     sns.set_context("talk")
     main_kwargs = {
         "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
-        "dataset_class": "HomophilySynthetic",  # ADPlanetoid, LinkPlanetoid, Planetoid, HomophilySynthetic
-        "dataset_name": "hs-0.9",  # Cora, CiteSeer, PubMed, hs-0.1, hs-0.3, hs-0.5, hs-0.7, hs-0.9
-        "custom_key": "NEDPO8-ES",  # NE, EV1, EV2
+        "dataset_class": "RandomPartitionGraph",  # ADPlanetoid, LinkPlanetoid, Planetoid, HomophilySynthetic, RandomPartitionGraph
+        "dataset_name": "rpg-10-500-0.1-0.025",  # Cora, CiteSeer, PubMed, hs-0.1, hs-0.3, hs-0.5, hs-0.7, hs-0.9, 10-500-0.9-0.025
+        "custom_key": "NEO8",  # NE, EV1, EV2
     }
 
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "glayout_with_training_and_attention"
+    MODE = "degree_and_homophily"
 
     if MODE == "link_pred_perfs_for_multiple_models":
 
@@ -570,6 +632,9 @@ if __name__ == '__main__':
 
     elif MODE == "glayout_with_training_and_attention":
         visualize_glayout_with_training_and_attention(**main_kwargs)
+
+    elif MODE == "degree_and_homophily":
+        analyze_degree_and_homophily()
 
     elif MODE == "attention_dist_by_sample_type":
         data_frame_list = []
