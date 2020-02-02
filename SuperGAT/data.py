@@ -13,7 +13,7 @@ from pprint import pprint
 from typing import Tuple, Callable, List
 
 from layer import negative_sampling
-from data_syn import HomophilySynthetic
+from data_syn import HomophilySynthetic, RandomPartitionGraph
 
 
 def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor, epsilon=1e-11) -> List[torch.Tensor]:
@@ -164,7 +164,8 @@ def get_dataset_class_name(dataset_name: str) -> str:
 
 
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
-    assert dataset_class in (pyg.datasets.__all__ + ["LinkPlanetoid", "ADPlanetoid", "HomophilySynthetic"])
+    assert dataset_class in (pyg.datasets.__all__ +
+                             ["LinkPlanetoid", "ADPlanetoid", "HomophilySynthetic", "RandomPartitionGraph"])
     return eval(dataset_class)
 
 
@@ -225,7 +226,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
-    elif dataset_class in ["HomophilySynthetic"]:
+    elif dataset_class in ["HomophilySynthetic", "RandomPartitionGraph"]:  # Node or Link (One graph with given mask)
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
@@ -285,6 +286,25 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    # RandomPartitionGraph
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.9-0.025", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.7-0.025", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.5-0.025", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.3-0.025", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.1-0.025", "~/graph-data")
+
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.9-0.04", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.7-0.04", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.5-0.04", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.3-0.04", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.1-0.04", "~/graph-data")
+
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.9-0.01", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.7-0.01", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.5-0.01", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.3-0.01", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.1-0.01", "~/graph-data")
 
     # Synthetic
     _test_data("HomophilySynthetic", "hs-0.5", "~/graph-data")
