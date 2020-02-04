@@ -43,12 +43,16 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarr
     x, y, edge_index = data.x, data.y, data.edge_index
 
     deg = degree(edge_index[0])
-    agr = get_agreement_dist(edge_index, y, epsilon=0)
+    agr = get_agreement_dist(edge_index, y, with_self_loops=False, epsilon=0)
 
     degree_and_homophily = []
     for i, (d, a) in enumerate(zip(deg, agr)):
-        h = get_h(a)
-        degree_and_homophily.append([d, h])
+        if len(a) == 0:
+            assert d == 0
+            degree_and_homophily.append([d, 1])
+        else:
+            h = get_h(a)
+            degree_and_homophily.append([d, h])
     return np.asarray(degree_and_homophily)
 
 
@@ -56,9 +60,11 @@ def analyze_degree_and_homophily(extension="png", **data_kwargs):
 
     dn_to_dg_and_h = OrderedDict()
 
-    for dataset_name in tqdm(["rpg-10-500-{}-0.025".format(r) for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
-        degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name, data_root="~/graph-data")
-        dn_to_dg_and_h[dataset_name] = degree_and_homophily
+    for adr in [0.025, 0.04, 0.01]:
+        for dataset_name in tqdm(["rpg-10-500-{}-{}".format(r, adr) for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
+            degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name,
+                                                            data_root="~/graph-data")
+            dn_to_dg_and_h[dataset_name] = degree_and_homophily
 
     for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
         degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
@@ -581,6 +587,7 @@ if __name__ == '__main__':
     os.makedirs("../logs", exist_ok=True)
 
     MODE = "degree_and_homophily"
+    cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":
 
