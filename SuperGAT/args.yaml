@@ -71,18 +71,6 @@ GAT-Cora-NEDPO8-ES-Link:
   <<: *GAT-Cora-NEDPO8-ES
   task_type: Link_Prediction
 
-GAT-Cora-EVL9O8:
-  <<: *GAT-Cora-NE
-  model_name: LinkGAT
-  is_link_gnn: True
-  out_heads: 8
-  use_pretraining: True
-  total_pretraining_epoch: 1
-  edge_sampling_ratio: 0.9483766465047745
-  l2_lambda: 0.015463313539921298
-  link_lambda: 2.2976901087679122
-  neg_sample_ratio: 0.7
-
 GAT-Cora-EVL12O8:  # 0.8426
   <<: *GAT-Cora-NE
   model_name: LinkGAT
@@ -197,15 +185,6 @@ GAT-Cora-EV9NSO8: &GAT-Cora-EV9NSO8  # *0.8499
   neg_sample_ratio: 0.2
   logit_temperature: 1.0
 
-GAT-Cora-EV9NSO8-nsr03:  # 0.8502
-  <<: *GAT-Cora-EV9
-  out_heads: 8
-  edge_sampling_ratio: 0.9288475885737304
-  l2_lambda: 0.007953633092122336
-  att_lambda: 3.249437442948412
-  total_pretraining_epoch: 49
-  neg_sample_ratio: 0.3
-
 GAT-Cora-EV9NSO8-ES: &GAT-Cora-EV9NSO8-ES
   <<: *GAT-Cora-EV9NSO8
   use_early_stop: True
@@ -214,24 +193,6 @@ GAT-Cora-EV9NSO8-ES: &GAT-Cora-EV9NSO8-ES
   early_stop_threshold_loss: 1.081762712086197e-05
   early_stop_threshold_perf: 1.4200006430337179e-05
   epochs: 495
-
-GAT-Cora-EV9O8MO:
-  <<: *GAT-Cora-EV9
-  out_heads: 8
-  edge_sampling_ratio: 0.9415869989676415
-  l2_lambda: 0.010220007108586993
-  att_lambda: 3.996741075453459
-  attention_type: "prob_mask_only"
-  total_pretraining_epoch: 74
-  neg_sample_ratio: 0.4
-
-GAT-Cora-EV9O1:
-  <<: *GAT-Cora-EV9
-  edge_sampling_ratio: 0.5
-  l2_lambda: 0.0005
-  att_lambda: 0.0001
-  attention_type: "prob_mask"
-  total_pretraining_epoch: 30
 
 GAT-Cora-EV12: &GAT-Cora-EV12
   <<: *GAT-Cora-E
@@ -244,65 +205,23 @@ GAT-Cora-EV12O8:  # No pretraining
   l2_lambda: 0.009591902680360786
   att_lambda: 3.3387640167333097
 
-GAT-Cora-EV12NSO8: &GAT-Cora-EV12NSO8 # 0.8492
-  <<: *GAT-Cora-EV12
-  out_heads: 8
-  edge_sampling_ratio: 0.5448325408142086
-  l2_lambda: 0.009966526178313471
-  att_lambda: 3.5536667418164765
-  neg_sample_ratio: 0.7
-
-GAT-Cora-EV12NSO8-nsr05: &GAT-Cora-EV12NSO8-nsr05 # *0.8492
+GAT-Cora-EV12NSO8: &GAT-Cora-EV12NSO8 # *0.8492
   <<: *GAT-Cora-EV12
   out_heads: 8
   edge_sampling_ratio: 0.7737062345533201
   l2_lambda: 0.00936213531676361
   att_lambda: 3.045489874559996
   neg_sample_ratio: 0.5
-  logit_temperature: 1.0
+  logit_temperature: 1.3
 
 GAT-Cora-EV12NSO8-ES: &GAT-Cora-EV12NSO8-ES
-  <<: *GAT-Cora-EV12NSO8-nsr05
+  <<: *GAT-Cora-EV12NSO8
   use_early_stop: True
-  early_stop_patience: 465
-  early_stop_queue_length: 411
-  early_stop_threshold_loss: 0.0016213039333555384
-  early_stop_threshold_perf: 0.0019240795961995804
-  epochs: 477
-
-GAT-Cora-EV12O8MO:  # No pretraining
-  <<: *GAT-Cora-EV12
-  out_heads: 8
-  edge_sampling_ratio: 0.6977021924133151
-  l2_lambda: 0.009591902680360786
-  att_lambda: 3.3387640167333097
-  attention_type: "prob_mask_only"
-  neg_sample_ratio: 0.4
-
-GAT-Cora-NEV12O8:  # No pretraining
-  <<: *GAT-Cora-EV12
-  out_heads: 8
-  edge_sampling_ratio: 0.6977021924133151
-  l2_lambda: 0.009591902680360786
-  att_lambda: 0  # NEV
-
-GAT-Cora-EV12O1:  # No pretraining
-  <<: *GAT-Cora-EV12
-  edge_sampling_ratio: 0.5001065133395246
-  l2_lambda: 0.009822681226235598
-  att_lambda: 1.8490524030529658
-
-GAT-Cora-EV13: &GAT-Cora-EV13
-  <<: *GAT-Cora-E
-  attention_type: "logit_mask"
-
-GAT-Cora-EV13NSO8: &GAT-Cora-EV13NSO8
-  <<: *GAT-Cora-EV13
-  out_heads: 8
-  edge_sampling_ratio: 0.5448325408142086
-  l2_lambda: 0.009966526178313471
-  att_lambda: 3.5536667418164765
-  neg_sample_ratio: 0.7
+  early_stop_patience: 41
+  early_stop_queue_length: 401
+  early_stop_threshold_loss: 9.069767563822198e-05
+  early_stop_threshold_perf: 1.580345884487224e-05
+  epochs: 496
 
 GAT-Cora-NEO8-ES-ATT:
   <<: *GAT-Cora-NEO8-ES
@@ -369,29 +288,7 @@ GAT-CiteSeer-NEDPO8-ES-Link:
   <<: *GAT-CiteSeer-NEDPO8-ES
   task_type: Link_Prediction
 
-GAT-CiteSeer-EVL9O8:  # 0.7348
-  <<: *GAT-CiteSeer-NE
-  model_name: LinkGAT
-  is_link_gnn: True
-  out_heads: 8
-  use_pretraining: True
-  total_pretraining_epoch: 100
-  edge_sampling_ratio: 0.5473553201021623
-  l2_lambda: 0.04390409849673851
-  link_lambda: 0.9961642928693851
-  neg_sample_ratio: 0.5
-
-GAT-CiteSeer-EVL12O8:  # 0.7356
-  <<: *GAT-CiteSeer-NE
-  model_name: LinkGAT
-  is_link_gnn: True
-  out_heads: 8
-  edge_sampling_ratio: 0.6642674136844611
-  l2_lambda: 0.03974226235077282
-  link_lambda: 0.47625745551384296
-  neg_sample_ratio: 0.5
-
-GAT-CiteSeer-EVL12O8-nsr03:  # *0.7365
+GAT-CiteSeer-EVL12O8:  # *0.7365
   <<: *GAT-CiteSeer-NE
   model_name: LinkGAT
   is_link_gnn: True
@@ -428,15 +325,7 @@ GAT-CiteSeer-EV2: &GAT-CiteSeer-EV2
   l2_lambda: 0.04777495641265913
   att_lambda: 0.6183687430239637
 
-GAT-CiteSeer-EV2O8: &GAT-CiteSeer-EV2O8  # 0.7339
-  <<: *GAT-CiteSeer-EV2
-  out_heads: 8
-  edge_sampling_ratio: 0.9499077941001473
-  l2_lambda: 0.04922437531304383
-  att_lambda: 0.00656621522138879
-  neg_sample_ratio: 0.5
-
-GAT-CiteSeer-EV2O8-nsr01: &GAT-CiteSeer-EV2O8-nsr01  # *0.7339
+GAT-CiteSeer-EV2O8: &GAT-CiteSeer-EV2O8  # *0.7339
   <<: *GAT-CiteSeer-EV2
   out_heads: 8
   edge_sampling_ratio: 0.9484953787205146
@@ -454,7 +343,7 @@ GAT-CiteSeer-EV1O8-ES: &GAT-CiteSeer-EV1O8-ES
   epochs: 398
 
 GAT-CiteSeer-EV2O8-ES: &GAT-CiteSeer-EV2O8-ES
-  <<: *GAT-CiteSeer-EV2O8-nsr01  # nsr01
+  <<: *GAT-CiteSeer-EV2O8
   use_early_stop: True
   early_stop_patience: 332
   early_stop_queue_length: 183
@@ -484,7 +373,7 @@ GAT-CiteSeer-EV9O8:
   att_lambda: 0.00016746130730858905
   total_pretraining_epoch: 41
 
-GAT-CiteSeer-EV9NSO8:  # *0.7377
+GAT-CiteSeer-EV9NSO8:  &GAT-CiteSeer-EV9NSO8 # *0.7377
   <<: *GAT-CiteSeer-EV9
   out_heads: 8
   edge_sampling_ratio: 0.5007751734094837
@@ -492,24 +381,16 @@ GAT-CiteSeer-EV9NSO8:  # *0.7377
   att_lambda: 0.00017009300368113955
   total_pretraining_epoch: 79
   neg_sample_ratio: 0.4
-  logit_temperature: 1.0
+  logit_temperature: 1.1
 
-GAT-CiteSeer-EV9O8MO:
-  <<: *GAT-CiteSeer-EV9
-  out_heads: 8
-  edge_sampling_ratio: 0.5030357607832597
-  l2_lambda: 0.0407014219526219
-  att_lambda: 0.00016746130730858905
-  attention_type: "prob_mask_only"
-  total_pretraining_epoch: 41
-
-GAT-CiteSeer-EV9O1:
-  <<: *GAT-CiteSeer-EV9
-  edge_sampling_ratio: 0.5
-  l2_lambda: 0.0005
-  att_lambda: 0.0001
-  attention_type: "prob_mask"
-  total_pretraining_epoch: 30
+GAT-CiteSeer-EV9NSO8-ES: &GAT-CiteSeer-EV9NSO8-ES
+  <<: *GAT-CiteSeer-EV9NSO8
+  use_early_stop: True
+  early_stop_patience: 173
+  early_stop_queue_length: 303
+  early_stop_threshold_loss: 0.0006897020136960293
+  early_stop_threshold_perf: 0.010056574337723506
+  epochs: 366
 
 GAT-CiteSeer-EV12: &GAT-CiteSeer-EV12  # No pretraining
   <<: *GAT-CiteSeer-E
@@ -522,43 +403,23 @@ GAT-CiteSeer-EV12O8:  # No pretraining  0.7374
   l2_lambda: 0.041174833026475226
   att_lambda: 0.1964994137261087
 
-GAT-CiteSeer-EV12NSO8:  # 0.7315
+GAT-CiteSeer-EV12NSO8: &GAT-CiteSeer-EV12NSO8  # *0.7315
   <<: *GAT-CiteSeer-EV12
   out_heads: 8
   edge_sampling_ratio: 0.5603447809946922
   l2_lambda: 0.04420148764681786
   att_lambda: 0.4476859775367019
   neg_sample_ratio: 0.2
-  logit_temperature: 1.0
+  logit_temperature: 0.7
 
-GAT-CiteSeer-EV12NSO8-nsr06:  # 0.7317
-  <<: *GAT-CiteSeer-EV12
-  out_heads: 8
-  edge_sampling_ratio: 0.788454323969223
-  l2_lambda: 0.040885761632682635
-  att_lambda: 1.8717591906102747e-08
-  neg_sample_ratio: 0.6
-
-GAT-CiteSeer-EV12O8MO:  # No pretraining
-  <<: *GAT-CiteSeer-EV12
-  out_heads: 8
-  edge_sampling_ratio: 0.8626322691750812
-  l2_lambda: 0.03866305390334028
-  att_lambda: 0.01019006831591324
-  attention_type: "prob_mask_only"
-
-GAT-CiteSeer-NEV12O8:  # No pretraining
-  <<: *GAT-CiteSeer-EV12
-  out_heads: 8
-  edge_sampling_ratio: 0.8626322691750812
-  l2_lambda: 0.03866305390334028
-  att_lambda: 0  # NEV
-
-GAT-CiteSeer-EV12O1:  # No pretraining
-  <<: *GAT-CiteSeer-EV12
-  edge_sampling_ratio: 0.5
-  l2_lambda: 0.0005
-  att_lambda: 0.1
+GAT-CiteSeer-EV12NSO8-ES: &GAT-CiteSeer-EV12NSO8-ES
+  <<: *GAT-CiteSeer-EV12NSO8
+  use_early_stop: True
+  early_stop_patience: 263
+  early_stop_queue_length: 320
+  early_stop_threshold_loss: 0.007777587454981648
+  early_stop_threshold_perf: 0.0002739828474291477
+  epochs: 330
 
 GAT-CiteSeer-NEO8-ES-ATT:
   <<: *GAT-CiteSeer-NEO8-ES
@@ -633,19 +494,6 @@ GAT-PubMed-NEDP-500-ES-Link:
   <<: *GAT-PubMed-NEDP-500-ES
   task_type: Link_Prediction
 
-GAT-PubMed-EVL9O8-500:
-  <<: *GAT-PubMed-NE
-  epochs: 500
-  model_name: LinkGAT
-  is_link_gnn: True
-  out_heads: 8
-  use_pretraining: True
-  total_pretraining_epoch: 1
-  edge_sampling_ratio: 0.5002892670247774
-  l2_lambda: 0.0004808784359388049
-  link_lambda: 0.590042928034016
-  neg_sample_ratio: 0.7
-
 GAT-PubMed-EVL12O8-500:  # 0.796
   <<: *GAT-PubMed-NE
   epochs: 500
@@ -715,33 +563,7 @@ GAT-PubMed-EV9O8: &GAT-PubMed-EV9O8
   total_pretraining_epoch: 41
   use_pretraining: True
 
-GAT-PubMed-EV9O8-500:
-  <<: *GAT-PubMed-EV9O8
-  epochs: 500
-  edge_sampling_ratio: 0.5
-  l2_lambda: 8.608275211233963e-05
-  att_lambda: 31.622776601683793
-  total_pretraining_epoch: 41
-
-GAT-PubMed-EV9O8MO-500:
-  <<: *GAT-PubMed-EV9O8
-  epochs: 500
-  edge_sampling_ratio: 0.5
-  l2_lambda: 8.608275211233963e-05
-  att_lambda: 31.622776601683793
-  attention_type: "prob_mask_only"
-  total_pretraining_epoch: 41
-
-GAT-PubMed-EV9NSO8-500:  # 0.8262
-  <<: *GAT-PubMed-EV9O8
-  epochs: 500
-  edge_sampling_ratio: 0.9112772882971971
-  l2_lambda: 0.0002003885937728024
-  att_lambda: 23.796349071053402
-  total_pretraining_epoch: 100
-  neg_sample_ratio: 0.3
-
-GAT-PubMed-EV9NSO8-500-nsr03: &GAT-PubMed-EV9NSO8-500-nsr03  # *0.8244
+GAT-PubMed-EV9NSO8-500: &GAT-PubMed-EV9NSO8-500  # *0.8244
   <<: *GAT-PubMed-EV9O8
   epochs: 500
   edge_sampling_ratio: 0.9314710555750157
@@ -751,17 +573,8 @@ GAT-PubMed-EV9NSO8-500-nsr03: &GAT-PubMed-EV9NSO8-500-nsr03  # *0.8244
   neg_sample_ratio: 0.3
   logit_temperature: 1.0
 
-GAT-PubMed-EV9NSO8-500-nsr01:  # 0.8256
-  <<: *GAT-PubMed-EV9O8
-  epochs: 500
-  edge_sampling_ratio: 0.9350997540901991
-  l2_lambda: 1.4920597275804174e-05
-  att_lambda: 31.095187100445685
-  total_pretraining_epoch: 99
-  neg_sample_ratio: 0.1
-
 GAT-PubMed-EV9NSO8-500-ES: &GAT-PubMed-EV9NSO8-500-ES
-  <<: *GAT-PubMed-EV9NSO8-500-nsr03
+  <<: *GAT-PubMed-EV9NSO8-500
   use_early_stop: True
   early_stop_patience: 203
   early_stop_queue_length: 418
@@ -776,28 +589,6 @@ GAT-PubMed-EV12O8: &GAT-PubMed-EV12O8  # No pretraining
   att_lambda: 0.01019006831591324
   attention_type: "prob_mask"
 
-GAT-PubMed-NEV12O8-500:  # No pretraining
-  <<: *GAT-PubMed-EV12O8
-  epochs: 500
-  edge_sampling_ratio: 0.8626322691750812
-  l2_lambda: 0.03866305390334028
-  att_lambda: 0  # NEV
-
-GAT-PubMed-EV12O8-500:  # No pretraining
-  <<: *GAT-PubMed-EV12O8
-  epochs: 500
-  edge_sampling_ratio: 0.8626322691750812
-  l2_lambda: 0.03866305390334028
-  att_lambda: 0.01019006831591324
-
-GAT-PubMed-EV12O8MO-500:  # No pretraining
-  <<: *GAT-PubMed-EV12O8
-  epochs: 500
-  edge_sampling_ratio: 0.8626322691750812
-  l2_lambda: 0.03866305390334028
-  att_lambda: 0.01019006831591324
-  attention_type: "prob_mask_only"
-
 GAT-PubMed-EV12NSO8-500: &GAT-PubMed-EV12NSO8-500 # *0.8239
   <<: *GAT-PubMed-EV12O8
   epochs: 500
@@ -805,16 +596,16 @@ GAT-PubMed-EV12NSO8-500: &GAT-PubMed-EV12NSO8-500 # *0.8239
   l2_lambda: 0.000638115051935756
   att_lambda: 10.061340672978162
   neg_sample_ratio: 0.5
-  logit_temperature: 1.0
+  logit_temperature: 1.3
 
 GAT-PubMed-EV12NSO8-500-ES: &GAT-PubMed-EV12NSO8-500-ES
   <<: *GAT-PubMed-EV12NSO8-500
   use_early_stop: True
-  early_stop_patience: 456
-  early_stop_queue_length: 113
-  early_stop_threshold_loss: 2.108252202414036e-05
-  early_stop_threshold_perf: 0.00022069689458527363
-  epochs: 463
+  early_stop_patience: 487
+  early_stop_queue_length: 361
+  early_stop_threshold_loss: 0.000571585134780444
+  early_stop_threshold_perf: 0.00522278683697432
+  epochs: 492
 
 GAT-PubMed-NE-500-ES-ATT:
   <<: *GAT-PubMed-NE-500-ES
@@ -1322,25 +1113,25 @@ GCN-rpg-10-500-0.9-0.04-NE-ES: &GCN-rpg-10-500-0.9-0.04-NE-ES
 
 
 
-GCN-rpg-10-500-0.1-0.01-NE: &GCN-rpg-10-500-0.1-0.01-NE
+GCN-rpg-10-500-0.1-0.01-NE: &GCN-rpg-10-500-0.1-0.01-NE  # 0.2877
   <<: *GCN-synthetic
-  l2_lambda: 0.561427098378267
+  l2_lambda: 0.028025076873396296
 
-GCN-rpg-10-500-0.3-0.01-NE: &GCN-rpg-10-500-0.3-0.01-NE
+GCN-rpg-10-500-0.3-0.01-NE: &GCN-rpg-10-500-0.3-0.01-NE  # 0.3207
   <<: *GCN-synthetic
-  l2_lambda: 0.9999284584641989
+  l2_lambda: 0.022709549463758496
 
-GCN-rpg-10-500-0.5-0.01-NE: &GCN-rpg-10-500-0.5-0.01-NE
+GCN-rpg-10-500-0.5-0.01-NE: &GCN-rpg-10-500-0.5-0.01-NE  # 0.5573
   <<: *GCN-synthetic
-  l2_lambda: 0.7002285564572234
+  l2_lambda: 0.00011484893379946441
 
-GCN-rpg-10-500-0.7-0.01-NE: &GCN-rpg-10-500-0.7-0.01-NE
+GCN-rpg-10-500-0.7-0.01-NE: &GCN-rpg-10-500-0.7-0.01-NE  # 0.7063
   <<: *GCN-synthetic
-  l2_lambda: 0.3931919919188017
+  l2_lambda: 0.0005788723237249363
 
-GCN-rpg-10-500-0.9-0.01-NE: &GCN-rpg-10-500-0.9-0.01-NE
+GCN-rpg-10-500-0.9-0.01-NE: &GCN-rpg-10-500-0.9-0.01-NE  # 0.883
   <<: *GCN-synthetic
-  l2_lambda: 0.6508906509204768
+  l2_lambda: 0.0004697289118760761
 
 GCN-rpg-10-500-0.1-0.01-NE-ES: &GCN-rpg-10-500-0.1-0.01-NE-ES
   <<: *GCN-rpg-10-500-0.1-0.01-NE
@@ -2011,45 +1802,45 @@ GAT-rpg-10-500-0.9-0.025-EV12NSO8: &GAT-rpg-10-500-0.9-0.025-EV12NSO8
 
 
 
-GAT-rpg-10-500-0.1-0.04-NEO8: &GAT-rpg-10-500-0.1-0.04-NEO8
+GAT-rpg-10-500-0.1-0.04-NEO8: &GAT-rpg-10-500-0.1-0.04-NEO8  # 0.38
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.561427098378267
+  l2_lambda: 0.0003672155196316332
 
 GAT-rpg-10-500-0.1-0.04-NEDPO8: &GAT-rpg-10-500-0.1-0.04-NEDPO8
   <<: *GAT-rpg-x-NE
   l2_lambda: 2.921762973198899e-05
   attention_type: "dot_product"
 
-GAT-rpg-10-500-0.3-0.04-NEO8: &GAT-rpg-10-500-0.3-0.04-NEO8
+GAT-rpg-10-500-0.3-0.04-NEO8: &GAT-rpg-10-500-0.3-0.04-NEO8  # 0.5703
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.9999284584641989
+  l2_lambda: 0.0008333717574678922
 
 GAT-rpg-10-500-0.3-0.04-NEDPO8: &GAT-rpg-10-500-0.3-0.04-NEDPO8
   <<: *GAT-rpg-x-NE
   l2_lambda: 2.4128507560964883e-05
   attention_type: "dot_product"
 
-GAT-rpg-10-500-0.5-0.04-NEO8: &GAT-rpg-10-500-0.5-0.04-NEO8
+GAT-rpg-10-500-0.5-0.04-NEO8: &GAT-rpg-10-500-0.5-0.04-NEO8  # 0.8693
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.7002285564572234
+  l2_lambda: 7.2612561503064995e-06
 
 GAT-rpg-10-500-0.5-0.04-NEDPO8: &GAT-rpg-10-500-0.5-0.04-NEDPO8
   <<: *GAT-rpg-x-NE
   l2_lambda: 0.0006464579943077529
   attention_type: "dot_product"
 
-GAT-rpg-10-500-0.7-0.04-NEO8: &GAT-rpg-10-500-0.7-0.04-NEO8
+GAT-rpg-10-500-0.7-0.04-NEO8: &GAT-rpg-10-500-0.7-0.04-NEO8  # 0.9923
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.3931919919188017
+  l2_lambda: 8.086187432257785e-05
 
 GAT-rpg-10-500-0.7-0.04-NEDPO8: &GAT-rpg-10-500-0.7-0.04-NEDPO8
   <<: *GAT-rpg-x-NE
   l2_lambda: 1.214119151072568e-06
   attention_type: "dot_product"
 
-GAT-rpg-10-500-0.9-0.04-NEO8: &GAT-rpg-10-500-0.9-0.04-NEO8
+GAT-rpg-10-500-0.9-0.04-NEO8: &GAT-rpg-10-500-0.9-0.04-NEO8  # 1.0
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.6508906509204768
+  l2_lambda: 0.0016714705968159762
 
 GAT-rpg-10-500-0.9-0.04-NEDPO8: &GAT-rpg-10-500-0.9-0.04-NEDPO8
   <<: *GAT-rpg-x-NE
@@ -2292,49 +2083,49 @@ GAT-rpg-10-500-0.9-0.04-EV12NSO8: &GAT-rpg-10-500-0.9-0.04-EV12NSO8
   neg_sample_ratio: 0.5
 
 
-GAT-rpg-10-500-0.1-0.01-NEO8: &GAT-rpg-10-500-0.1-0.01-NEO8
+GAT-rpg-10-500-0.1-0.01-NEO8: &GAT-rpg-10-500-0.1-0.01-NEO8  # 0.3143
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.561427098378267
+  l2_lambda: 9.031996838799724e-07
 
-GAT-rpg-10-500-0.1-0.01-NEDPO8: &GAT-rpg-10-500-0.1-0.01-NEDPO8
+GAT-rpg-10-500-0.1-0.01-NEDPO8: &GAT-rpg-10-500-0.1-0.01-NEDPO8  # 0.41
   <<: *GAT-rpg-x-NE
-  l2_lambda: 2.921762973198899e-05
+  l2_lambda: 2.3992486057478126e-06
   attention_type: "dot_product"
 
-GAT-rpg-10-500-0.3-0.01-NEO8: &GAT-rpg-10-500-0.3-0.01-NEO8
+GAT-rpg-10-500-0.3-0.01-NEO8: &GAT-rpg-10-500-0.3-0.01-NEO8  # 0.3813
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.9999284584641989
+  l2_lambda: 1.2545250640508678e-05
 
-GAT-rpg-10-500-0.3-0.01-NEDPO8: &GAT-rpg-10-500-0.3-0.01-NEDPO8
+GAT-rpg-10-500-0.3-0.01-NEDPO8: &GAT-rpg-10-500-0.3-0.01-NEDPO8  # 0.4593
   <<: *GAT-rpg-x-NE
-  l2_lambda: 2.4128507560964883e-05
+  l2_lambda: 1.2639091138379297e-06
   attention_type: "dot_product"
 
-GAT-rpg-10-500-0.5-0.01-NEO8: &GAT-rpg-10-500-0.5-0.01-NEO8
+GAT-rpg-10-500-0.5-0.01-NEO8: &GAT-rpg-10-500-0.5-0.01-NEO8  # 0.5613
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.7002285564572234
+  l2_lambda: 0.0003212892752804261
 
-GAT-rpg-10-500-0.5-0.01-NEDPO8: &GAT-rpg-10-500-0.5-0.01-NEDPO8
+GAT-rpg-10-500-0.5-0.01-NEDPO8: &GAT-rpg-10-500-0.5-0.01-NEDPO8  # 0.581
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.0006464579943077529
+  l2_lambda: 0.003016830965035184
   attention_type: "dot_product"
 
-GAT-rpg-10-500-0.7-0.01-NEO8: &GAT-rpg-10-500-0.7-0.01-NEO8
+GAT-rpg-10-500-0.7-0.01-NEO8: &GAT-rpg-10-500-0.7-0.01-NEO8  # 0.714
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.3931919919188017
+  l2_lambda: 1.180710846650403e-06
 
-GAT-rpg-10-500-0.7-0.01-NEDPO8: &GAT-rpg-10-500-0.7-0.01-NEDPO8
+GAT-rpg-10-500-0.7-0.01-NEDPO8: &GAT-rpg-10-500-0.7-0.01-NEDPO8  # 0.668
   <<: *GAT-rpg-x-NE
-  l2_lambda: 1.214119151072568e-06
+  l2_lambda: 5.407633285532208e-06
   attention_type: "dot_product"
 
-GAT-rpg-10-500-0.9-0.01-NEO8: &GAT-rpg-10-500-0.9-0.01-NEO8
+GAT-rpg-10-500-0.9-0.01-NEO8: &GAT-rpg-10-500-0.9-0.01-NEO8  # 0.8913
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.6508906509204768
+  l2_lambda: 0.0004776933873298182
 
-GAT-rpg-10-500-0.9-0.01-NEDPO8: &GAT-rpg-10-500-0.9-0.01-NEDPO8
+GAT-rpg-10-500-0.9-0.01-NEDPO8: &GAT-rpg-10-500-0.9-0.01-NEDPO8  # 0.82
   <<: *GAT-rpg-x-NE
-  l2_lambda: 0.00362968442880248
+  l2_lambda: 3.79046082647804e-07
   attention_type: "dot_product"
 
 GAT-rpg-10-500-0.1-0.01-NEO8-ES: &GAT-rpg-10-500-0.1-0.01-NEO8-ES
