@@ -64,6 +64,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="
     parser.add_argument("--attention-type", default="basic", type=str)
     parser.add_argument("--att-lambda", default=0., type=float)
     parser.add_argument("--super-gat-criterion", default=None, type=str)
+    parser.add_argument("--logit-temperature", default=1.0, type=float)
     parser.add_argument("--neg-sample-ratio", default=0.0, type=float)
 
     # Pretraining
@@ -103,6 +104,7 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "is_super_gat",
         "is_link-gnn",
         "attention_type",
+        "logit_temperature",
         "use_pretraining",
         "total_pretraining_epoch",
         "pretraining_noise_ratio",

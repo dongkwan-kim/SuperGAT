@@ -63,7 +63,7 @@ def is_pretraining(current_epoch, pretraining_epoch):
 class SuperGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_super_gat=True, attention_type="basic", super_gat_criterion=None,
+                 is_super_gat=True, attention_type="basic", super_gat_criterion=None, logit_temperature=1.0,
                  neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False,
                  cache_attention=False, **kwargs):
         super(SuperGAT, self).__init__(aggr='add', **kwargs)
@@ -77,6 +77,7 @@ class SuperGAT(MessagePassing):
         self.is_super_gat = is_super_gat
         self.attention_type = attention_type
         self.super_gat_criterion = super_gat_criterion
+        self.logit_temperature = logit_temperature
         self.neg_sample_ratio = neg_sample_ratio
         self.pretraining_noise_ratio = pretraining_noise_ratio
         self.pretraining = None if not use_pretraining else True
@@ -286,6 +287,9 @@ class SuperGAT(MessagePassing):
             alpha = torch.einsum("ehf,xhf->eh",
                                  torch.cat([x_i, x_j], dim=-1),
                                  self.att_mh_1)
+
+            # Temperature
+            logits = logits / self.logit_temperature
 
             # [E, heads] * [E, heads] -> [E, heads]
             if self.attention_type.startswith("logit_mask"):
