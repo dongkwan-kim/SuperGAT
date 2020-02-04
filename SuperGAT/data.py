@@ -16,10 +16,12 @@ from layer import negative_sampling
 from data_syn import HomophilySynthetic, RandomPartitionGraph
 
 
-def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor, epsilon=1e-11) -> List[torch.Tensor]:
+def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
+                       with_self_loops=True, epsilon=1e-11) -> List[torch.Tensor]:
     """
     :param edge_index: tensor the shape of which is [2, E]
     :param y: tensor the shape of which is [N]
+    :param with_self_loops: add_self_loops if True
     :param epsilon: small float number for stability.
     :return: Tensor list L the length of which is N.
         L[i] = tensor([..., a(y_j, y_i), ...]) for e_{ji} \in {E}
@@ -29,8 +31,9 @@ def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor, epsilon=1e-11)
     num_nodes = y.size(0)
 
     # Add self-loops and sort by index
-    edge_index, _ = remove_self_loops(edge_index)
-    edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)  # [2, E + N]
+    if with_self_loops:
+        edge_index, _ = remove_self_loops(edge_index)
+        edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)  # [2, E + N]
     edge_index, _ = sort_edge_index(edge_index, num_nodes=num_nodes)
 
     agree_dist_list = []
