@@ -23,11 +23,40 @@ def _get_key_and_makedirs(args=None, no_args_key=None, base_path="./", exist_ok=
     return _key, _path
 
 
+def plot_line_with_std(tuple_to_mean_list, tuple_to_std_list, x_label, y_label, name_label_list, x_list,
+                       hue=None, size=None, style=None, col=None, order=None,
+                       markers=True, dashes=False, n=150,
+                       x_lim=None, y_lim=None,
+                       args=None, custom_key="", extension="png"):
+    pd_data = {x_label: [], y_label: [], **{name_label: [] for name_label in name_label_list}}
+    for name_tuple, mean_list in tuple_to_mean_list.items():
+        std_list = tuple_to_std_list[name_tuple]
+        for x, mean, std in zip(x_list, mean_list, std_list):
+            for name_label, value_of_name in zip(name_label_list, name_tuple):
+                pd_data[name_label] += [value_of_name for _ in range(n)]
+            pd_data[y_label] += list(np.random.normal(mean, std, n))
+            pd_data[x_label] += [x for _ in range(n)]
+    df = pd.DataFrame(pd_data)
+
+    key, path = _get_key_and_makedirs(args, custom_key, base_path="../figs")
+    plot_info = "_".join([k for k in [hue, size, style, col] if k])
+    path_and_name = "{}/fig_line_{}_{}.{}".format(path, key, plot_info, extension).replace(". ", "_")
+
+    plot = sns.relplot(x=x_label, y=y_label, kind="line",
+                       col=col, hue=hue, style=style, markers=markers, dashes=dashes,
+                       legend="full", hue_order=order, ci="sd", # err_style="bars",
+                       data=df)
+    plot.set(xlim=x_lim)
+    plot.set(ylim=y_lim)
+    plot.savefig(path_and_name, bbox_inches='tight')
+    plt.clf()
+
+
 def plot_multiple_dist(data_list: List[torch.Tensor], name_list: List[str], x, y,
                        args=None, extension="png", custom_key="",
-                       ylim=None, plot_func=None,
+                       ylim=None, plot_func=None, unit_width_per_name=3,
                        **kwargs):
-    plt.figure(figsize=(3 * len(name_list), 7))
+    plt.figure(figsize=(unit_width_per_name * len(name_list), 7))
 
     # data_list, name_list -> pd.Dataframe {x: [name...], y: [datum...]}
     pd_data = {x: [], y: []}
@@ -89,7 +118,7 @@ def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None
         elif layout == "spring":
             _k = 2.6
             layout = "{}-{}".format(layout, _k)
-            pos = nx.layout.spring_layout(G, k=_k/math.sqrt(len(xs)))
+            pos = nx.layout.spring_layout(G, k=_k / math.sqrt(len(xs)))
         elif layout == "kamada_kawai":
             pos = nx.layout.kamada_kawai_layout(G)
         elif layout == "shell":
