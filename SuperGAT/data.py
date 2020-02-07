@@ -13,12 +13,15 @@ from pprint import pprint
 from typing import Tuple, Callable, List
 
 from layer import negative_sampling
+from data_syn import HomophilySynthetic, RandomPartitionGraph
 
 
-def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor, epsilon=1e-11) -> List[torch.Tensor]:
+def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
+                       with_self_loops=True, epsilon=1e-11) -> List[torch.Tensor]:
     """
     :param edge_index: tensor the shape of which is [2, E]
     :param y: tensor the shape of which is [N]
+    :param with_self_loops: add_self_loops if True
     :param epsilon: small float number for stability.
     :return: Tensor list L the length of which is N.
         L[i] = tensor([..., a(y_j, y_i), ...]) for e_{ji} \in {E}
@@ -28,8 +31,9 @@ def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor, epsilon=1e-11)
     num_nodes = y.size(0)
 
     # Add self-loops and sort by index
-    edge_index, _ = remove_self_loops(edge_index)
-    edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)  # [2, E + N]
+    if with_self_loops:
+        edge_index, _ = remove_self_loops(edge_index)
+        edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)  # [2, E + N]
     edge_index, _ = sort_edge_index(edge_index, num_nodes=num_nodes)
 
     agree_dist_list = []
@@ -72,7 +76,7 @@ class LinkPlanetoid(Planetoid):
 
     def __init__(self, root, name, train_val_test_ratio=None, seed=42):
         super().__init__(root, name)
-        self.train_val_test_ratio = train_val_test_ratio or (0.85, 0.05, 0.1)
+        self.train_val_test_ratio = train_val_test_ratio or (0.9, 0.0, 0.1)
         self.seed = seed
         self.data_spliter = GAE(None)
 
@@ -102,10 +106,15 @@ class LinkPlanetoid(Planetoid):
         data = self.data_spliter.split_edges(data, *self.train_val_test_ratio[1:])
         data.__delattr__("train_neg_adj_mask")
 
-        val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
-                                    to_undirected(data.val_neg_edge_index)], dim=1)
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
                                     to_undirected(data.test_neg_edge_index)], dim=1)
+
+        if data.val_pos_edge_index.size(1) > 0:
+            val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
+                                        to_undirected(data.val_neg_edge_index)], dim=1)
+        else:
+            val_edge_index = test_edge_index
+
         return data.train_pos_edge_index, val_edge_index, test_edge_index
 
     def _sample_train_neg_edge_index(self, is_undirected_edges=True):
@@ -163,7 +172,8 @@ def get_dataset_class_name(dataset_name: str) -> str:
 
 
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
-    assert dataset_class in (pyg.datasets.__all__ + ["LinkPlanetoid", "ADPlanetoid"])
+    assert dataset_class in (pyg.datasets.__all__ +
+                             ["LinkPlanetoid", "ADPlanetoid", "HomophilySynthetic", "RandomPartitionGraph"])
     return eval(dataset_class)
 
 
@@ -201,7 +211,10 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         kwargs["name"] = dataset_name
 
     torch.manual_seed(seed)
-    root = os.path.join(root, dataset_name or dataset_class)
+    if not dataset_class in ["HomophilySynthetic"]:
+        root = os.path.join(root, dataset_name or dataset_class)
+    else:
+        root = os.path.join(root, "synthetic")
     dataset_cls = get_dataset_class(dataset_class)
 
     if dataset_class in ["TUDataset"]:  # Graph
@@ -218,6 +231,10 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         return train_loader, val_loader, test_loader
 
     elif dataset_class in ["Planetoid", "LinkPlanetoid", "ADPlanetoid"]:  # Node or Link (One graph with given mask)
+        dataset = dataset_cls(root=root, **kwargs)
+        return dataset, None, None
+
+    elif dataset_class in ["HomophilySynthetic", "RandomPartitionGraph"]:  # Node or Link (One graph with given mask)
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
@@ -277,6 +294,29 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    # RandomPartitionGraph
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.9-0.025", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.7-0.025", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.5-0.025", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.3-0.025", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.1-0.025", "~/graph-data")
+
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.9-0.04", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.7-0.04", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.5-0.04", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.3-0.04", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.1-0.04", "~/graph-data")
+
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.9-0.01", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.7-0.01", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.5-0.01", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.3-0.01", "~/graph-data")
+    _test_data("RandomPartitionGraph", "rpg-10-500-0.1-0.01", "~/graph-data")
+
+    # Synthetic
+    _test_data("HomophilySynthetic", "hs-0.5", "~/graph-data")
+    _test_data("HomophilySynthetic", "hs-0.9", "~/graph-data")
 
     # Link Prediction
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
