@@ -171,8 +171,11 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     elif _args.task_type == "Node_Transductive" or _args.task_type == "Attention_Dist":
         perfs = get_accuracy(outputs_total, ys_total)
     elif _args.task_type == "Link_Prediction":
-        val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
-        perfs = SuperGAT.get_link_pred_perfs_by_attention(model=model, edge_y=val_or_test_edge_y)
+        if "run_link_prediction" in kwargs and kwargs["run_link_prediction"]:
+            val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
+            perfs = SuperGAT.get_link_pred_perfs_by_attention(model=model, edge_y=val_or_test_edge_y)
+        else:
+            perfs = get_accuracy(outputs_total, ys_total)
     else:
         raise ValueError
 
@@ -233,6 +236,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     best_test_perf = 0.
     best_test_perf_at_best_val = 0.
     best_test_perf_at_best_val_weak = 0.
+    link_test_perf_at_best_val_weak = 0.
 
     val_loss_deque = deque(maxlen=args.early_stop_queue_length)
     val_perf_deque = deque(maxlen=args.early_stop_queue_length)
@@ -284,6 +288,11 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
                 if test_perf_at_best_val_weak > best_test_perf_at_best_val_weak:
                     best_test_perf_at_best_val_weak = test_perf_at_best_val_weak
 
+                if args.task_type == "Link_Prediction":
+                    link_test_perf, _ = test_model(running_device, net, test_d or train_d, loss_func,
+                                                   _args=args, val_or_test="test", verbose=0, run_link_prediction=True)
+                    link_test_perf_at_best_val_weak = link_test_perf
+
             if val_perf > best_val_perf:
                 print_color = "yellow"
                 best_val_perf = val_perf
@@ -314,7 +323,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
                 val_perf_change = abs(recent_val_perf_mean - val_perf) / recent_val_perf_mean
 
                 if (val_loss_change < args.early_stop_threshold_loss) or \
-                   (val_perf_change < args.early_stop_threshold_perf):
+                        (val_perf_change < args.early_stop_threshold_perf):
                     if args.verbose >= 1:
                         cprint("Early Stopped at epoch {}".format(epoch), "red")
                         cprint("\t- val_loss_change is {} (thres: {}) | {} -> {}".format(
@@ -328,6 +337,9 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
                     break
             val_loss_deque.append(val_loss)
             val_perf_deque.append(val_perf)
+
+    if args.task_type == "Link_Prediction":
+        ret = {"link_test_perf_at_best_val_weak": link_test_perf_at_best_val_weak, **ret}
 
     if args.save_plot:
         save_loss_and_perf_plot([val_loss_list, val_perf_list, test_perf_list], ret, args,
@@ -354,7 +366,6 @@ def run_with_many_seeds(args, num_seeds, gpu_id=None, **kwargs):
 
 
 def summary_results(results_dict: Dict[str, list or float]):
-
     line_list = []
 
     def cprint_and_append(x, color=None):
@@ -378,12 +389,13 @@ def summary_results(results_dict: Dict[str, list or float]):
 
 if __name__ == '__main__':
 
-    num_total_runs = 5  # 10
+    num_total_runs = 100
+
     main_args = get_args(
-        model_name="GAT",  # GAT, LargeGAT
-        dataset_class="LinkPlanetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid
-        dataset_name="Cora",  # Cora, CiteSeer, PubMed
-        custom_key="EV2O8-ES-Link",  # NEO8, NEDPO8, EV12NSO8, EV1O8, EV1O8-ES-Link, EV2O8-ES-Link
+        model_name="GAT",  # GAT, LargeGAT, GCN
+        dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
+        dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
+        custom_key="EVL12O8-ES",  # NEO8, NEDPO8, EV12NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
     pprint_args(main_args)
 
