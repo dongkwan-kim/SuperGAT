@@ -10,7 +10,7 @@ from arguments import get_args, pprint_args, pdebug_args
 from data import get_dataset_or_loader, get_agreement_dist
 from main import run, run_with_many_seeds, summary_results
 from utils import blind_other_gpus, sigmoid, get_entropy_tensor_by_iter, get_kld_tensor_by_iter
-from visualize import plot_graph_layout, _get_key, plot_multiple_dist, _get_key_and_makedirs
+from visualize import plot_graph_layout, _get_key, plot_multiple_dist, _get_key_and_makedirs, plot_line_with_std
 from layer import negative_sampling
 
 import torch
@@ -57,22 +57,17 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarr
 
 
 def analyze_degree_and_homophily(extension="png", **data_kwargs):
-
     dn_to_dg_and_h = OrderedDict()
+
+    for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
+        degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
+        dn_to_dg_and_h[dataset_name] = degree_and_homophily
 
     for adr in [0.025, 0.04, 0.01]:
         for dataset_name in tqdm(["rpg-10-500-{}-{}".format(r, adr) for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
             degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name,
                                                             data_root="~/graph-data")
             dn_to_dg_and_h[dataset_name] = degree_and_homophily
-
-    for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
-        degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
-        dn_to_dg_and_h[dataset_name] = degree_and_homophily
-
-    for dataset_name in tqdm(["hs-0.1", "hs-0.3", "hs-0.5", "hs-0.7", "hs-0.9"]):
-        degree_and_homophily = get_degree_and_homophily("HomophilySynthetic", dataset_name, data_root="~/graph-data")
-        dn_to_dg_and_h[dataset_name] = degree_and_homophily
 
     for dataset_name, degree_and_homophily in dn_to_dg_and_h.items():
         df = pd.DataFrame({
@@ -117,7 +112,7 @@ def analyze_link_pred_perfs_for_multiple_models(name_and_kwargs: List[Tuple[str,
 
 def plot_kld_jsd_ent(kld_agree_att_by_layer, kld_att_agree_by_layer, jsd_by_layer, entropy_by_layer,
                      kld_agree_unifatt, kld_unifatt_agree, jsd_uniform, entropy_agreement, entropy_uniform,
-                     num_layers, model_args, epoch, name_prefix_list,
+                     num_layers, model_args, epoch, name_prefix_list, unit_width_per_name=3,
                      ylim_dict=None, width=0.6, extension="png", **kwargs):
     ylim_dict = ylim_dict or dict()
 
@@ -133,27 +128,27 @@ def plot_kld_jsd_ent(kld_agree_att_by_layer, kld_att_agree_by_layer, jsd_by_laye
     plot_multiple_dist(kld_agree_att_by_layer + [kld_agree_unifatt],
                        name_list=name_list + ["Uniform"],
                        x="Attention Type ({})".format(model_args.dataset_name), y="KLD(AGR, ATT)",
-                       args=model_args,
-                       custom_key="KLD_AGR_ATT_{:03d}".format(epoch),
-                       ylim=_ylim("KLD_AGR_ATT"), width=width, extension=extension, **kwargs)
+                       args=model_args, custom_key="KLD_AGR_ATT_{:03d}".format(epoch),
+                       ylim=_ylim("KLD_AGR_ATT"), unit_width_per_name=unit_width_per_name,
+                       width=width, extension=extension, **kwargs)
     plot_multiple_dist(kld_att_agree_by_layer + [kld_unifatt_agree],
                        name_list=name_list + ["Uniform"],
                        x="Attention Type ({})".format(model_args.dataset_name), y="KLD(ATT, AGR)",
-                       args=model_args,
-                       custom_key="KLD_ATT_AGR_{:03d}".format(epoch),
-                       ylim=_ylim("KLD_ATT_AGR"), width=width, extension=extension, **kwargs)
+                       args=model_args, custom_key="KLD_ATT_AGR_{:03d}".format(epoch),
+                       ylim=_ylim("KLD_ATT_AGR"), unit_width_per_name=unit_width_per_name,
+                       width=width, extension=extension, **kwargs)
     plot_multiple_dist(jsd_by_layer + [jsd_uniform],
                        name_list=name_list + ["Uniform"],
                        x="Attention Type ({})".format(model_args.dataset_name), y="JSD",
-                       args=model_args,
-                       custom_key="JSD_{:03d}".format(epoch),
-                       ylim=_ylim("JSD"), width=width, extension=extension, **kwargs)
+                       args=model_args, custom_key="JSD_{:03d}".format(epoch),
+                       ylim=_ylim("JSD"), unit_width_per_name=unit_width_per_name,
+                       width=width, extension=extension, **kwargs)
     plot_multiple_dist(entropy_by_layer + [entropy_agreement, entropy_uniform],
                        name_list=name_list + ["Agreement", "Uniform"],
                        x="Attention Type ({})".format(model_args.dataset_name), y="Entropy",
-                       args=model_args,
-                       custom_key="ENT_{:03d}".format(epoch),
-                       ylim=_ylim("ENT"), width=width, extension=extension, **kwargs)
+                       args=model_args, custom_key="ENT_{:03d}".format(epoch),
+                       ylim=_ylim("ENT"), unit_width_per_name=unit_width_per_name,
+                       width=width, extension=extension, **kwargs)
 
 
 def get_attention_metric_for_single_model(model, batch, device):
@@ -197,7 +192,9 @@ def get_attention_metric_for_single_model(model, batch, device):
            kld_agree_unifatt, kld_unifatt_agree, jsd_uniform, entropy_agreement, entropy_uniform
 
 
-def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[Tuple[str, Dict]], extension="png"):
+def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[Tuple[str, Dict]],
+                                                   unit_width_per_name=3,
+                                                   extension="png"):
     res = None
     total_args, num_layers, custom_key_list, name_prefix_list = None, None, [], []
     kld1_list, kld2_list, jsd_list, ent_list = [], [], [], []  # [L * M, N]
@@ -234,7 +231,7 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
     total_args.custom_key = "-".join(sorted(custom_key_list))
     plot_kld_jsd_ent(kld1_list, kld2_list, jsd_list, ent_list, *res,
                      num_layers=num_layers, model_args=total_args, epoch=-1,
-                     name_prefix_list=name_prefix_list, extension=extension,
+                     name_prefix_list=name_prefix_list, unit_width_per_name=unit_width_per_name, extension=extension,
                      flierprops={"marker": "x", "markersize": 12})
 
 
@@ -578,8 +575,8 @@ if __name__ == '__main__':
     sns.set_context("talk")
     main_kwargs = {
         "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
-        "dataset_class": "RandomPartitionGraph",  # ADPlanetoid, LinkPlanetoid, Planetoid, HomophilySynthetic, RandomPartitionGraph
-        "dataset_name": "rpg-10-500-0.1-0.025",  # Cora, CiteSeer, PubMed, hs-0.1, hs-0.3, hs-0.5, hs-0.7, hs-0.9, 10-500-0.9-0.025
+        "dataset_class": "RandomPartitionGraph", # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
+        "dataset_name": "rpg-10-500-0.1-0.025",  # Cora, CiteSeer, PubMed, rpg-10-500-0.9-0.025
         "custom_key": "NEO8",  # NE, EV1, EV2
     }
 
@@ -592,13 +589,26 @@ if __name__ == '__main__':
     if MODE == "link_pred_perfs_for_multiple_models":
 
         def get_main_custom_key_list(dataset_name, prefix_1, prefix_2):
-            return ["{}O8-ES-Link".format(prefix_1), "{}O8-ES-Link".format(prefix_2)] if dataset_name != "PubMed" \
-                else ["{}-500-ES-Link".format(prefix_1), "{}-500-ES-Link".format(prefix_2)]
+            if "NS" in prefix_1:
+                ckl = ["{}O8".format(prefix_1) + ("-ES-Link" if dataset_name != "PubMed" else "-500-ES-Link")]
+            elif dataset_name != "PubMed":
+                ckl = ["{}O8-ES-Link".format(prefix_1), "{}O8-ES-Link".format(prefix_2)]
+            else:
+                ckl = ["{}-500-ES-Link".format(prefix_1), "{}-500-ES-Link".format(prefix_2)]
+            return ckl
 
-        use_supervision = False  # this
+
+        mode_type = "S2"  # N, S1, S2
         main_kwargs["dataset_class"] = "LinkPlanetoid"
         dataset_name_list = ["Cora", "CiteSeer", "PubMed"]
-        p1, p2 = ("EV1", "EV2") if use_supervision else ("NE", "NEDP")
+        if mode_type == "N":
+            p1, p2 = "NE", "NEDP"
+        elif mode_type == "S1":
+            p1, p2 = "EV1", "EV2"
+        elif mode_type == "S2":
+            p1, p2 = "EV12NS", None
+        else:
+            raise ValueError("Wrong mode: {}".format(mode_type))
 
         main_name_and_kwargs = [("{}-{}".format(d, ck), {**main_kwargs, "dataset_name": d, "custom_key": ck})
                                 for d in dataset_name_list for ck in get_main_custom_key_list(d, p1, p2)]
@@ -610,12 +620,27 @@ if __name__ == '__main__':
 
         sns.set_context("poster", font_scale=1.25)
 
-        main_kwargs["model_name"] = "GAT"  # GAT, LargeGAT
-        main_kwargs["dataset_name"] = "Cora"  # Cora, CiteSeer, PubMed
-        num_layers = 4  # Only for LargeGAT
+        is_super_gat = True  # False
 
-        main_name_prefix_list = ["GO", "DP"]
-        if main_kwargs["model_name"] == "GAT":
+        main_kwargs["model_name"] = "GAT"  # GAT, LargeGAT
+        main_kwargs["dataset_name"] = "PubMed"  # Cora, CiteSeer, PubMed
+        main_kwargs["dataset_class"] = "ADPlanetoid"  # Fix.
+        num_layers = 4  # Only for LargeGAT 3, 4
+
+        if not is_super_gat:
+            main_name_prefix_list = ["GO", "DP"]
+            unit_width = 3
+        else:
+            main_name_prefix_list = ["SG"]
+            unit_width = 3
+
+        if is_super_gat:
+            if main_kwargs["dataset_name"] != "PubMed":
+                main_custom_key_list = ["EV12NSO8-ES-ATT"]
+            else:
+                main_custom_key_list = ["EV12NSO8-500-ES-ATT"]
+
+        elif main_kwargs["model_name"] == "GAT":
             if main_kwargs["dataset_name"] != "PubMed":
                 main_custom_key_list = ["NEO8-ES-ATT", "NEDPO8-ES-ATT"]
             else:
@@ -631,7 +656,9 @@ if __name__ == '__main__':
             raise ValueError("Wrong model name: {}".format(main_kwargs["model_name"]))
         main_npx_and_kwargs = [(npx, {**main_kwargs, "custom_key": ck}) for npx, ck in zip(main_name_prefix_list,
                                                                                            main_custom_key_list)]
-        visualize_attention_metric_for_multiple_models(main_npx_and_kwargs, extension="pdf")
+        pprint(main_npx_and_kwargs)
+        visualize_attention_metric_for_multiple_models(main_npx_and_kwargs,
+                                                       unit_width_per_name=unit_width, extension="pdf")
 
     elif MODE == "glayout_without_training":
         layout_shape = "tsne"  # tsne, spring, kamada_kawai
@@ -643,7 +670,7 @@ if __name__ == '__main__':
     elif MODE == "degree_and_homophily":
         analyze_degree_and_homophily()
 
-    elif MODE == "attention_dist_by_sample_type":
+    elif MODE == "attention_dist_by_sample_type":  # deprecated
         data_frame_list = []
         for dn in ["Cora", "CiteSeer", "PubMed"]:
             for ck in ["NE", "EV1"]:
@@ -673,7 +700,7 @@ if __name__ == '__main__':
                     cprint("-------", "yellow")
                     idx += 1
 
-    elif MODE == "edge_fnn":
+    elif MODE == "edge_fnn":  # deprecated
         for dn in ["Cora", "CiteSeer", "PubMed"]:
             main_kwargs = dict(
                 model_name="GAT",  # GAT, BaselineGAT
