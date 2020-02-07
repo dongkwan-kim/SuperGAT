@@ -76,7 +76,7 @@ class LinkPlanetoid(Planetoid):
 
     def __init__(self, root, name, train_val_test_ratio=None, seed=42):
         super().__init__(root, name)
-        self.train_val_test_ratio = train_val_test_ratio or (0.85, 0.05, 0.1)
+        self.train_val_test_ratio = train_val_test_ratio or (0.9, 0.0, 0.1)
         self.seed = seed
         self.data_spliter = GAE(None)
 
@@ -106,10 +106,15 @@ class LinkPlanetoid(Planetoid):
         data = self.data_spliter.split_edges(data, *self.train_val_test_ratio[1:])
         data.__delattr__("train_neg_adj_mask")
 
-        val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
-                                    to_undirected(data.val_neg_edge_index)], dim=1)
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
                                     to_undirected(data.test_neg_edge_index)], dim=1)
+
+        if data.val_pos_edge_index.size(1) > 0:
+            val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
+                                        to_undirected(data.val_neg_edge_index)], dim=1)
+        else:
+            val_edge_index = test_edge_index
+
         return data.train_pos_edge_index, val_edge_index, test_edge_index
 
     def _sample_train_neg_edge_index(self, is_undirected_edges=True):
