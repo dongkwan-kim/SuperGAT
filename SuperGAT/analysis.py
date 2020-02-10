@@ -583,7 +583,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "degree_and_homophily"
+    MODE = "small_synthetic_examples"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":
@@ -663,6 +663,16 @@ if __name__ == '__main__':
     elif MODE == "glayout_without_training":
         layout_shape = "tsne"  # tsne, spring, kamada_kawai
         visualize_glayout_without_training(layout=layout_shape, **main_kwargs)
+
+    elif MODE == "small_synthetic_examples":
+        layout_shape = "tsne"
+        c, n = 5, 100
+        main_kwargs["dataset_class"] = "RandomPartitionGraph"
+        for d in [0.01, 0.04]:
+            for r in [0.1, 0.5, 0.9]:
+                main_kwargs["dataset_name"] = "rpg-{}-{}-{}-{}".format(c, n, r, d)
+                visualize_glayout_without_training(layout=layout_shape, **main_kwargs)
+                print("Done: {}".format(main_kwargs["dataset_name"]))
 
     elif MODE == "glayout_with_training_and_attention":
         visualize_glayout_with_training_and_attention(**main_kwargs)

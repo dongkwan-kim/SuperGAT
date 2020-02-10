@@ -1806,3 +1806,22 @@ GAT-rpg-10-500-0.9-0.04-EV12NSO8-ES: &GAT-rpg-10-500-0.9-0.04-EV12NSO8-ES
   early_stop_threshold_loss: 0.0015168901734047813
   early_stop_threshold_perf: 1.9747792986905662e-05
   epochs: 909
+
+
+GAT-rpg-5-100-0.1-0.01-NEO8:
+  <<: *GAT-rpg-x-NE
+
+GAT-rpg-5-100-0.5-0.01-NEO8:
+  <<: *GAT-rpg-x-NE
+
+GAT-rpg-5-100-0.9-0.01-NEO8:
+  <<: *GAT-rpg-x-NE
+
+GAT-rpg-5-100-0.1-0.04-NEO8:
+  <<: *GAT-rpg-x-NE
+
+GAT-rpg-5-100-0.5-0.04-NEO8:
+  <<: *GAT-rpg-x-NE
+
+GAT-rpg-5-100-0.9-0.04-NEO8:
+  <<: *GAT-rpg-x-NE

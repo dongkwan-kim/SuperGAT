@@ -140,7 +140,7 @@ def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None
         edge_kwargs = dict(edge_color=edge_color, edge_cmap=plt.cm.Greys, width=1.25, alpha=0.8,
                            edge_vmin=0., edge_vmax=1.)
     else:
-        edge_kwargs = dict(edge_color="grey", width=0.25, alpha=0.2)
+        edge_kwargs = dict(edge_color="grey", width=0.5, alpha=0.2)
 
     edges = nx.draw_networkx_edges(G, pos, node_size=node_sizes, **edge_kwargs)
 
