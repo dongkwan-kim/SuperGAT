@@ -173,7 +173,8 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     elif _args.task_type == "Link_Prediction":
         if "run_link_prediction" in kwargs and kwargs["run_link_prediction"]:
             val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
-            perfs = SuperGAT.get_link_pred_perfs_by_attention(model=model, edge_y=val_or_test_edge_y)
+            perfs = SuperGAT.get_link_pred_perfs_by_attention(model=model, edge_y=val_or_test_edge_y,
+                                                              layer_idx=kwargs["layer_idx_for_link_prediction"])
         else:
             perfs = get_accuracy(outputs_total, ys_total)
     else:
@@ -290,7 +291,8 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
 
                 if args.task_type == "Link_Prediction":
                     link_test_perf, _ = test_model(running_device, net, test_d or train_d, loss_func,
-                                                   _args=args, val_or_test="test", verbose=0, run_link_prediction=True)
+                                                   _args=args, val_or_test="test", verbose=0,
+                                                   run_link_prediction=True, layer_idx_for_link_prediction=-1)
                     link_test_perf_at_best_val_weak = link_test_perf
 
             if val_perf > best_val_perf:
