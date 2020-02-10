@@ -13,7 +13,7 @@ from pprint import pprint
 from typing import Tuple, Callable, List
 
 from layer import negative_sampling
-from data_syn import HomophilySynthetic, RandomPartitionGraph
+from data_syn import RandomPartitionGraph
 
 
 def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
@@ -159,6 +159,108 @@ class LinkPlanetoid(Planetoid):
         return datum
 
 
+class ADRandomPartitionGraph(RandomPartitionGraph):
+
+    def __init__(self, root, name):
+        super().__init__(root, name)
+        y, edge_index = self.data.y, self.data.edge_index
+        self.agreement_dist = get_agreement_dist(edge_index, y)
+        self.uniform_att_dist = get_uniform_dist_like(self.agreement_dist)
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        datum.__setitem__("agreement_dist", self.agreement_dist)
+        datum.__setitem__("uniform_att_dist", self.uniform_att_dist)
+        return datum
+
+
+class LinkRandomPartitionGraph(RandomPartitionGraph):
+
+    def __init__(self, root, name, train_val_test_ratio=None, seed=42):
+        super().__init__(root, name)
+        self.train_val_test_ratio = train_val_test_ratio or (0.9, 0.0, 0.1)
+        self.seed = seed
+        self.data_spliter = GAE(None)
+
+        tpei, vei, tei = self.train_val_test_split()
+        self.train_pos_edge_index = tpei  # undirected [2, E * 0.85]
+        self.val_edge_index = vei  # undirected [2, E * 0.05 * 2]
+        self.test_edge_index = tei  # undirected [2, E * 0.1 * 2]
+
+        self.val_edge_y = self.get_edge_y(self.val_edge_index.size(1))
+        self.test_edge_y = self.get_edge_y(self.test_edge_index.size(1))
+
+        # Remove validation/test pos edges from self.edge_index
+        self.data.edge_index = self.train_pos_edge_index
+
+    def train_val_test_split(self):
+        x, edge_index = self.data.x, self.data.edge_index
+
+        edge_index, _ = remove_self_loops(edge_index)
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+
+        data = deepcopy(self.data)
+        data.edge_index = edge_index
+
+        # train_pos_edge_index=[2, E * 0.85] (undirected)
+        # val_neg/pos_edge_index=[2, E/2 * 0.05] (not undirected)
+        # test_neg/pos_edge_index: [2, E/2 * 0.1] (not undirected)
+        data = self.data_spliter.split_edges(data, *self.train_val_test_ratio[1:])
+        data.__delattr__("train_neg_adj_mask")
+
+        test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
+                                    to_undirected(data.test_neg_edge_index)], dim=1)
+
+        if data.val_pos_edge_index.size(1) > 0:
+            val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
+                                        to_undirected(data.val_neg_edge_index)], dim=1)
+        else:
+            val_edge_index = test_edge_index
+
+        return data.train_pos_edge_index, val_edge_index, test_edge_index
+
+    def _sample_train_neg_edge_index(self, is_undirected_edges=True):
+        num_pos_samples = self.train_pos_edge_index.size(1)
+        num_neg_samples = num_pos_samples // 2 if is_undirected_edges else num_pos_samples
+        neg_edge_index = negative_sampling(
+            edge_index=self.train_pos_edge_index,
+            num_nodes=self.data.x.size(0),
+            num_neg_samples=num_neg_samples,
+        )
+        return to_undirected(neg_edge_index) if is_undirected_edges else neg_edge_index
+
+    @staticmethod
+    def get_edge_y(num_edges, pos_num_or_ratio=0.5, device=None):
+        num_pos = pos_num_or_ratio if isinstance(pos_num_or_ratio, int) else int(pos_num_or_ratio * num_edges)
+        y = torch.zeros(num_edges).float()
+        y[:num_pos] = 1.
+        y = y if device is None else y.to(device)
+        return y
+
+    def __getitem__(self, item) -> torch.Tensor:
+        """
+        :param item:
+        :return: Draw negative samples, and return [2, E * 0.8 * 2] tensor
+        """
+        datum = super().__getitem__(item)
+
+        # Sample negative training samples from the negative sample pool
+        train_neg_edge_index = self._sample_train_neg_edge_index(is_undirected(self.test_edge_index))
+        train_edge_index = torch.cat([self.train_pos_edge_index, train_neg_edge_index], dim=1)
+        train_edge_y = self.get_edge_y(train_edge_index.size(1),
+                                       pos_num_or_ratio=self.train_pos_edge_index.size(1),
+                                       device=train_edge_index.device)
+
+        # Add attributes for edge prediction
+        datum.__setitem__("train_edge_index", train_edge_index)
+        datum.__setitem__("train_edge_y", train_edge_y)
+        datum.__setitem__("val_edge_index", self.val_edge_index)
+        datum.__setitem__("val_edge_y", self.val_edge_y)
+        datum.__setitem__("test_edge_index", self.test_edge_index)
+        datum.__setitem__("test_edge_y", self.test_edge_y)
+        return datum
+
+
 def get_dataset_class_name(dataset_name: str) -> str:
     dataset_name = dataset_name.lower()
     if dataset_name in ["cora", "citeseer", "pubmed"]:
@@ -173,7 +275,8 @@ def get_dataset_class_name(dataset_name: str) -> str:
 
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in (pyg.datasets.__all__ +
-                             ["LinkPlanetoid", "ADPlanetoid", "HomophilySynthetic", "RandomPartitionGraph"])
+                             ["LinkPlanetoid", "ADPlanetoid", "HomophilySynthetic"] +
+                             ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"])
     return eval(dataset_class)
 
 
@@ -234,7 +337,8 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
-    elif dataset_class in ["HomophilySynthetic", "RandomPartitionGraph"]:  # Node or Link (One graph with given mask)
+    elif dataset_class in ["HomophilySynthetic",
+                           "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"]:
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
@@ -295,28 +399,20 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 if __name__ == '__main__':
 
+    # ADRandomPartitionGraph
+    for d in [0.01, 0.025, 0.04]:
+        for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
+            _test_data("ADRandomPartitionGraph", "rpg-10-500-{}-{}".format(h, d), "~/graph-data")
+
+    # LinkRandomPartitionGraph
+    for d in [0.01, 0.025, 0.04]:
+        for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
+            _test_data("LinkRandomPartitionGraph", "rpg-10-500-{}-{}".format(h, d), "~/graph-data")
+
     # RandomPartitionGraph
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.9-0.025", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.7-0.025", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.5-0.025", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.3-0.025", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.1-0.025", "~/graph-data")
-
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.9-0.04", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.7-0.04", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.5-0.04", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.3-0.04", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.1-0.04", "~/graph-data")
-
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.9-0.01", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.7-0.01", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.5-0.01", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.3-0.01", "~/graph-data")
-    _test_data("RandomPartitionGraph", "rpg-10-500-0.1-0.01", "~/graph-data")
-
-    # Synthetic
-    _test_data("HomophilySynthetic", "hs-0.5", "~/graph-data")
-    _test_data("HomophilySynthetic", "hs-0.9", "~/graph-data")
+    for d in [0.01, 0.025, 0.04]:
+        for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
+            _test_data("RandomPartitionGraph", "rpg-10-500-{}-{}".format(h, d), "~/graph-data")
 
     # Link Prediction
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")

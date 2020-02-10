@@ -125,81 +125,6 @@ class RandomPartitionGraph(InMemoryDataset):
         }
 
 
-class HomophilySynthetic(InMemoryDataset):
-
-    def __init__(self, root, name, num_train_per_class=20, num_val_per_class=50, num_test_per_class=100,
-                 transform=None, pre_transform=None):
-        self.name = name  # hs-{}
-        self.homophily = float(name.split("-")[1])
-        self.num_train_per_class = num_train_per_class
-        self.num_val_per_class = num_val_per_class
-        self.num_test_per_class = num_test_per_class
-        super(HomophilySynthetic, self).__init__(root, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0])
-
-    @property
-    def raw_file_names(self):
-        return ["ind.n5000-h{}-c10.graph".format(self.homophily),
-                "ind.n5000-h{}-c10.allx".format(self.homophily),
-                "ind.n5000-h{}-c10.ally".format(self.homophily)]
-
-    @property
-    def processed_file_names(self):
-        return ['hs-data-h{}.pt'.format(self.homophily)]
-
-    def download(self):
-        print("Please download manually from: https://github.com/samihaija/mixhop/blob/master/data/synthetic")  # todo
-        pass
-
-    def process(self):
-        graph_path, x_path, y_path = [os.path.join(self.root, rf) for rf in self.raw_file_names]
-        graph = _unpickle(graph_path)  # node to neighbors: Dict[int, List[int]]
-        x = np.load(x_path)  # ndarray the shape of which is [5000, 2]
-        x = (x - x.mean()) / x.std()
-        y_one_hot = np.load(y_path)  # ndarray the shape of which is [5000, 10]
-        y = np.argmax(y_one_hot, axis=1)
-
-        nx_g = nx.Graph()
-        for u, neighbors in graph.items():
-            nx_g.add_edges_from([(u, v) for v in neighbors])
-        for x_id, (x_features, y_features) in enumerate(zip(x, y)):
-            nx_g.add_node(x_id, x=x_features, y=y_features)
-
-        data = from_networkx(nx_g)
-        mask_dict = self._get_split_mask(data.y)
-        for k, v in mask_dict.items():
-            setattr(data, k, v)
-        data, slices = self.collate([data])
-        torch.save((data, slices), self.processed_paths[0])
-
-    def _get_split_mask(self, y):
-
-        def _mask0(sz):
-            return torch.zeros(sz, dtype=torch.uint8)
-
-        def _fill_mask(index, mask0):
-            index = torch.Tensor(index).long()
-            mask0[index] = 1
-            return mask0
-
-        classes = torch.unique(y)
-        train, val, test = [], [], []
-        train_mask, val_mask, test_mask = _mask0(len(y)), _mask0(len(y)), _mask0(len(y))
-
-        num_total = self.num_train_per_class + self.num_val_per_class + self.num_test_per_class
-        for c in classes:
-            indices_c = [i for _, i in zip(range(num_total), torch.utils.data.SubsetRandomSampler((y == c).nonzero()))]
-            train += indices_c[:self.num_train_per_class]
-            val += indices_c[self.num_train_per_class:self.num_train_per_class+self.num_val_per_class]
-            test += indices_c[-self.num_test_per_class:]
-
-        return {
-            "train_mask": _fill_mask(train, train_mask),
-            "val_mask": _fill_mask(val, val_mask),
-            "test_mask": _fill_mask(test, test_mask),
-        }
-
-
 def _unpickle(_path):
     u = pickle._Unpickler(open(_path, "rb"))
     u.encoding = 'latin1'
@@ -248,18 +173,8 @@ def make_x(path, name, y_one_hot=None, save=False):
 if __name__ == '__main__':
 
     MODE = "RPG"
-
-    if MODE == "HS":
-        for hi in range(4, 10):
-            h = round(float(0.1 * hi), 1)
-            hs = HomophilySynthetic(root="~/graph-data", name="h-{}".format(h))
-
-    elif MODE == "RPG":
-        for p_in_ratio in [0.9, 0.7, 0.5, 0.3, 0.1]:
-            data = RandomPartitionGraph(root="~/graph-data",
-                                        name="rpg-10-500-{}-0.025".format(p_in_ratio))
-            for b in data:
-                print(b)
-
-    else:
-        raise ValueError
+    for p_in_ratio in [0.9, 0.7, 0.5, 0.3, 0.1]:
+        rpg = RandomPartitionGraph(root="~/graph-data",
+                                   name="rpg-10-500-{}-0.025".format(p_in_ratio))
+        for b in rpg:
+            print(b)
