@@ -32,6 +32,12 @@ class RandomPartitionGraph(InMemoryDataset):
 
         super(RandomPartitionGraph, self).__init__(root, transform, pre_transform)
         self.data, self.slices = torch.load(self.processed_paths[0])
+        self.data.num_nodes = self.data.x.size(0)
+
+    def get(self, idx):
+        self.data.__num_nodes__ = [self.data.x.size(0)]
+        got = super().get(idx)
+        return got
 
     def _get_p_out(self):
         assert self.avg_degree_ratio - self.p_in > 0
@@ -109,7 +115,7 @@ class RandomPartitionGraph(InMemoryDataset):
         for c in classes:
             indices_c = [i for _, i in zip(range(num_total), torch.utils.data.SubsetRandomSampler((y == c).nonzero()))]
             train += indices_c[:self.num_train_per_class]
-            val += indices_c[self.num_train_per_class:self.num_train_per_class+self.num_val_per_class]
+            val += indices_c[self.num_train_per_class:self.num_train_per_class + self.num_val_per_class]
             test += indices_c[-self.num_test_per_class:]
 
         return {
@@ -201,7 +207,6 @@ def _unpickle(_path):
 
 
 def make_x(path, name, y_one_hot=None, save=False):
-
     if y_one_hot is None:  # one-hot ndarray the shape of which is (N, C)
         y_path = os.path.join(path, "{}.ally.npy".format(name))  # e.g., ind.n5000-h{}-c10
         y_one_hot = np.load(y_path)
