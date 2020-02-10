@@ -204,7 +204,7 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
         num_layers = args.num_layers
 
         train_d, _, _ = get_dataset_or_loader(
-            "ADPlanetoid", args.dataset_name, args.data_root,
+            args.dataset_class, args.dataset_name, args.data_root,
             batch_size=args.batch_size, seed=args.seed,
         )
         batch = train_d[0]
@@ -583,7 +583,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "small_synthetic_examples"
+    MODE = "attention_metric_for_multiple_models_synthetic"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":
@@ -625,7 +625,7 @@ if __name__ == '__main__':
         main_kwargs["model_name"] = "GAT"  # GAT, LargeGAT
         main_kwargs["dataset_name"] = "PubMed"  # Cora, CiteSeer, PubMed
         main_kwargs["dataset_class"] = "ADPlanetoid"  # Fix.
-        num_layers = 4  # Only for LargeGAT 3, 4
+        main_num_layers = 4  # Only for LargeGAT 3, 4
 
         if not is_super_gat:
             main_name_prefix_list = ["GO", "DP"]
@@ -647,11 +647,11 @@ if __name__ == '__main__':
                 main_custom_key_list = ["NE-500-ES-ATT", "NEDP-500-ES-ATT"]
         elif main_kwargs["model_name"] == "LargeGAT":
             if main_kwargs["dataset_name"] != "PubMed":
-                main_custom_key_list = ["NEO8-L{}-ES-ATT".format(num_layers),
-                                        "NEDPO8-L{}-ES-ATT".format(num_layers)]
+                main_custom_key_list = ["NEO8-L{}-ES-ATT".format(main_num_layers),
+                                        "NEDPO8-L{}-ES-ATT".format(main_num_layers)]
             else:
-                main_custom_key_list = ["NE-600-L{}-ES-ATT".format(num_layers),
-                                        "NEDP-600-L{}-ES-ATT".format(num_layers)]
+                main_custom_key_list = ["NE-600-L{}-ES-ATT".format(main_num_layers),
+                                        "NEDP-600-L{}-ES-ATT".format(main_num_layers)]
         else:
             raise ValueError("Wrong model name: {}".format(main_kwargs["model_name"]))
         main_npx_and_kwargs = [(npx, {**main_kwargs, "custom_key": ck}) for npx, ck in zip(main_name_prefix_list,
@@ -659,6 +659,35 @@ if __name__ == '__main__':
         pprint(main_npx_and_kwargs)
         visualize_attention_metric_for_multiple_models(main_npx_and_kwargs,
                                                        unit_width_per_name=unit_width, extension="pdf")
+
+    elif MODE == "link_pred_perfs_for_multiple_models_synthetic":
+        k = "EV12NSO8"
+        ck = "{}-ES-Link".format(k)
+        main_kwargs["model_name"] = "GAT"
+        main_kwargs["dataset_class"] = "LinkRandomPartitionGraph"
+        main_name_and_kwargs = []
+        for _d in [0.01, 0.025, 0.04]:
+            for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
+                d = "rpg-10-500-{}-{}".format(h, _d)
+                main_name_and_kwargs.append(("{}-{}".format(d, ck),
+                                             {**main_kwargs, "dataset_name": d, "custom_key": ck}))
+        pprint(main_name_and_kwargs)
+        analyze_link_pred_perfs_for_multiple_models(main_name_and_kwargs, num_total_runs=10)
+
+    elif MODE == "attention_metric_for_multiple_models_synthetic":
+        main_kwargs["model_name"] = "GAT"
+        main_kwargs["dataset_class"] = "ADRandomPartitionGraph"
+        sns.set_context("poster", font_scale=1.25)
+        for _d in [0.01, 0.025, 0.04]:
+            for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
+                main_kwargs["dataset_name"] = "rpg-10-500-{}-{}".format(h, _d)
+
+                main_npx_and_kwargs = []
+                for npx, ck in zip(["SG", "GO", "DP"], ["EV12NSO8", "NEO8", "NEDPO8"]):
+                    main_npx_and_kwargs.append((npx, {**main_kwargs, "custom_key": "{}-ES-ATT".format(ck)}))
+                pprint(main_npx_and_kwargs)
+                visualize_attention_metric_for_multiple_models(main_npx_and_kwargs,
+                                                               unit_width_per_name=3, extension="pdf")
 
     elif MODE == "glayout_without_training":
         layout_shape = "tsne"  # tsne, spring, kamada_kawai
