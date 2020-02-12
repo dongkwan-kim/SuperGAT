@@ -367,7 +367,7 @@ def run_with_many_seeds(args, num_seeds, gpu_id=None, **kwargs):
     return results
 
 
-def summary_results(results_dict: Dict[str, list or float]):
+def summary_results(results_dict: Dict[str, list or float], num_digits=3, keys_to_print=None):
     line_list = []
 
     def cprint_and_append(x, color=None):
@@ -377,14 +377,20 @@ def summary_results(results_dict: Dict[str, list or float]):
     cprint_and_append("## RESULTS SUMMARY ##", "yellow")
     is_value_list = False
     for rk, rv in sorted(results_dict.items()):
+        if keys_to_print is not None and rk not in keys_to_print:
+            continue
         if isinstance(rv, list):
-            cprint_and_append("{}: {} +- {}".format(rk, round(float(np.mean(rv)), 5), round(float(np.std(rv)), 5)))
+            cprint_and_append("{}: {} +- {}".format(
+                rk, round(float(np.mean(rv)), num_digits), round(float(np.std(rv)), num_digits))
+            )
             is_value_list = True
         else:
             cprint_and_append("{}: {}".format(rk, rv))
     cprint_and_append("## RESULTS DETAILS ##", "yellow")
     if is_value_list:
         for rk, rv in sorted(results_dict.items()):
+            if keys_to_print is not None and rk not in keys_to_print:
+                continue
             cprint_and_append("{}: {}".format(rk, rv))
     return line_list
 
@@ -397,7 +403,7 @@ if __name__ == '__main__':
         model_name="GAT",  # GAT, LargeGAT, GCN
         dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
         dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
-        custom_key="EVL12O8-ES",  # NEO8, NEDPO8, EV12NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
+        custom_key="EV12NSO8-ES",  # NEO8, NEDPO8, EV12NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
     pprint_args(main_args)
 
@@ -411,4 +417,6 @@ if __name__ == '__main__':
 
     # noinspection PyTypeChecker
     many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
-    summary_results(many_seeds_result)
+
+    pprint_args(main_args)
+    summary_results(many_seeds_result, keys_to_print=["best_test_perf", "best_val_perf", "test_perf_at_best_val_weak"])
