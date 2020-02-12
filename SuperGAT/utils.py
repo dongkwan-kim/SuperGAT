@@ -75,6 +75,15 @@ def get_entropy_tensor_by_iter(x_list: List[torch.Tensor], is_prob_dist=False) -
     return entropy_tensor.to(x_list[0].device)
 
 
+def torch_log_stable(target_tensor, eps=1e-43):
+    if not target_tensor.min() == 0:
+        return torch.log(target_tensor)
+    else:
+        target_tensor[target_tensor == 0] = eps
+        log_tensor = torch.log(target_tensor)
+        return log_tensor
+
+
 def get_kld_tensor_by_iter(pd_list: List[torch.Tensor], qd_list: List[torch.Tensor]) -> torch.Tensor:
     """
     :param pd_list: List of tensors [*, X, C_i]
@@ -85,7 +94,7 @@ def get_kld_tensor_by_iter(pd_list: List[torch.Tensor], qd_list: List[torch.Tens
     for pd, qd in zip(pd_list, qd_list):
         # input given is expected to contain log-probabilities.
         # The targets are given as probabilities (i.e. without taking the logarithm).
-        log_pd = torch.log(pd)
+        log_pd = torch_log_stable(pd)
         # pd, qd: [X, C_i] -> []
         kld = F.kl_div(log_pd, qd, reduction="batchmean")  # []
         kld_list.append(kld)
