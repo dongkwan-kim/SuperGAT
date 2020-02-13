@@ -8,15 +8,18 @@ def get_args_key(args):
     return "-".join([args.model_name, args.dataset_name, args.custom_key])
 
 
-def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path="./args.yaml") -> argparse.Namespace:
+def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=None) -> argparse.Namespace:
+
+    yaml_path = yaml_path or os.path.join(os.path.dirname(os.path.realpath(__file__)), "args.yaml")
 
     custom_key = custom_key.split("+")[0]
 
     parser = argparse.ArgumentParser(description='Parser for Explicit Graph Attention')
 
     # Basics
-    parser.add_argument("--num-gpus-total", default=0)
-    parser.add_argument("--num-gpus-to-use", default=0)
+    parser.add_argument("--num-gpus-total", default=0, type=int)
+    parser.add_argument("--num-gpus-to-use", default=0, type=int)
+    parser.add_argument("--black-list", default=None, type=int, nargs="+")
     parser.add_argument("--checkpoint-dir", default="../checkpoints")
     parser.add_argument('--data-root', default="~/graph-data", metavar='DIR', help='path to dataset')
     parser.add_argument("--model-name", default=model_name)
@@ -138,7 +141,6 @@ def pdebug_args(_args: argparse.Namespace, logger):
     logger.debug("Args LOGGING-PDEBUG: {}".format(get_args_key(_args)))
     for k, v in sorted(_args.__dict__.items()):
         logger.debug("\t- {}: {}".format(k, v))
-
 
 
 if __name__ == '__main__':
