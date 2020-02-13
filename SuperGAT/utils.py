@@ -125,7 +125,7 @@ def get_gpu_utility(gpu_id_or_ids: int or list) -> List[int]:
 
     gpu_utilities = [g - min(gpu_utilities) for g in gpu_utilities]
 
-    if len(gpu_utilities) != len(gpu_ids):
+    if len(gpu_utilities) < len(gpu_ids):
         raise EnvironmentError(
             "Cannot find all GPUs whose ids are {}, only found {} GPUs".format(gpu_ids, len(gpu_utilities)))
     else:

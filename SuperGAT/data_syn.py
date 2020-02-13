@@ -2,16 +2,14 @@
 # Original code & data: https://github.com/samihaija/mixhop/blob/master/data/synthetic
 
 import pickle
-from pprint import pprint
 import random
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
 import torch
 from torch_geometric.data import InMemoryDataset
-from torch_geometric.utils import from_networkx, subgraph
+from torch_geometric.utils import from_networkx
 
 
 class RandomPartitionGraph(InMemoryDataset):

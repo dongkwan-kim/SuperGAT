@@ -3,9 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from termcolor import cprint
 
-import torch_geometric.transforms as T
-import torch_geometric.nn as pygnn
-
 from layer import SuperGAT
 from data import get_dataset_or_loader, getattr_d
 
