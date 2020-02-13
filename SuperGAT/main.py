@@ -181,7 +181,8 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
         raise ValueError
 
     if verbose >= 2:
-        cprint("\n{}: {}".format(val_or_test, model.__class__.__name__), "yellow")
+        full_name = "Validation" if val_or_test == "val" else "Test"
+        cprint("\n[{} of {}]".format(full_name, model.__class__.__name__), "yellow")
         cprint("\t- Perfs: {}".format(perfs), "yellow")
 
     return perfs, total_loss
@@ -233,11 +234,9 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
 
     best_val_perf = 0.
     test_perf_at_best_val = 0.
-    test_perf_at_best_val_weak = 0.
     best_test_perf = 0.
     best_test_perf_at_best_val = 0.
-    best_test_perf_at_best_val_weak = 0.
-    link_test_perf_at_best_val_weak = 0.
+    link_test_perf_at_best_val = 0.
 
     val_loss_deque = deque(maxlen=args.early_stop_queue_length)
     val_perf_deque = deque(maxlen=args.early_stop_queue_length)
@@ -285,34 +284,31 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
                 best_test_perf = test_perf
 
             if val_perf >= best_val_perf:
-                test_perf_at_best_val_weak = test_perf
-                if test_perf_at_best_val_weak > best_test_perf_at_best_val_weak:
-                    best_test_perf_at_best_val_weak = test_perf_at_best_val_weak
+
+                print_color = "yellow"
+                best_val_perf = val_perf
+                test_perf_at_best_val = test_perf
+
+                if test_perf_at_best_val > best_test_perf_at_best_val:
+                    best_test_perf_at_best_val = test_perf_at_best_val
 
                 if args.task_type == "Link_Prediction":
                     link_test_perf, _ = test_model(running_device, net, test_d or train_d, loss_func,
                                                    _args=args, val_or_test="test", verbose=0,
                                                    run_link_prediction=True, layer_idx_for_link_prediction=-1)
-                    link_test_perf_at_best_val_weak = link_test_perf
+                    link_test_perf_at_best_val = link_test_perf
 
-            if val_perf > best_val_perf:
-                print_color = "yellow"
-                best_val_perf = val_perf
-                test_perf_at_best_val = test_perf
-                if test_perf_at_best_val > best_test_perf_at_best_val:
-                    best_test_perf_at_best_val = test_perf_at_best_val
                 if args.save_model:
                     save_model(net, args, target_epoch=epoch, perf=val_perf)
+
             else:
                 print_color = None
 
             ret = {
                 "best_val_perf": best_val_perf,
                 "test_perf_at_best_val": test_perf_at_best_val,
-                "test_perf_at_best_val_weak": test_perf_at_best_val_weak,
                 "best_test_perf": best_test_perf,
                 "best_test_perf_at_best_val": best_test_perf_at_best_val,
-                "best_test_perf_at_best_val_weak": best_test_perf_at_best_val_weak,
             }
             if args.verbose >= 1:
                 cprint_multi_lines("\t- ", print_color, **ret)
@@ -341,7 +337,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
             val_perf_deque.append(val_perf)
 
     if args.task_type == "Link_Prediction":
-        ret = {"link_test_perf_at_best_val_weak": link_test_perf_at_best_val_weak, **ret}
+        ret = {"link_test_perf_at_best_val": link_test_perf_at_best_val, **ret}
 
     if args.save_plot:
         save_loss_and_perf_plot([val_loss_list, val_perf_list, test_perf_list], ret, args,
@@ -419,4 +415,4 @@ if __name__ == '__main__':
     many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
 
     pprint_args(main_args)
-    summary_results(many_seeds_result, keys_to_print=["best_test_perf", "best_val_perf", "test_perf_at_best_val_weak"])
+    summary_results(many_seeds_result, keys_to_print=["best_test_perf", "best_val_perf", "test_perf_at_best_val"])
