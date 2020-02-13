@@ -14,7 +14,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
 
     custom_key = custom_key.split("+")[0]
 
-    parser = argparse.ArgumentParser(description='Parser for Explicit Graph Attention')
+    parser = argparse.ArgumentParser(description='Parser for Supervised Graph Attention Networks')
 
     # Basics
     parser.add_argument("--num-gpus-total", default=0, type=int)
@@ -84,14 +84,17 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
 
     # Experiment specific parameters loaded from .yamls
     with open(yaml_path) as args_file:
-        args_key = "-".join([model_name, dataset_name or dataset_class, custom_key])
+        args = parser.parse_args()
+        args_key = "-".join([args.model_name, args.dataset_name or args.dataset_class, args.custom_key])
         try:
             parser.set_defaults(**dict(YAML().load(args_file)[args_key].items()))
         except KeyError:
             cprint("KeyError: there's no {} in yamls".format(args_key), "red")
             exit()
 
-    return parser.parse_args()
+    # Update params from .yamls
+    args = parser.parse_args()
+    return args
 
 
 def get_important_args(_args: argparse.Namespace) -> dict:
