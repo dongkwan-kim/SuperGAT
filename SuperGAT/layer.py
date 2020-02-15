@@ -146,7 +146,12 @@ class SuperGAT(MessagePassing):
             else:
                 raise ValueError
 
-        self.residuals = {"num_updated": 0, "att": None, "att_with_negatives": None, "att_label": None}
+        self.cache = {
+            "num_updated": 0,
+            "att": None,  # Use only when self.cache_attention == True for task_type == "Attention_Dist"
+            "att_with_negatives": None,  # Use as X for supervision.
+            "att_label": None,  # Use as Y for supervision.
+        }
 
         if bias and concat:
             self.bias = Parameter(torch.Tensor(heads * out_channels))
@@ -228,7 +233,7 @@ class SuperGAT(MessagePassing):
                 att_label[:edge_index.size(1)] = 1.
             else:
                 att_label = None
-            self._update_residuals("att_label", att_label)
+            self._update_cache("att_label", att_label)
 
             if self.is_super_gat and self.attention_type in [
                 "gat_originated", "dot_product", "logit_mask", "prob_mask", "tanh_mask",
@@ -236,7 +241,7 @@ class SuperGAT(MessagePassing):
                 att_with_negatives = self.att_scaling * F.elu(att_with_negatives) + self.att_bias
                 att_with_negatives = self.att_scaling_2 * F.elu(att_with_negatives) + self.att_bias_2
 
-            self._update_residuals("att_with_negatives", att_with_negatives)
+            self._update_cache("att_with_negatives", att_with_negatives)
 
         return propagated
 
@@ -255,7 +260,7 @@ class SuperGAT(MessagePassing):
         # Compute attention coefficients. [E, heads]
         alpha = self._get_attention(edge_index_i, x_i, x_j, size_i)
         if self.cache_attention:
-            self._update_residuals("att", alpha)
+            self._update_cache("att", alpha)
 
         # Sample attention coefficients stochastically.
         alpha = F.dropout(alpha, p=self.dropout, training=self.training)
@@ -368,27 +373,26 @@ class SuperGAT(MessagePassing):
             self.neg_sample_ratio, self.pretraining_noise_ratio
         )
 
-    def _update_residuals(self, key, val):
-        self.residuals[key] = val
-        self.residuals["num_updated"] += 1
+    def _update_cache(self, key, val):
+        self.cache[key] = val
+        self.cache["num_updated"] += 1
 
     @staticmethod
     def get_supervised_attention_loss(model, edge_sampling_ratio=1.0, criterion=None):
 
         loss_list = []
-        att_residuals_list = [(m, m.residuals) for m in model.modules()
-                              if m.__class__.__name__ == SuperGAT.__name__]
+        cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == SuperGAT.__name__]
 
         device = next(model.parameters()).device
         criterion = nn.BCEWithLogitsLoss() if criterion is None else eval(criterion)
-        for module, att_res in att_residuals_list:
+        for module, cache in cache_list:
             # Attention (X)
-            att = att_res["att_with_negatives"]  # [E + neg_E, heads]
+            att = cache["att_with_negatives"]  # [E + neg_E, heads]
             num_total_samples = att.size(0)
             num_to_sample = int(num_total_samples * edge_sampling_ratio)
 
             # Labels (Y)
-            label = att_res["att_label"]  # [E + neg_E]
+            label = cache["att_label"]  # [E + neg_E]
 
             att = att.mean(dim=-1)  # [E + neg_E]
             permuted = torch.randperm(num_total_samples).to(device)
@@ -433,10 +437,10 @@ class SuperGAT(MessagePassing):
         :param metric: metric for perfs
         :return:
         """
-        att_residuals_list = [m.residuals for m in model.modules() if m.__class__.__name__ == SuperGAT.__name__]
-        att_res = att_residuals_list[layer_idx]
+        cache_list = [m.cache for m in model.modules() if m.__class__.__name__ == SuperGAT.__name__]
+        cache_of_layer_idx = cache_list[layer_idx]
 
-        att = att_res["att_with_negatives"]  # [E + neg_E, heads]
+        att = cache_of_layer_idx["att_with_negatives"]  # [E + neg_E, heads]
         att = att.mean(dim=-1)  # [E + neg_E]
 
         edge_probs, edge_y = np_sigmoid(att.cpu().numpy()), edge_y.cpu().numpy()
@@ -463,7 +467,7 @@ class SuperGAT(MessagePassing):
         edge_index, _ = remove_self_loops(edge_index)
         edge_index, _ = add_self_loops(edge_index, num_nodes=num_nodes)  # [2, E]
 
-        att = self.residuals["att"]  # [E, heads]
+        att = self.cache["att"]  # [E, heads]
 
         att_dist_list = []
         for node_idx in range(num_nodes):

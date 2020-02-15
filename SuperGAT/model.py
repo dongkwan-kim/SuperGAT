@@ -90,8 +90,8 @@ class SuperGATNet(nn.Module):
         x = F.dropout(x, p=self.args.dropout, training=self.training)
         x = self.conv2(x, edge_index, **kwargs)
 
-        if self.training and self.args.verbose >= 2:
-            _inspect_attention_tensor(x, edge_index, self.conv2.residuals)
+        if self.training and self.args.verbose >= 3:
+            _inspect_attention_tensor(x, edge_index, self.conv2.cache)
 
         return x
 
@@ -164,9 +164,6 @@ class SuperGATNetPPI(nn.Module):
         x = F.elu(x)
 
         x = self.conv3(x, edge_index) + self.lin3(x)
-
-        # if self.training and self.args.verbose >= 2:
-        #     _inspect_attention_tensor(x, edge_index, self.conv2.residuals)
 
         return x
 
