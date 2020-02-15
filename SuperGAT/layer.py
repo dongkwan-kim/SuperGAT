@@ -40,6 +40,29 @@ def negative_sampling(edge_index, num_nodes=None, num_neg_samples=None):
     return torch.stack([row, col], dim=0).long().to(edge_index.device)
 
 
+def negative_sampling_numpy(edge_index_numpy: np.ndarray, num_nodes=None, num_neg_samples=None):
+    num_neg_samples = num_neg_samples or edge_index_numpy.shape[1]
+
+    # Handle '2*|edges| > num_nodes^2' case.
+    num_neg_samples = min(num_neg_samples,
+                          num_nodes * num_nodes - edge_index_numpy.shape[1])
+
+    idx = (edge_index_numpy[0] * num_nodes + edge_index_numpy[1])
+
+    rng = range(num_nodes ** 2)
+    perm = np.asarray(random.sample(rng, num_neg_samples))
+    mask = np.isin(perm, idx).astype(np.uint8)
+    rest = mask.nonzero()[0]
+    while np.prod(rest.shape) > 0:
+        tmp = random.sample(rng, rest.shape[0])
+        mask = np.isin(tmp, idx).astype(np.uint8)
+        perm[rest] = tmp
+        rest = rest[mask.nonzero()[0]]
+
+    row, col = perm / num_nodes, perm % num_nodes
+    return np.stack([row, col], axis=0)
+
+
 def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
     split = degree(batch[edge_index[0]], dtype=torch.long).tolist()
     edge_indices = torch.split(edge_index, split, dim=1)
