@@ -250,9 +250,14 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     val_loss_deque = deque(maxlen=args.early_stop_queue_length)
     val_perf_deque = deque(maxlen=args.early_stop_queue_length)
 
+    dataset_kwargs = {}
+    if args.dataset_class == "ENSPlanetoid":
+        dataset_kwargs["neg_sample_ratio"] = args.neg_sample_ratio
+
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
         batch_size=args.batch_size, seed=args.seed,
+        **dataset_kwargs,
     )
 
     net_cls = _get_model_cls(args.model_name)

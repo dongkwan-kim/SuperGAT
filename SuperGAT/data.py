@@ -23,8 +23,10 @@ import os
 
 class ENSPlanetoid(Planetoid):
     """Efficient Negative Sampling for Planetoid"""
-    def __init__(self, root, name, q_trial=30):
+    def __init__(self, root, name, neg_sample_ratio, q_trial=30):
         super().__init__(root, name)
+
+        self.neg_sample_ratio = neg_sample_ratio
 
         x, edge_index = self.data.x, self.data.edge_index
         edge_index, _ = remove_self_loops(edge_index)
@@ -50,7 +52,7 @@ class ENSPlanetoid(Planetoid):
         neg_edge_index = negative_sampling_numpy(
             edge_index_numpy=self.edge_index_with_self_loops_numpy,
             num_nodes=self.data.x.size(0),
-            num_neg_samples=self.num_pos_samples,
+            num_neg_samples=int(self.neg_sample_ratio * self.num_pos_samples),
         )
         train_edge_index_numpy = np.concatenate([self.edge_index_with_self_loops_numpy, neg_edge_index], axis=1)
         return train_edge_index_numpy
@@ -466,9 +468,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 if __name__ == '__main__':
 
     # Efficient Negative Sampling
-    _test_data("ENSPlanetoid", "Cora", '~/graph-data')
-    _test_data("ENSPlanetoid", "CiteSeer", '~/graph-data')
-    _test_data("ENSPlanetoid", "PubMed", '~/graph-data')
+    _test_data("ENSPlanetoid", "Cora", '~/graph-data', neg_sample_ratio=0.5)
+    _test_data("ENSPlanetoid", "CiteSeer", '~/graph-data', neg_sample_ratio=0.5)
+    _test_data("ENSPlanetoid", "PubMed", '~/graph-data', neg_sample_ratio=0.5)
 
     # ADRandomPartitionGraph
     for d in [0.01, 0.025, 0.04]:
