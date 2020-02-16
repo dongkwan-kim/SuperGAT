@@ -18,10 +18,13 @@ import torch.nn.functional as F
 from torch_geometric.utils import subgraph, softmax, remove_self_loops, add_self_loops, degree
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from termcolor import cprint
 import coloredlogs
+try:
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+except ImportError:
+    pass
 
 
 def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarray:
@@ -571,8 +574,12 @@ def visualize_edge_fnn(extension="pdf", **kwargs):
 
 if __name__ == '__main__':
 
-    sns.set(style="whitegrid")
-    sns.set_context("talk")
+    try:
+        sns.set(style="whitegrid")
+        sns.set_context("talk")
+    except NameError:
+        pass
+
     main_kwargs = {
         "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
         "dataset_class": "RandomPartitionGraph", # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph

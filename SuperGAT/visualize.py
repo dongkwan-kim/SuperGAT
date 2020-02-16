@@ -7,8 +7,11 @@ import networkx as nx
 import torch
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
+try:
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+except ImportError:
+    pass
 
 
 def _get_key(args, no_args_key=None):
