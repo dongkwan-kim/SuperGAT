@@ -227,10 +227,13 @@ class SuperGAT(MessagePassing):
             )  # [E + neg_E, heads]
 
             # Labels
-            if self.training:
+            if self.training and self.cache["att_label"] is None:
                 device = next(self.parameters()).device
                 att_label = torch.zeros(att_with_negatives.size(0)).float().to(device)
                 att_label[:edge_index.size(1)] = 1.
+                self._update_cache("att_label", att_label)
+            elif self.training and self.cache["att_label"] is not None:
+                att_label = self.cache["att_label"]
             else:
                 att_label = None
             self._update_cache("att_label", att_label)

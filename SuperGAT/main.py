@@ -18,7 +18,7 @@ from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
-from model import SuperGATNet, SuperGATNetPPI, LargeSuperGATNet
+from model import SuperGATNet, LargeSuperGATNet
 from layer import SuperGAT
 from model_baseline import LinkGNN
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
@@ -161,9 +161,6 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
                 loss = criterion(outputs[val_or_test_mask], batch.y[val_or_test_mask])
                 outputs_ndarray = outputs[val_or_test_mask].cpu().numpy()
                 ys_ndarray = to_one_hot(batch.y[val_or_test_mask], num_classes)
-            elif model.__class__.__name__ == SuperGATNetPPI.__name__:  # PPI task
-                loss = criterion(outputs, batch.y)
-                outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), batch.y.cpu().numpy()
             else:
                 loss = criterion(outputs, batch.y)
                 outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), to_one_hot(batch.y, num_classes)
@@ -220,8 +217,6 @@ def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
 def _get_model_cls(model_name: str):
     if model_name == "GAT":
         return SuperGATNet
-    elif model_name == "GATPPI":
-        return SuperGATNetPPI
     elif model_name.startswith("LinkG"):
         return LinkGNN
     elif model_name == "LargeGAT":
@@ -411,7 +406,7 @@ if __name__ == '__main__':
 
     main_args = get_args(
         model_name="GAT",  # GAT, LargeGAT, GCN
-        dataset_class="ENSPlanetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
+        dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
         dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
         custom_key="EV12NSO8-ES",  # NEO8, NEDPO8, EV12NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
@@ -431,4 +426,4 @@ if __name__ == '__main__':
 
     pprint_args(main_args)
     summary_results(many_seeds_result, keys_to_print=["best_test_perf", "best_val_perf", "test_perf_at_best_val"])
-    cprint("Time for runs: {}s".format(time.perf_counter() - t0))
+    cprint("Time for runs (s): {}".format(time.perf_counter() - t0))

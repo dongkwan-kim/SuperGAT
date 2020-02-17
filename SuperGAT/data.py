@@ -23,7 +23,7 @@ import os
 
 class ENSPlanetoid(Planetoid):
     """Efficient Negative Sampling for Planetoid"""
-    def __init__(self, root, name, neg_sample_ratio, q_trial=30):
+    def __init__(self, root, name, neg_sample_ratio, q_trial=110):
         super().__init__(root, name)
 
         self.neg_sample_ratio = neg_sample_ratio
@@ -63,7 +63,7 @@ class ENSPlanetoid(Planetoid):
 
     def get_train_edge_index_from_queue(self):
         train_edge_index_from_queue = torch.Tensor(self.q.get()).long()
-        if self.q.qsize() <= 10:
+        if self.q.qsize() <= 5:
             p = Process(target=self.put_train_edge_index_to_queue, args=(self.q_trial, self.q))
             p.daemon = True
             p.start()
