@@ -426,10 +426,9 @@ if __name__ == '__main__':
     cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
     # noinspection PyTypeChecker
-    t0 = time.time()
+    t0 = time.perf_counter()
     many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
-    t1 = time.time() - t0
 
     pprint_args(main_args)
     summary_results(many_seeds_result, keys_to_print=["best_test_perf", "best_val_perf", "test_perf_at_best_val"])
-    cprint("Time for runs: {}s".format(t1))
+    cprint("Time for runs: {}s".format(time.perf_counter() - t0))
