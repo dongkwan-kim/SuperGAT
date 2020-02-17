@@ -4,6 +4,7 @@ from collections import deque, defaultdict
 from typing import Tuple, Any, List, Dict
 from copy import deepcopy
 from pprint import pprint
+import time
 
 import torch
 import torch.nn as nn
@@ -79,6 +80,10 @@ def load_model(model, _args, target_epoch=None, **kwargs) -> Tuple[Any, dict] or
 
 def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _args):
     model.train()
+    try:
+        dataset_or_loader.train()
+    except AttributeError:
+        pass
 
     total_loss = 0.
     for batch in dataset_or_loader:
@@ -130,6 +135,10 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     model.eval()
     try:
         model.set_layer_attrs("cache_attention", _args.task_type == "Attention_Dist")
+    except AttributeError:
+        pass
+    try:
+        dataset_or_loader.eval()
     except AttributeError:
         pass
 
@@ -241,9 +250,14 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     val_loss_deque = deque(maxlen=args.early_stop_queue_length)
     val_perf_deque = deque(maxlen=args.early_stop_queue_length)
 
+    dataset_kwargs = {}
+    if args.dataset_class == "ENSPlanetoid":
+        dataset_kwargs["neg_sample_ratio"] = args.neg_sample_ratio
+
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
         batch_size=args.batch_size, seed=args.seed,
+        **dataset_kwargs,
     )
 
     net_cls = _get_model_cls(args.model_name)
@@ -397,7 +411,7 @@ if __name__ == '__main__':
 
     main_args = get_args(
         model_name="GAT",  # GAT, LargeGAT, GCN
-        dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
+        dataset_class="ENSPlanetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
         dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
         custom_key="EV12NSO8-ES",  # NEO8, NEDPO8, EV12NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
@@ -412,7 +426,9 @@ if __name__ == '__main__':
     cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
     # noinspection PyTypeChecker
+    t0 = time.perf_counter()
     many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
 
     pprint_args(main_args)
     summary_results(many_seeds_result, keys_to_print=["best_test_perf", "best_val_perf", "test_perf_at_best_val"])
+    cprint("Time for runs: {}s".format(time.perf_counter() - t0))

@@ -256,7 +256,7 @@ def get_layer_repr_and_e2att(model, data, _args) -> List[Tuple[torch.Tensor, Dic
         for i, x in enumerate(model.forward_for_all_layers(data.x, data.edge_index)):
             edge_to_attention = defaultdict(list)
             conv = getattr(model, "conv{}".format(i + 1))
-            att = conv.residuals["att"]  # [E + N, heads]
+            att = conv.cache["att"]  # [E + N, heads]
             mean_att = att.mean(dim=-1)  # [E + N]
             for ma, e in zip(mean_att, edge_index.t()):
                 if e[0] != e[1]:

@@ -7,13 +7,79 @@ from torch_geometric.data import DataLoader, InMemoryDataset, Data
 from torch_geometric.nn import GAE
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops
+import numpy as np
 
 import os
 from pprint import pprint
 from typing import Tuple, Callable, List
 
-from layer import negative_sampling
+from layer import negative_sampling, negative_sampling_numpy
 from data_syn import RandomPartitionGraph
+
+
+from multiprocessing import Process, Queue
+import os
+
+
+class ENSPlanetoid(Planetoid):
+    """Efficient Negative Sampling for Planetoid"""
+    def __init__(self, root, name, neg_sample_ratio, q_trial=30):
+        super().__init__(root, name)
+
+        self.neg_sample_ratio = neg_sample_ratio
+
+        x, edge_index = self.data.x, self.data.edge_index
+        edge_index, _ = remove_self_loops(edge_index)
+        edge_index_with_self_loops, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+        self.edge_index_with_self_loops_numpy = edge_index_with_self_loops.numpy()
+        self.num_pos_samples = self.edge_index_with_self_loops_numpy.shape[1]
+
+        self.q = Queue()
+        self.q_trial = q_trial
+        self.put_train_edge_index_to_queue(5, self.q)
+
+        self.need_neg_samples = True
+
+    def train(self):
+        self.need_neg_samples = True
+
+    def eval(self):
+        self.need_neg_samples = False
+
+    def get_train_edge_index_numpy(self):
+        # Sample negative training samples from the negative sample pool
+        # We need numpy version, because it is stuck if child process touch torch.Tensor.
+        neg_edge_index = negative_sampling_numpy(
+            edge_index_numpy=self.edge_index_with_self_loops_numpy,
+            num_nodes=self.data.x.size(0),
+            num_neg_samples=int(self.neg_sample_ratio * self.num_pos_samples),
+        )
+        train_edge_index_numpy = np.concatenate([self.edge_index_with_self_loops_numpy, neg_edge_index], axis=1)
+        return train_edge_index_numpy
+
+    def put_train_edge_index_to_queue(self, n, q):
+        for _ in range(n):
+            q.put(self.get_train_edge_index_numpy())
+
+    def get_train_edge_index_from_queue(self):
+        train_edge_index_from_queue = torch.Tensor(self.q.get()).long()
+        if self.q.qsize() <= 10:
+            p = Process(target=self.put_train_edge_index_to_queue, args=(self.q_trial, self.q))
+            p.daemon = True
+            p.start()
+        return train_edge_index_from_queue
+
+    def __getitem__(self, item) -> torch.Tensor:
+        """
+        :param item:
+        :return: Draw negative samples, and return [2, E] tensor
+        """
+        datum = super().__getitem__(item)
+        # Add attributes for edge prediction
+        if self.need_neg_samples:
+            train_edge_index = self.get_train_edge_index_from_queue()
+            datum.__setitem__("train_edge_index", train_edge_index)
+        return datum
 
 
 def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
@@ -275,6 +341,7 @@ def get_dataset_class_name(dataset_name: str) -> str:
 
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in (pyg.datasets.__all__ +
+                             ["ENSPlanetoid"] +
                              ["LinkPlanetoid", "ADPlanetoid", "HomophilySynthetic"] +
                              ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"])
     return eval(dataset_class)
@@ -333,7 +400,8 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
         return train_loader, val_loader, test_loader
 
-    elif dataset_class in ["Planetoid", "LinkPlanetoid", "ADPlanetoid"]:  # Node or Link (One graph with given mask)
+    # Node or Link (One graph with given mask)
+    elif dataset_class in ["Planetoid", "LinkPlanetoid", "ADPlanetoid", "ENSPlanetoid"]:
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
@@ -398,6 +466,11 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    # Efficient Negative Sampling
+    _test_data("ENSPlanetoid", "Cora", '~/graph-data', neg_sample_ratio=0.5)
+    _test_data("ENSPlanetoid", "CiteSeer", '~/graph-data', neg_sample_ratio=0.5)
+    _test_data("ENSPlanetoid", "PubMed", '~/graph-data', neg_sample_ratio=0.5)
 
     # ADRandomPartitionGraph
     for d in [0.01, 0.025, 0.04]:

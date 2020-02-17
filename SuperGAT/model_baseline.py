@@ -69,7 +69,7 @@ class LinkGNN(nn.Module):
         self.r_scaling_21, self.r_bias_21 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
         self.r_scaling_22, self.r_bias_22 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
 
-        self.residuals = {"num_updated": 0, "batch": None, "x_conv1": None, "x_conv2": None, "label": None}
+        self.cache = {"num_updated": 0, "batch": None, "x_conv1": None, "x_conv2": None, "label": None}
 
         self.reset_parameters()
         pprint(next(self.modules()))
@@ -84,23 +84,23 @@ class LinkGNN(nn.Module):
     def forward(self, x, edge_index, batch=None, **kwargs):
 
         # Labels
-        if self.training and self.residuals["label"] is None:
+        if self.training and self.cache["label"] is None:
             device = next(self.parameters()).device
             num_pos, num_neg = edge_index.size(1), int(self.neg_sample_ratio * edge_index.size(1))
             label = torch.zeros(num_pos + num_neg).float().to(device)
             label[:edge_index.size(1)] = 1.
-            self._update_residuals("label", label)
+            self._update_cache("label", label)
 
-        self._update_residuals("batch", batch)
+        self._update_cache("batch", batch)
 
         x = F.dropout(x, p=self.args.dropout, training=self.training)
         x = self.conv1(x, edge_index)
-        self._update_residuals("x_conv1", x)
+        self._update_cache("x_conv1", x)
         x = F.elu(x)
 
         x = F.dropout(x, p=self.args.dropout, training=self.training)
         x = self.conv2(x, edge_index)
-        self._update_residuals("x_conv2", x)
+        self._update_cache("x_conv2", x)
 
         return x
 
@@ -137,9 +137,9 @@ class LinkGNN(nn.Module):
         recon = r_scaling_2 * F.elu(recon) + r_bias_2
         return recon
 
-    def _update_residuals(self, key, val):
-        self.residuals[key] = val
-        self.residuals["num_updated"] += 1
+    def _update_cache(self, key, val):
+        self.cache[key] = val
+        self.cache["num_updated"] += 1
 
     @staticmethod
     def get_reconstruction_loss(model, edge_index, edge_sampling_ratio=1.0, criterion=None):
@@ -149,13 +149,13 @@ class LinkGNN(nn.Module):
 
         loss_list = []
 
-        batch = model.residuals["batch"]
-        label = model.residuals["label"]
+        batch = model.cache["batch"]
+        label = model.cache["label"]
         num_total_samples = label.size(0)
         num_to_sample = int(num_total_samples * edge_sampling_ratio)
 
         for layer_id in range(1, 3):
-            x = model.residuals["x_conv{}".format(layer_id)]
+            x = model.cache["x_conv{}".format(layer_id)]
 
             edge_index, _ = remove_self_loops(edge_index)
             edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
