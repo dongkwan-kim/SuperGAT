@@ -402,7 +402,7 @@ def summary_results(results_dict: Dict[str, list or float], num_digits=3, keys_t
 
 if __name__ == '__main__':
 
-    num_total_runs = 100
+    num_total_runs = 25
 
     main_args = get_args(
         model_name="GAT",  # GAT, LargeGAT, GCN
