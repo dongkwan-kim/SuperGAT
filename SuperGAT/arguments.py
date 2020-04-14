@@ -24,6 +24,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument('--data-root', default="~/graph-data", metavar='DIR', help='path to dataset')
     parser.add_argument("--model-name", default=model_name)
     parser.add_argument("--task-type", default="", type=str)
+    parser.add_argument("--perf-type", default="accuracy", type=str)
     parser.add_argument("--dataset-class", default=dataset_class)
     parser.add_argument("--dataset-name", default=dataset_name)
     parser.add_argument("--custom-key", default=custom_key)
