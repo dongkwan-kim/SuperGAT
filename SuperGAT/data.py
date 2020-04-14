@@ -15,6 +15,7 @@ from typing import Tuple, Callable, List
 
 from layer import negative_sampling, negative_sampling_numpy
 from data_syn import RandomPartitionGraph
+from webkb4univ import WebKB4Univ
 
 
 from multiprocessing import Process, Queue
@@ -343,7 +344,8 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in (pyg.datasets.__all__ +
                              ["ENSPlanetoid"] +
                              ["LinkPlanetoid", "ADPlanetoid", "HomophilySynthetic"] +
-                             ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"])
+                             ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
+                             ["WebKB4Univ"])
     return eval(dataset_class)
 
 
@@ -377,13 +379,11 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     :param kwargs:
     :return:
     """
-    if dataset_class != "PPI":
+    if dataset_class not in ["PPI", "WebKB4Univ"]:
         kwargs["name"] = dataset_name
 
     torch.manual_seed(seed)
-    if not dataset_class in ["HomophilySynthetic"]:
-        root = os.path.join(root, dataset_name or dataset_class)
-    else:
+    if dataset_class in ["HomophilySynthetic"]:
         root = os.path.join(root, "synthetic")
     dataset_cls = get_dataset_class(dataset_class)
 
@@ -418,6 +418,17 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
         return train_loader, val_loader, test_loader
+
+    elif dataset_class in ["WebKB4Univ"]:
+        dataset = dataset_cls(root=root, **kwargs)
+        train_dataset = dataset[2:]
+        val_dataset = dataset[0:1]
+        test_dataset = dataset[1:2]
+        train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+        return train_loader, val_loader, test_loader
+
     else:
         raise ValueError
 
@@ -466,6 +477,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    # WebKB Four University
+    _test_data("WebKB4Univ", "WebKB4Univ", '~/graph-data')
 
     # Efficient Negative Sampling
     _test_data("ENSPlanetoid", "Cora", '~/graph-data', neg_sample_ratio=0.5)
