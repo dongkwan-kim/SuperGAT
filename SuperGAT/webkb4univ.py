@@ -15,7 +15,7 @@ def read_web_kb_data(folder, name):
     edge_list = []  # List of Tuple[href, href]
     y_list = []  # List of integer classes
 
-    classes = ["student", "faculty", "staff", "department", "course", "project", "other"]
+    classes = ["student", "faculty", "staff", "department", "course", "project"]  # Not use 'other' class
     for cid, c in enumerate(classes):
         class_dir = osp.join(folder, "webkb", c, name)
         for src_html in os.listdir(class_dir):
