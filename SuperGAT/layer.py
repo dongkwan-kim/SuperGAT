@@ -1,82 +1,19 @@
 import numpy as np
 from sklearn.metrics import roc_auc_score, average_precision_score
 from termcolor import cprint
+
 import torch
 import torch.nn as nn
-from torch.nn import Parameter, Linear
+from torch.nn import Parameter
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
-from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, subgraph, degree, dropout_adj, \
-    is_undirected, sort_edge_index, accuracy
+from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, dropout_adj, \
+    is_undirected, accuracy, negative_sampling, batched_negative_sampling
 import torch_geometric.nn.inits as tgi
 
-import time
-import random
 from typing import List
 
-from utils import get_accuracy, to_one_hot, np_sigmoid
-
-
-def negative_sampling(edge_index, num_nodes=None, num_neg_samples=None):
-    num_neg_samples = num_neg_samples or edge_index.size(1)
-
-    # Handle '2*|edges| > num_nodes^2' case.
-    num_neg_samples = min(num_neg_samples,
-                          num_nodes * num_nodes - edge_index.size(1))
-
-    idx = (edge_index[0] * num_nodes + edge_index[1]).to('cpu')
-
-    rng = range(num_nodes ** 2)
-    perm = torch.as_tensor(random.sample(rng, num_neg_samples))
-    mask = torch.from_numpy(np.isin(perm, idx).astype(np.uint8))
-    rest = mask.nonzero().view(-1)
-    while rest.numel() > 0:  # pragma: no cover
-        tmp = torch.as_tensor(random.sample(rng, rest.size(0)))
-        mask = torch.from_numpy(np.isin(tmp, idx).astype(np.uint8))
-        perm[rest] = tmp
-        rest = rest[mask.nonzero().view(-1)]
-
-    row, col = perm / num_nodes, perm % num_nodes
-    return torch.stack([row, col], dim=0).long().to(edge_index.device)
-
-
-def negative_sampling_numpy(edge_index_numpy: np.ndarray, num_nodes=None, num_neg_samples=None):
-    num_neg_samples = num_neg_samples or edge_index_numpy.shape[1]
-
-    # Handle '2*|edges| > num_nodes^2' case.
-    num_neg_samples = min(num_neg_samples,
-                          num_nodes * num_nodes - edge_index_numpy.shape[1])
-
-    idx = (edge_index_numpy[0] * num_nodes + edge_index_numpy[1])
-
-    rng = range(num_nodes ** 2)
-    perm = np.asarray(random.sample(rng, num_neg_samples))
-    mask = np.isin(perm, idx).astype(np.uint8)
-    rest = mask.nonzero()[0]
-    while np.prod(rest.shape) > 0:
-        tmp = random.sample(rng, rest.shape[0])
-        mask = np.isin(tmp, idx).astype(np.uint8)
-        perm[rest] = tmp
-        rest = rest[mask.nonzero()[0]]
-
-    row, col = perm / num_nodes, perm % num_nodes
-    return np.stack([row, col], axis=0)
-
-
-def batched_negative_sampling(edge_index, batch, num_neg_samples=None):
-    split = degree(batch[edge_index[0]], dtype=torch.long).tolist()
-    edge_indices = torch.split(edge_index, split, dim=1)
-    num_nodes = degree(batch, dtype=torch.long)
-    cum_nodes = torch.cat([batch.new_zeros(1), num_nodes.cumsum(dim=0)[:-1]])
-
-    neg_edge_indices = []
-    for edge_index, N, C in zip(edge_indices, num_nodes.tolist(),
-                                cum_nodes.tolist()):
-        neg_edge_index = negative_sampling(edge_index - C, N,
-                                           num_neg_samples) + C
-        neg_edge_indices.append(neg_edge_index)
-
-    return torch.cat(neg_edge_indices, dim=1)
+from utils import np_sigmoid
 
 
 def is_pretraining(current_epoch, pretraining_epoch):
@@ -86,8 +23,8 @@ def is_pretraining(current_epoch, pretraining_epoch):
 class SuperGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
-                 is_super_gat=True, attention_type="basic", super_gat_criterion=None, logit_temperature=1.0,
-                 neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False,
+                 is_super_gat=True, attention_type="basic", super_gat_criterion=None,
+                 neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False, cache_label=False,
                  cache_attention=False, **kwargs):
         super(SuperGAT, self).__init__(aggr='add', **kwargs)
 
@@ -100,10 +37,10 @@ class SuperGAT(MessagePassing):
         self.is_super_gat = is_super_gat
         self.attention_type = attention_type
         self.super_gat_criterion = super_gat_criterion
-        self.logit_temperature = logit_temperature
         self.neg_sample_ratio = neg_sample_ratio
         self.pretraining_noise_ratio = pretraining_noise_ratio
         self.pretraining = None if not use_pretraining else True
+        self.cache_label = cache_label
         self.cache_attention = cache_attention
 
         self.weight = Parameter(torch.Tensor(in_channels, heads * out_channels))
@@ -202,13 +139,12 @@ class SuperGAT(MessagePassing):
 
         if (self.is_super_gat and self.training) or (attention_edge_index is not None):
 
+            num_neg_samples = int(self.neg_sample_ratio * edge_index.size(1))
+
             if attention_edge_index is not None:
                 neg_edge_index = None
 
             elif batch is None:
-                # For compatibility, use x.size(0) if neg_sample_ratio is not given
-                num_neg_samples = x.size(0) if self.neg_sample_ratio <= 0.0 \
-                    else int(self.neg_sample_ratio * edge_index.size(1))
                 neg_edge_index = negative_sampling(
                     edge_index=edge_index,
                     num_nodes=x.size(0),
@@ -217,7 +153,9 @@ class SuperGAT(MessagePassing):
             else:
                 neg_edge_index = batched_negative_sampling(
                     edge_index=edge_index,
-                    batch=batch)
+                    batch=batch,
+                    num_neg_samples=num_neg_samples,
+                )
 
             att_with_negatives = self._get_attention_with_negatives(
                 x=x,
@@ -227,7 +165,7 @@ class SuperGAT(MessagePassing):
             )  # [E + neg_E, heads]
 
             # Labels
-            if self.training and self.cache["att_label"] is None:
+            if self.training and (self.cache["att_label"] is None or not self.cache_label):
                 device = next(self.parameters()).device
                 att_label = torch.zeros(att_with_negatives.size(0)).float().to(device)
                 att_label[:edge_index.size(1)] = 1.
@@ -239,7 +177,7 @@ class SuperGAT(MessagePassing):
             self._update_cache("att_label", att_label)
 
             if self.is_super_gat and self.attention_type in [
-                "gat_originated", "dot_product", "logit_mask", "prob_mask", "tanh_mask",
+                "gat_originated", "dot_product", "prob_mask",
             ]:
                 att_with_negatives = self.att_scaling * F.elu(att_with_negatives) + self.att_bias
                 att_with_negatives = self.att_scaling_2 * F.elu(att_with_negatives) + self.att_bias_2
@@ -319,18 +257,8 @@ class SuperGAT(MessagePassing):
                                  torch.cat([x_i, x_j], dim=-1),
                                  self.att_mh_1)
 
-            # Temperature
-            logits = logits / self.logit_temperature
-
             # [E, heads] * [E, heads] -> [E, heads]
-            if self.attention_type.startswith("logit_mask"):
-                alpha = torch.einsum("eh,eh->eh", alpha, logits)
-            elif self.attention_type.startswith("prob_mask"):
-                alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
-            elif self.attention_type.startswith("tanh_mask"):
-                alpha = torch.einsum("eh,eh->eh", alpha, torch.tanh(logits))
-            else:
-                raise ValueError
+            alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
 
         else:
             raise ValueError
@@ -398,8 +326,9 @@ class SuperGAT(MessagePassing):
             label = cache["att_label"]  # [E + neg_E]
 
             att = att.mean(dim=-1)  # [E + neg_E]
-            permuted = torch.randperm(num_total_samples).to(device)
-            loss = criterion(att[permuted][:num_to_sample], label[permuted][:num_to_sample])
+            permuted = torch.randperm(num_total_samples)[:num_to_sample]
+            permuted = permuted.to(device)
+            loss = criterion(att[permuted], label[permuted])
             loss_list.append(loss)
 
         return sum(loss_list)

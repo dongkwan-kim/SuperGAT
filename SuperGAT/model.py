@@ -57,7 +57,7 @@ class SuperGATNet(nn.Module):
             num_input_features, args.num_hidden_features,
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
-            super_gat_criterion=args.super_gat_criterion, logit_temperature=args.logit_temperature,
+            super_gat_criterion=args.super_gat_criterion,
             neg_sample_ratio=args.neg_sample_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio, use_pretraining=args.use_pretraining,
         )
@@ -66,7 +66,7 @@ class SuperGATNet(nn.Module):
             args.num_hidden_features * args.heads, num_classes,
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
-            super_gat_criterion=args.super_gat_criterion, logit_temperature=args.logit_temperature,
+            super_gat_criterion=args.super_gat_criterion,
             neg_sample_ratio=args.neg_sample_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio, use_pretraining=args.use_pretraining,
         )
@@ -75,20 +75,20 @@ class SuperGATNet(nn.Module):
 
     def forward_for_all_layers(self, x, edge_index, batch=None, **kwargs):
         x1 = F.dropout(x, p=self.args.dropout, training=self.training)
-        x1 = self.conv1(x1, edge_index, **kwargs)
+        x1 = self.conv1(x1, edge_index, batch=batch, **kwargs)
         x2 = F.elu(x1)
         x2 = F.dropout(x2, p=self.args.dropout, training=self.training)
-        x2 = self.conv2(x2, edge_index, **kwargs)
+        x2 = self.conv2(x2, edge_index, batch=batch, **kwargs)
         return x1, x2
 
     def forward(self, x, edge_index, batch=None, **kwargs) -> torch.Tensor:
 
         x = F.dropout(x, p=self.args.dropout, training=self.training)
-        x = self.conv1(x, edge_index, **kwargs)
+        x = self.conv1(x, edge_index, batch=batch, **kwargs)
         x = F.elu(x)
 
         x = F.dropout(x, p=self.args.dropout, training=self.training)
-        x = self.conv2(x, edge_index, **kwargs)
+        x = self.conv2(x, edge_index, batch=batch, **kwargs)
 
         if self.training and self.args.verbose >= 3:
             _inspect_attention_tensor(x, edge_index, self.conv2.cache)
@@ -109,6 +109,62 @@ class SuperGATNet(nn.Module):
             self.conv1.get_attention_dist(edge_index, num_nodes),
             self.conv2.get_attention_dist(edge_index, num_nodes),
         ]
+
+
+class ResSuperGATNet(nn.Module):
+
+    def __init__(self, args, dataset_or_loader):
+        super().__init__()
+        self.args = args
+
+        gat_cls = _get_gat_cls(self.args.model_name)
+
+        num_input_features = getattr_d(dataset_or_loader, "num_node_features")
+        num_classes = getattr_d(dataset_or_loader, "num_classes")
+
+        self.conv1 = gat_cls(
+            num_input_features, args.num_hidden_features,
+            heads=args.heads, dropout=args.dropout, concat=True,
+            is_super_gat=args.is_super_gat, attention_type=args.attention_type,
+            super_gat_criterion=args.super_gat_criterion,
+            neg_sample_ratio=args.neg_sample_ratio,
+        )
+        self.lin1 = nn.Linear(num_input_features, args.num_hidden_features * args.heads)
+
+        self.conv2 = gat_cls(
+            args.num_hidden_features * args.heads, args.num_hidden_features,
+            heads=args.heads, dropout=args.dropout, concat=True,
+            is_super_gat=args.is_super_gat, attention_type=args.attention_type,
+            super_gat_criterion=args.super_gat_criterion,
+            neg_sample_ratio=args.neg_sample_ratio,
+        )
+        if self.args.use_skip_connect_for_2:
+            self.lin2 = nn.Linear(args.num_hidden_features * args.heads, args.num_hidden_features * args.heads)
+
+        self.conv3 = gat_cls(
+            args.num_hidden_features * args.heads, num_classes,
+            heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
+            is_super_gat=args.is_super_gat, attention_type=args.attention_type,
+            super_gat_criterion=args.super_gat_criterion,
+            neg_sample_ratio=args.neg_sample_ratio,
+        )
+        self.lin3 = nn.Linear(args.num_hidden_features * args.heads, num_classes)
+
+        pprint(next(self.modules()))
+
+    def forward(self, x, edge_index, batch=None, **kwargs) -> torch.Tensor:
+
+        x = self.conv1(x, edge_index, batch=batch) + self.lin1(x)
+        x = F.elu(x)
+
+        if self.args.use_skip_connect_for_2:
+            x = self.conv2(x, edge_index, batch=batch) + self.lin2(x)
+        else:
+            x = self.conv2(x, edge_index, batch=batch) + x
+        x = F.elu(x)
+
+        x = self.conv3(x, edge_index, batch=batch) + self.lin3(x)
+        return x
 
 
 class LargeSuperGATNet(nn.Module):

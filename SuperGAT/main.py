@@ -18,7 +18,7 @@ from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
-from model import SuperGATNet, LargeSuperGATNet
+from model import SuperGATNet, LargeSuperGATNet, ResSuperGATNet
 from layer import SuperGAT
 from model_baseline import LinkGNN
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
@@ -161,6 +161,9 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
                 loss = criterion(outputs[val_or_test_mask], batch.y[val_or_test_mask])
                 outputs_ndarray = outputs[val_or_test_mask].cpu().numpy()
                 ys_ndarray = to_one_hot(batch.y[val_or_test_mask], num_classes)
+            elif _args.dataset_name == "PPI":  # PPI task
+                loss = criterion(outputs, batch.y)
+                outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), batch.y.cpu().numpy()
             else:
                 loss = criterion(outputs, batch.y)
                 outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), to_one_hot(batch.y, num_classes)
@@ -171,18 +174,18 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
 
     outputs_total, ys_total = np.concatenate(outputs_list), np.concatenate(ys_list)
 
-    if _args.task_type == "Node_Inductive":
-        preds = (outputs_total > 0).astype(int)
-        perfs = f1_score(ys_total, preds, average="micro") if preds.sum() > 0 else 0
-    elif _args.task_type == "Node_Transductive" or _args.task_type == "Attention_Dist":
-        perfs = get_accuracy(outputs_total, ys_total)
-    elif _args.task_type == "Link_Prediction":
+    if _args.task_type == "Link_Prediction":
         if "run_link_prediction" in kwargs and kwargs["run_link_prediction"]:
             val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
             perfs = SuperGAT.get_link_pred_perfs_by_attention(model=model, edge_y=val_or_test_edge_y,
                                                               layer_idx=kwargs["layer_idx_for_link_prediction"])
         else:
             perfs = get_accuracy(outputs_total, ys_total)
+    elif _args.perf_type == "micro-f1" and _args.dataset_name == "PPI":
+        preds = (outputs_total > 0).astype(int)
+        perfs = f1_score(ys_total, preds, average="micro") if preds.sum() > 0 else 0
+    elif _args.perf_type == "accuracy" or _args.task_type == "Attention_Dist":
+        perfs = get_accuracy(outputs_total, ys_total)
     else:
         raise ValueError
 
@@ -217,6 +220,8 @@ def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
 def _get_model_cls(model_name: str):
     if model_name == "GAT":
         return SuperGATNet
+    elif model_name == "GATPPI":
+        return ResSuperGATNet
     elif model_name.startswith("LinkG"):
         return LinkGNN
     elif model_name == "LargeGAT":
@@ -402,13 +407,13 @@ def summary_results(results_dict: Dict[str, list or float], num_digits=3, keys_t
 
 if __name__ == '__main__':
 
-    num_total_runs = 25
+    num_total_runs = 7
 
     main_args = get_args(
         model_name="GAT",  # GAT, LargeGAT, GCN
         dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
         dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
-        custom_key="EV12NSO8-ES",  # NEO8, NEDPO8, EV12NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
+        custom_key="EV13NSO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
     pprint_args(main_args)
 
@@ -425,5 +430,6 @@ if __name__ == '__main__':
     many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
 
     pprint_args(main_args)
-    summary_results(many_seeds_result, keys_to_print=["best_test_perf", "best_val_perf", "test_perf_at_best_val"])
+    summary_results(many_seeds_result, keys_to_print=["best_test_perf", "best_val_perf",
+                                                      "test_perf_at_best_val", "best_test_perf_at_best_val"])
     cprint("Time for runs (s): {}".format(time.perf_counter() - t0))

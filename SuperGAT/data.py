@@ -4,18 +4,18 @@ from copy import deepcopy
 from termcolor import cprint
 from torch_geometric.datasets import *
 from torch_geometric.data import DataLoader, InMemoryDataset, Data
-from torch_geometric.nn import GAE
+from torch_geometric.nn.models import GAE
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
-    add_self_loops
+    add_self_loops, negative_sampling
 import numpy as np
 
 import os
 from pprint import pprint
 from typing import Tuple, Callable, List
 
-from layer import negative_sampling, negative_sampling_numpy
 from data_syn import RandomPartitionGraph
 from webkb4univ import WebKB4Univ
+from utils import negative_sampling_numpy
 
 
 from multiprocessing import Process, Queue
