@@ -1,5 +1,6 @@
 log_*
 logs
+logs-*
 *deprecated
 figs*
 test_*.py
