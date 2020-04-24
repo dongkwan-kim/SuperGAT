@@ -213,7 +213,7 @@ def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
     plot = sns.lineplot(data=df, palette="tab10", linewidth=2.5)
     title = "{}-{}-{}".format(args.model_name, args.dataset_name, args.custom_key)
     plot.set_title(title)
-    plot.get_figure().savefig("./{}_{}_{}.png".format(title, args.seed, return_dict["best_test_perf_at_best_val"]))
+    plot.get_figure().savefig("../plots/{}_{}_{}.png".format(title, args.seed, return_dict["best_test_perf_at_best_val"]))
     plt.clf()
 
 
