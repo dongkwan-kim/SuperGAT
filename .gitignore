@@ -1,10 +1,9 @@
-log_*
-logs
-logs-*
+log*
 *deprecated
 figs*
 plot*
 test_*.py
+_*.py
 
 # Created by https://www.gitignore.io/api/git,macos,python,virtualenv,pycharm+all
 # Edit at https://www.gitignore.io/?templates=git,macos,python,virtualenv,pycharm+all
