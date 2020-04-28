@@ -11,15 +11,16 @@ from data import get_dataset_or_loader, get_agreement_dist
 from main import run, run_with_many_seeds, summary_results
 from utils import blind_other_gpus, sigmoid, get_entropy_tensor_by_iter, get_kld_tensor_by_iter
 from visualize import plot_graph_layout, _get_key, plot_multiple_dist, _get_key_and_makedirs, plot_line_with_std
-from layer import negative_sampling
+from layer import negative_sampling, SuperGAT
 
 import torch
 import torch.nn.functional as F
-from torch_geometric.utils import subgraph, softmax, remove_self_loops, add_self_loops, degree
+from torch_geometric.utils import subgraph, softmax, remove_self_loops, add_self_loops, degree, to_dense_adj
 import numpy as np
 import pandas as pd
 from termcolor import cprint
 import coloredlogs
+
 try:
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -154,16 +155,16 @@ def plot_kld_jsd_ent(kld_agree_att_by_layer, kld_att_agree_by_layer, jsd_by_laye
                        width=width, extension=extension, **kwargs)
 
 
-def get_attention_metric_for_single_model(model, batch, device):
+def get_attention_metric_for_single_model(model, data, device):
     # List[List[torch.Tensor]]: [L, N, [heads, #neighbors]]
-    att_dist_by_layer = model.get_attention_dist_by_layer(batch.edge_index, batch.x.size(0))
+    att_dist_by_layer = model.get_attention_dist_by_layer(data.edge_index, data.x.size(0))
     heads = att_dist_by_layer[0][0].size(0)
 
-    agreement_dist = batch.agreement_dist  # List[torch.Tensor]: [N, #neighbors]
+    agreement_dist = data.agreement_dist  # List[torch.Tensor]: [N, #neighbors]
     agreement_dist_hxn = [ad.expand(heads, -1).to(device) for ad in agreement_dist]  # [N, [heads, #neighbors]]
 
-    uniform_att_dist = [uad.to(device) for uad in batch.uniform_att_dist]  # [N, #neighbors]
-    uniform_att_dist_hxn = [uad.expand(heads, -1).to(device) for uad in batch.uniform_att_dist]
+    uniform_att_dist = [uad.to(device) for uad in data.uniform_att_dist]  # [N, #neighbors]
+    uniform_att_dist_hxn = [uad.expand(heads, -1).to(device) for uad in data.uniform_att_dist]
 
     # Entropy and KLD: [L, N]
     entropy_by_layer = []
@@ -210,7 +211,7 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
             args.dataset_class, args.dataset_name, args.data_root,
             batch_size=args.batch_size, seed=args.seed,
         )
-        batch = train_d[0]
+        data = train_d[0]
 
         gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total) if g not in args.black_list], 1))][0]
 
@@ -223,7 +224,7 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
 
         model, ret = run(args, gpu_id=gpu_id, return_model=True)
 
-        kld1_layer, kld2_layer, jsd_layer, ent_layer, *res = get_attention_metric_for_single_model(model, batch, device)
+        kld1_layer, kld2_layer, jsd_layer, ent_layer, *res = get_attention_metric_for_single_model(model, data, device)
         kld1_list += kld1_layer
         kld2_list += kld2_layer
         jsd_list += jsd_layer
@@ -236,6 +237,71 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
                      num_layers=num_layers, model_args=total_args, epoch=-1,
                      name_prefix_list=name_prefix_list, unit_width_per_name=unit_width_per_name, extension=extension,
                      flierprops={"marker": "x", "markersize": 12})
+
+
+def get_attention_heatmap_for_single_model(model, data, device):
+    cache_list = [m.cache for m in model.modules() if m.__class__.__name__ == SuperGAT.__name__]
+    att_list = [cache["att"] for cache in cache_list]  # List of [E, heads]
+    for att in att_list:
+        print(att.mean(), att.std(), att.max(), att.min())
+
+    edge_index, _ = remove_self_loops(data.edge_index)
+    edge_index, _ = add_self_loops(edge_index, num_nodes=data.x.size(0))  # [2, E]
+
+    dense_att_list = []
+    for i, att in enumerate(att_list):
+        dense_att = to_dense_adj(edge_index.to(device), batch=None, edge_attr=att).squeeze()  # [N, N, heads]
+        dense_att_list.append(dense_att)
+    return dense_att_list
+
+
+def visualize_attention_heatmap_for_multiple_models(name_prefix_and_kwargs: List[Tuple[str, Dict]],
+                                                    unit_width_per_name=3,
+                                                    extension="png"):
+    heatmaps_list = []
+    total_args, num_layers, custom_key_list, name_prefix_list = None, None, [], []
+    for name_prefix, kwargs in name_prefix_and_kwargs:
+        args = get_args(**kwargs)
+        custom_key_list.append(args.custom_key)
+        num_layers = args.num_layers
+
+        train_d, _, _ = get_dataset_or_loader(
+            args.dataset_class, args.dataset_name, args.data_root,
+            batch_size=args.batch_size, seed=args.seed,
+        )
+        data = train_d[0]
+
+        args.task_type = "Attention_Dist"  # set cache_attention True after load dataset
+
+        gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total) if g not in args.black_list], 1))][0]
+
+        if args.verbose >= 1:
+            pprint_args(args)
+            cprint("Use GPU the ID of which is {}".format(gpu_id), "yellow")
+
+        device = "cpu" if gpu_id is None \
+            else torch.device('cuda:{}'.format(gpu_id) if torch.cuda.is_available() else 'cpu')
+
+        model, ret = run(args, gpu_id=gpu_id, return_model=True)
+
+        heatmaps_nxn = [ah.cpu().numpy() for ah  # [N, N, heads]
+                        in get_attention_heatmap_for_single_model(model, data, device)]
+        heatmaps_list.append(heatmaps_nxn)
+        name_prefix_list.append(name_prefix)
+        total_args = args
+
+    total_args.custom_key = "-".join(sorted(custom_key_list))
+    for name_prefix, heatmaps in zip(name_prefix_list, heatmaps_list):
+        for i, hmp in enumerate(heatmaps):  # [N, N, heads]
+            for head in range(hmp.shape[-1]):
+                name = "../figs/att_heatmap_{}_layer{}_head{}.{}".format(name_prefix, i + 1, head, extension)
+                print(name)
+                ax = sns.heatmap(hmp[:, :, head],
+                                 vmin=0, vmax=1,
+                                 cmap="YlGnBu", xticklabels=False, yticklabels=False)
+                ax.set_title("WOW")
+                ax.get_figure().savefig(name, bbox_inches='tight')
+                plt.clf()
 
 
 def edge_to_sorted_tuple(e):
@@ -582,15 +648,15 @@ if __name__ == '__main__':
 
     main_kwargs = {
         "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
-        "dataset_class": "RandomPartitionGraph", # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
-        "dataset_name": "rpg-10-500-0.1-0.025",  # Cora, CiteSeer, PubMed, rpg-10-500-0.9-0.025
+        "dataset_class": "Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
+        "dataset_name": "Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.9-0.025
         "custom_key": "NEO8",  # NE, EV1, EV2
     }
 
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "attention_metric_for_multiple_models_synthetic"
+    MODE = "visualize_attention_heatmap_for_multiple_models"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":
@@ -666,6 +732,23 @@ if __name__ == '__main__':
         pprint(main_npx_and_kwargs)
         visualize_attention_metric_for_multiple_models(main_npx_and_kwargs,
                                                        unit_width_per_name=unit_width, extension="pdf")
+
+    elif MODE == "visualize_attention_heatmap_for_multiple_models":
+
+        # sns.set_context("poster", font_scale=1.25)
+
+        is_super_gat = False  # False
+        main_kwargs["model_name"] = "GAT"  # GAT, LargeGAT
+        main_kwargs["dataset_name"] = "Cora"  # Cora, CiteSeer, PubMed
+
+        unit_width = 3
+        main_name_prefix_list = ["SDP", "GO", "DP"]
+        main_custom_key_list = ["NESDPO8", "NEO8", "NEDPO8"]
+        main_npx_and_kwargs = [(npx, {**main_kwargs, "custom_key": ck}) for npx, ck in zip(main_name_prefix_list,
+                                                                                           main_custom_key_list)]
+
+        visualize_attention_heatmap_for_multiple_models(main_npx_and_kwargs,
+                                                        unit_width_per_name=unit_width, extension="png")
 
     elif MODE == "link_pred_perfs_for_multiple_models_synthetic":
         k = "EV12NSO8"
