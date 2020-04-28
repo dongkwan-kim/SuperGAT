@@ -68,7 +68,6 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--attention-type", default="basic", type=str)
     parser.add_argument("--att-lambda", default=0., type=float)
     parser.add_argument("--super-gat-criterion", default=None, type=str)
-    parser.add_argument("--logit-temperature", default=1.0, type=float)
     parser.add_argument("--neg-sample-ratio", default=0.0, type=float)
 
     # Pretraining
