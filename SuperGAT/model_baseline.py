@@ -7,9 +7,11 @@ from torch.nn import Parameter
 
 from torch_geometric.nn.conv import GCNConv, GATConv
 from torch_geometric.utils import remove_self_loops, add_self_loops
+from torch_geometric.utils import negative_sampling, batched_negative_sampling
 import torch_geometric.nn.inits as tgi
 
-from layer import negative_sampling, batched_negative_sampling, is_pretraining
+from layer import is_pretraining
+from layer_cgat import CGATConv
 from data import getattr_d
 
 
@@ -38,6 +40,50 @@ def _get_last_features(cls_name: str, args):
         return args.num_hidden_features
     else:
         raise ValueError
+
+
+class CGATNet(nn.Module):
+
+    def __init__(self, args, dataset_or_loader):
+        super(CGATNet, self).__init__()
+        self.args = args
+
+        num_input_features = getattr_d(dataset_or_loader, "num_node_features")
+        num_classes = getattr_d(dataset_or_loader, "num_classes")
+
+        kwargs = {"use_topk_softmax": args.use_topk_softmax}
+        if args.use_topk_softmax:
+            kwargs["aggr_k"] = args.aggr_k
+        else:
+            kwargs["dropout"] = args.dropout
+
+        self.conv1 = CGATConv(
+            num_input_features, args.num_hidden_features,
+            heads=args.heads, concat=True,
+            margin_graph=args.margin_graph,
+            margin_boundary=args.margin_boundary,
+            num_neg_samples_per_edge=args.num_neg_samples_per_edge,
+            **kwargs,
+        )
+
+        self.conv2 = CGATConv(
+            args.num_hidden_features * args.heads, num_classes,
+            heads=(args.out_heads or args.heads), concat=False,
+            margin_graph=args.margin_graph,
+            margin_boundary=args.margin_boundary,
+            num_neg_samples_per_edge=args.num_neg_samples_per_edge,
+            **kwargs
+        )
+
+        pprint(next(self.modules()))
+
+    def forward(self, x, edge_index, batch=None, **kwargs):
+        x = F.dropout(x, p=self.args.dropout, training=self.training)
+        x = self.conv1(x, edge_index)
+        x = F.elu(x)
+        x = F.dropout(x, p=self.args.dropout, training=self.training)
+        x = self.conv2(x, edge_index)
+        return x
 
 
 class LinkGNN(nn.Module):

@@ -79,6 +79,9 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--is-link-gnn", default=False, type=bool)
     parser.add_argument("--link-lambda", default=0., type=float)
 
+    parser.add_argument("--is-cgat", default=False, type=bool)
+    parser.add_argument("--is-cgat-ssnc", default=False, type=bool)
+
     # Test
     parser.add_argument("--val-interval", default=10)
 

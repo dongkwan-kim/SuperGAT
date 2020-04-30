@@ -19,8 +19,9 @@ from sklearn.metrics import f1_score
 from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
 from model import SuperGATNet, LargeSuperGATNet, ResSuperGATNet
+from model_baseline import LinkGNN, CGATNet
 from layer import SuperGAT
-from model_baseline import LinkGNN
+from layer_cgat import CGATConv
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
 
 
@@ -122,6 +123,23 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
                 edge_sampling_ratio=_args.edge_sampling_ratio,
                 criterion=None,
                 pretraining_epoch=_args.total_pretraining_epoch,
+            )
+
+        if _args.is_cgat:
+            masked_y = batch.y.clone()
+            masked_y[~batch.train_mask] = -1
+            loss = CGATConv.mix_regularization_loss(
+                loss=loss,
+                model=model,
+                masked_y=masked_y,
+                graph_lambda=_args.graph_lambda,
+                boundary_lambda=_args.boundary_lambda,
+            )
+        elif _args.is_cgat_ssnc:
+            loss = CGATConv.mix_regularization_loss_for_ssnc(
+                loss=loss,
+                model=model,
+                graph_lambda=_args.graph_lambda,
             )
 
         loss.backward()
@@ -226,6 +244,8 @@ def _get_model_cls(model_name: str):
         return LinkGNN
     elif model_name == "LargeGAT":
         return LargeSuperGATNet
+    elif model_name == "CGAT":
+        return CGATNet
     else:
         raise ValueError
 
@@ -410,10 +430,10 @@ if __name__ == '__main__':
     num_total_runs = 7
 
     main_args = get_args(
-        model_name="GAT",  # GAT, LargeGAT, GCN
+        model_name="CGAT",  # GAT, CGAT, LargeGAT, GCN
         dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
         dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
-        custom_key="EV13NSO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
+        custom_key="SKO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
     pprint_args(main_args)
 
