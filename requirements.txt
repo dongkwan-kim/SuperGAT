@@ -37,8 +37,10 @@ six==1.14.0
 soupsieve==2.0
 termcolor==1.1.0
 torch==1.4.0+cu100
-torch-geometric==1.4.2
+torch-cluster==1.5.4
+torch-geometric==1.4.3
 torch-scatter==2.0.4
-torch-sparse==0.6.0
+torch-sparse==0.6.1
+torch-spline-conv==1.2.0
 tqdm==4.43.0
 urllib3==1.25.8
