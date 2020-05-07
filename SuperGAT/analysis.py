@@ -656,7 +656,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "visualize_attention_heatmap_for_multiple_models"
+    MODE = "attention_metric_for_multiple_models"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":
@@ -693,7 +693,7 @@ if __name__ == '__main__':
 
         sns.set_context("poster", font_scale=1.25)
 
-        is_super_gat = True  # False
+        is_super_gat = False  # False
 
         main_kwargs["model_name"] = "GAT"  # GAT, LargeGAT
         main_kwargs["dataset_name"] = "PubMed"  # Cora, CiteSeer, PubMed
@@ -701,7 +701,7 @@ if __name__ == '__main__':
         main_num_layers = 4  # Only for LargeGAT 3, 4
 
         if not is_super_gat:
-            main_name_prefix_list = ["GO", "DP"]
+            main_name_prefix_list = ["GO", "DP", "SDP"]
             unit_width = 3
         else:
             main_name_prefix_list = ["SG"]
@@ -715,9 +715,9 @@ if __name__ == '__main__':
 
         elif main_kwargs["model_name"] == "GAT":
             if main_kwargs["dataset_name"] != "PubMed":
-                main_custom_key_list = ["NEO8-ES-ATT", "NEDPO8-ES-ATT"]
+                main_custom_key_list = ["NEO8-ES-ATT", "NEDPO8-ES-ATT", "NESDPO8-ES-ATT"]
             else:
-                main_custom_key_list = ["NE-500-ES-ATT", "NEDP-500-ES-ATT"]
+                main_custom_key_list = ["NE-500-ES-ATT", "NEDP-500-ES-ATT", "NESDP-500-ES-ATT"]
         elif main_kwargs["model_name"] == "LargeGAT":
             if main_kwargs["dataset_name"] != "PubMed":
                 main_custom_key_list = ["NEO8-L{}-ES-ATT".format(main_num_layers),
