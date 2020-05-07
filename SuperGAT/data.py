@@ -405,6 +405,11 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
+    elif dataset_class == "CitationFull":
+        kwargs["name"] = kwargs["name"].lower()
+        dataset = dataset_cls(root=root, **kwargs)
+        raise NotImplementedError  # todo train-val-test split
+
     elif dataset_class in ["HomophilySynthetic",
                            "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"]:
         dataset = dataset_cls(root=root, **kwargs)
@@ -477,6 +482,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    _test_data("CitationFull", "Cora", '~/graph-data')
+    _test_data("CitationFull", "CiteSeer", '~/graph-data')
 
     # WebKB Four University
     _test_data("WebKB4Univ", "WebKB4Univ", '~/graph-data')
