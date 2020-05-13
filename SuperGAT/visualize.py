@@ -29,7 +29,7 @@ def _get_key_and_makedirs(args=None, no_args_key=None, base_path="./", exist_ok=
 def plot_line_with_std(tuple_to_mean_list, tuple_to_std_list, x_label, y_label, name_label_list, x_list,
                        hue=None, size=None, style=None, col=None, order=None,
                        markers=True, dashes=False, n=150,
-                       x_lim=None, y_lim=None,
+                       x_lim=None, y_lim=None, err_style="band",
                        args=None, custom_key="", extension="png"):
     pd_data = {x_label: [], y_label: [], **{name_label: [] for name_label in name_label_list}}
     for name_tuple, mean_list in tuple_to_mean_list.items():
@@ -47,7 +47,7 @@ def plot_line_with_std(tuple_to_mean_list, tuple_to_std_list, x_label, y_label, 
 
     plot = sns.relplot(x=x_label, y=y_label, kind="line",
                        col=col, hue=hue, style=style, markers=markers, dashes=dashes,
-                       legend="full", hue_order=order, ci="sd", # err_style="bars",
+                       legend="full", hue_order=order, ci="sd", err_style=err_style,
                        data=df)
     plot.set(xlim=x_lim)
     plot.set(ylim=y_lim)
