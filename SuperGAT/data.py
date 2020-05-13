@@ -6,7 +6,7 @@ from torch_geometric.datasets import *
 from torch_geometric.data import DataLoader, InMemoryDataset, Data
 from torch_geometric.nn.models import GAE
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
-    add_self_loops, negative_sampling
+    add_self_loops, negative_sampling, train_test_split_edges
 import numpy as np
 
 import os
@@ -124,6 +124,15 @@ def get_uniform_dist_like(dist_list: List[torch.Tensor]) -> List[torch.Tensor]:
     return uniform_dist_list  # [N, #neighbors]
 
 
+class FullPlanetoid(Planetoid):
+
+    def __init__(self, root, name):
+        super().__init__(root, name)
+        self.data.train_mask[:] = True
+        self.data.train_mask[self.data.test_mask] = False
+        self.data.train_mask[self.data.test_mask] = False
+
+
 class ADPlanetoid(Planetoid):
 
     def __init__(self, root, name):
@@ -145,7 +154,6 @@ class LinkPlanetoid(Planetoid):
         super().__init__(root, name)
         self.train_val_test_ratio = train_val_test_ratio or (0.9, 0.0, 0.1)
         self.seed = seed
-        self.data_spliter = GAE(None)
 
         tpei, vei, tei = self.train_val_test_split()
         self.train_pos_edge_index = tpei  # undirected [2, E * 0.85]
@@ -170,7 +178,7 @@ class LinkPlanetoid(Planetoid):
         # train_pos_edge_index=[2, E * 0.85] (undirected)
         # val_neg/pos_edge_index=[2, E/2 * 0.05] (not undirected)
         # test_neg/pos_edge_index: [2, E/2 * 0.1] (not undirected)
-        data = self.data_spliter.split_edges(data, *self.train_val_test_ratio[1:])
+        data = train_test_split_edges(data, *self.train_val_test_ratio[1:])
         data.__delattr__("train_neg_adj_mask")
 
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
@@ -247,7 +255,6 @@ class LinkRandomPartitionGraph(RandomPartitionGraph):
         super().__init__(root, name)
         self.train_val_test_ratio = train_val_test_ratio or (0.9, 0.0, 0.1)
         self.seed = seed
-        self.data_spliter = GAE(None)
 
         tpei, vei, tei = self.train_val_test_split()
         self.train_pos_edge_index = tpei  # undirected [2, E * 0.85]
@@ -272,7 +279,7 @@ class LinkRandomPartitionGraph(RandomPartitionGraph):
         # train_pos_edge_index=[2, E * 0.85] (undirected)
         # val_neg/pos_edge_index=[2, E/2 * 0.05] (not undirected)
         # test_neg/pos_edge_index: [2, E/2 * 0.1] (not undirected)
-        data = self.data_spliter.split_edges(data, *self.train_val_test_ratio[1:])
+        data = train_test_split_edges(data, *self.train_val_test_ratio[1:])
         data.__delattr__("train_neg_adj_mask")
 
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
@@ -343,7 +350,7 @@ def get_dataset_class_name(dataset_name: str) -> str:
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in (pyg.datasets.__all__ +
                              ["ENSPlanetoid"] +
-                             ["LinkPlanetoid", "ADPlanetoid", "HomophilySynthetic"] +
+                             ["LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic"] +
                              ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
                              ["WebKB4Univ"])
     return eval(dataset_class)
@@ -401,7 +408,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         return train_loader, val_loader, test_loader
 
     # Node or Link (One graph with given mask)
-    elif dataset_class in ["Planetoid", "LinkPlanetoid", "ADPlanetoid", "ENSPlanetoid"]:
+    elif dataset_class.endswith("Planetoid"):  # "Planetoid", "LinkPlanetoid", "ADPlanetoid", "ENSPlanetoid", ...
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
@@ -483,6 +490,10 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 if __name__ == '__main__':
 
+    _test_data("FullPlanetoid", "Cora", '~/graph-data')
+    _test_data("FullPlanetoid", "CiteSeer", '~/graph-data')
+    _test_data("FullPlanetoid", "PubMed", '~/graph-data')
+
     _test_data("CitationFull", "Cora", '~/graph-data')
     _test_data("CitationFull", "CiteSeer", '~/graph-data')
 
@@ -494,6 +505,11 @@ if __name__ == '__main__':
     _test_data("ENSPlanetoid", "CiteSeer", '~/graph-data', neg_sample_ratio=0.5)
     _test_data("ENSPlanetoid", "PubMed", '~/graph-data', neg_sample_ratio=0.5)
 
+    # RandomPartitionGraph
+    for d in [0.01, 0.025, 0.04]:
+        for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
+            _test_data("RandomPartitionGraph", "rpg-10-500-{}-{}".format(h, d), "~/graph-data")
+
     # ADRandomPartitionGraph
     for d in [0.01, 0.025, 0.04]:
         for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
@@ -503,11 +519,6 @@ if __name__ == '__main__':
     for d in [0.01, 0.025, 0.04]:
         for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
             _test_data("LinkRandomPartitionGraph", "rpg-10-500-{}-{}".format(h, d), "~/graph-data")
-
-    # RandomPartitionGraph
-    for d in [0.01, 0.025, 0.04]:
-        for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
-            _test_data("RandomPartitionGraph", "rpg-10-500-{}-{}".format(h, d), "~/graph-data")
 
     # Link Prediction
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
