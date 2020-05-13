@@ -45,10 +45,18 @@ class RandomPartitionGraph(InMemoryDataset):
         return p_out
 
     @property
+    def raw_dir(self):
+        return os.path.join(self.root, "RandomPartitionGraph", self.name, 'raw')
+
+    @property
+    def processed_dir(self):
+        return os.path.join(self.root, "RandomPartitionGraph", self.name, 'processed')
+
+    @property
     def raw_file_names(self):
-        return ["rpg.{}.graph".format(self.name),
-                "rpg.{}.allx.npy".format(self.name),
-                "rpg.{}.ally.npy".format(self.name)]
+        return ["{}.graph".format(self.name),
+                "{}.allx.npy".format(self.name),
+                "{}.ally.npy".format(self.name)]
 
     @property
     def processed_file_names(self):
@@ -60,22 +68,22 @@ class RandomPartitionGraph(InMemoryDataset):
 
         sizes = [self.nodes_per_class for _ in range(self.n_classes)]
         G = nx.random_partition_graph(sizes, self.p_in, self.p_out, directed=False)
-        y = [G.node[n]["block"] for n in range(len(G.nodes))]
+        y = [G._node[n]["block"] for n in range(len(G.nodes))]
         y_dict = {n: G._node[n]["block"] for n in range(len(G.nodes))}
         nx.set_node_attributes(G, y_dict, "y")
         for n in range(len(G.nodes)):
-            del G.node[n]["block"]
+            del G._node[n]["block"]
 
         adj_dict = {u: list(v_dict.keys()) for u, v_dict in G.adj.items()}
-        pickle.dump(adj_dict, open(os.path.join(self.root, self.raw_file_names[0]), "wb"))
+        pickle.dump(adj_dict, open(self.raw_paths[0], "wb"))
 
         y_one_hot = np.eye(self.n_classes)[y]
-        np.save(os.path.join(self.root, self.raw_file_names[2]), y_one_hot)
+        np.save(self.raw_paths[2], y_one_hot)
 
-        make_x(path=self.root, name="rpg.{}".format(self.name), y_one_hot=y_one_hot, save=True)
+        make_x(path=self.raw_dir, name=self.name, y_one_hot=y_one_hot, save=True)
 
     def process(self):
-        graph_path, x_path, y_path = [os.path.join(self.root, rf) for rf in self.raw_file_names]
+        graph_path, x_path, y_path = self.raw_paths
         graph = _unpickle(graph_path)  # node to neighbors: Dict[int, List[int]]
         x = np.load(x_path)  # ndarray the shape of which is [N, 2]
         x = (x - x.mean()) / x.std()
