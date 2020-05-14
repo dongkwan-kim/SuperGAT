@@ -3,6 +3,7 @@ from collections import defaultdict, OrderedDict
 from pprint import pprint
 from typing import List, Dict, Tuple
 from datetime import datetime
+from itertools import chain
 import os
 from tqdm import tqdm
 
@@ -36,32 +37,48 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarr
     :return: np.ndarray the shape of which is [N, 2] (degree, homophily) for Ns
     """
 
-    def get_h(agr_dist):
-        agr_dist = agr_dist.cpu().numpy()
-        agr_counts = (agr_dist == np.max(agr_dist)).sum()
-        return agr_counts / len(agr_dist)
+    def get_h(agr_dist, agr_sum, n_labels=1):
+        num_neighbors = len(agr_dist)
+        if np.max(agr_sum) > 0:
+            return agr_sum / (num_neighbors * n_labels)
+        else:
+            return 0
 
     train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42)
-    data = train_d[0]
-
-    x, y, edge_index = data.x, data.y, data.edge_index
+    if dataset_name != "PPI":
+        data = train_d[0]
+        x, y, edge_index = data.x, data.y, data.edge_index
+        num_labels = 1
+    else:
+        x_list, y_list, edge_index_list = [], [], []
+        for _data in chain(train_d, val_d, test_d):
+            x_list.append(_data.x)
+            y_list.append(_data.y)
+            edge_index_list.append(_data.edge_index)
+        x = torch.cat(x_list, dim=0)
+        y = torch.cat(y_list, dim=0)
+        edge_index = torch.cat(edge_index_list, dim=1)
+        num_labels = y.size(1)
 
     deg = degree(edge_index[0])
-    agr = get_agreement_dist(edge_index, y, with_self_loops=False, epsilon=0)
-
+    agr_list, agr_sum_list = get_agreement_dist(edge_index, y,
+                                                with_self_loops=False, epsilon=0, return_agree_dist_sum=True)
     degree_and_homophily = []
-    for i, (d, a) in enumerate(zip(deg, agr)):
-        if len(a) == 0:
+    for i, (d, _a, _as) in enumerate(zip(deg, agr_list, agr_sum_list)):
+        if len(_a) == 0:
             assert d == 0
             degree_and_homophily.append([d, 1])
         else:
-            h = get_h(a)
-            degree_and_homophily.append([d, h])
+            _h = get_h(_a, _as, n_labels=num_labels)
+            degree_and_homophily.append([d, _h])
     return np.asarray(degree_and_homophily)
 
 
 def analyze_degree_and_homophily(extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
+
+    degree_and_homophily = get_degree_and_homophily("PPI", "PPI", data_root="~/graph-data")
+    dn_to_dg_and_h["PPI"] = degree_and_homophily
 
     for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
         degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
@@ -656,7 +673,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "attention_metric_for_multiple_models"
+    MODE = "degree_and_homophily"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":

@@ -13,6 +13,8 @@ import os
 from pprint import pprint
 from typing import Tuple, Callable, List
 
+from tqdm import tqdm
+
 from data_syn import RandomPartitionGraph
 from webkb4univ import WebKB4Univ
 from utils import negative_sampling_numpy
@@ -84,11 +86,13 @@ class ENSPlanetoid(Planetoid):
 
 
 def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
-                       with_self_loops=True, epsilon=1e-11) -> List[torch.Tensor]:
+                       with_self_loops=True, return_agree_dist_sum=False,
+                       epsilon=1e-11) -> List[torch.Tensor]:
     """
     :param edge_index: tensor the shape of which is [2, E]
     :param y: tensor the shape of which is [N]
     :param with_self_loops: add_self_loops if True
+    :param return_agree_dist_sum: whether return the sum of agreement dist
     :param epsilon: small float number for stability.
     :return: Tensor list L the length of which is N.
         L[i] = tensor([..., a(y_j, y_i), ...]) for e_{ji} \in {E}
@@ -104,15 +108,30 @@ def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
     edge_index, _ = sort_edge_index(edge_index, num_nodes=num_nodes)
 
     agree_dist_list = []
-    for node_idx, label in enumerate(y):
+    agree_dist_sum_list = []
+    for node_idx, label in enumerate(tqdm(y)):
         neighbors, _ = edge_index[:, edge_index[1] == node_idx]
         y_neighbors = y[neighbors]
-        agree_dist = (y_neighbors == label).float()
-        agree_dist[agree_dist == 0] = epsilon  # For KLD
-        agree_dist = agree_dist / agree_dist.sum()
+        if len(label.size()) == 0:
+            agree_dist = (y_neighbors == label).float()
+        else:  # multi-label case
+            agree_dist = (y_neighbors * label).float().sum(dim=1)
+
+        if return_agree_dist_sum:
+            agree_dist_sum_list.append(agree_dist.sum().item())
+
+        if int(agree_dist.sum()) != 0:
+            agree_dist[agree_dist == 0] = epsilon  # For KLD
+            agree_dist = agree_dist / agree_dist.sum()
+        else:
+            agree_dist[:] = epsilon
+
         agree_dist_list.append(agree_dist)
 
-    return agree_dist_list  # [N, #neighbors]
+    if not return_agree_dist_sum:
+        return agree_dist_list  # [N, #neighbors]
+    else:
+        return agree_dist_list, agree_dist_sum_list  # [N, #neighbors], [N]
 
 
 def get_uniform_dist_like(dist_list: List[torch.Tensor]) -> List[torch.Tensor]:
