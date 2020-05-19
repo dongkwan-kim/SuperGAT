@@ -172,7 +172,10 @@ class CGATConv(MessagePassing):
 
         # Get top k attention coefficients only.
         if self.use_topk_softmax:
-            alpha = topk_softmax(alpha, edge_index_i, self.aggr_k, size_i)
+            if self.training:
+                alpha = topk_softmax(alpha, edge_index_i, self.aggr_k, size_i)
+            else:
+                alpha = softmax(alpha, edge_index_i, size_i)
         else:
             alpha = softmax(alpha, edge_index_i, size_i)
             alpha = F.dropout(alpha, p=self.dropout, training=self.training)
