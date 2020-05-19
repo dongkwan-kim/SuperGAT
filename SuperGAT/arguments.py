@@ -49,6 +49,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--l1-lambda", default=0., type=float)
     parser.add_argument("--l2-lambda", default=0., type=float)
     parser.add_argument("--num-layers", default=2, type=int)
+    parser.add_argument("--perf-task-for-val", default="Node", type=str)  # Node or Link
 
     # Early stop
     parser.add_argument("--use-early-stop", default=False, type=bool)

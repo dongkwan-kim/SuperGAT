@@ -40,6 +40,7 @@ def visualize_perf_against_nsr_or_esr(r_list: List[float],
         if t == "link":
             args.task_type = "Link_Prediction"
             args.dataset_class = "Link" + args.dataset_class
+            args.perf_task_for_val = "Link"
 
         for ratio in r_list:
 
@@ -56,8 +57,7 @@ def visualize_perf_against_nsr_or_esr(r_list: List[float],
                 cprint("Use GPU the ID of which is {}".format(gpu_id), "yellow")
 
             many_seeds_result = run_with_many_seeds(args, num_total_runs, gpu_id=gpu_id)
-            key = "test_perf_at_best_val" if t == "node" else "link_test_perf_at_best_val"
-            task_to_test_perf_at_best_val_list[t].append(many_seeds_result[key])
+            task_to_test_perf_at_best_val_list[t].append(many_seeds_result["test_perf_at_best_val"])
 
     tuple_to_mean_list = defaultdict(list)
     tuple_to_std_list = defaultdict(list)
@@ -105,6 +105,7 @@ def visualize_perf_against_att_lambda(att_lambda_list: List[float],
         if t == "link":
             args.task_type = "Link_Prediction"
             args.dataset_class = "Link" + args.dataset_class
+            args.perf_task_for_val = "Link"
 
         for att_lambda in att_lambda_list:
 
@@ -116,8 +117,7 @@ def visualize_perf_against_att_lambda(att_lambda_list: List[float],
                 cprint("Use GPU the ID of which is {}".format(gpu_id), "yellow")
 
             many_seeds_result = run_with_many_seeds(args, num_total_runs, gpu_id=gpu_id)
-            key = "test_perf_at_best_val" if t == "node" else "link_test_perf_at_best_val"
-            task_to_test_perf_at_best_val_list[t].append(many_seeds_result[key])
+            task_to_test_perf_at_best_val_list[t].append(many_seeds_result["test_perf_at_best_val"])
 
     tuple_to_mean_list = defaultdict(list)
     tuple_to_std_list = defaultdict(list)
@@ -169,9 +169,9 @@ if __name__ == '__main__':
         main_args = get_args(**main_kwargs)
         pprint_args(main_args)
         visualize_perf_against_att_lambda(
-            att_lambda_list=[1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2],
+            att_lambda_list=[1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
             args=main_args,
-            num_total_runs=5,
+            num_total_runs=10,
         )
 
     elif MODE == "visualize_perf_against_nsr_or_esr":
