@@ -195,8 +195,10 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     if _args.task_type == "Link_Prediction":
         if "run_link_prediction" in kwargs and kwargs["run_link_prediction"]:
             val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
+            layer_idx_for_lp = kwargs["layer_idx_for_link_prediction"] \
+                if "layer_idx_for_link_prediction" in kwargs else -1
             perfs = SuperGAT.get_link_pred_perfs_by_attention(model=model, edge_y=val_or_test_edge_y,
-                                                              layer_idx=kwargs["layer_idx_for_link_prediction"])
+                                                              layer_idx=layer_idx_for_lp)
         else:
             perfs = get_accuracy(outputs_total, ys_total)
     elif _args.perf_type == "micro-f1" and _args.dataset_name == "PPI":
@@ -295,6 +297,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
 
     ret = {}
     val_perf_list, test_perf_list, val_loss_list = [], [], []
+    perf_task_for_val = getattr(args, "perf_task_for_val", "Node")
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
         train_loss = train_model(running_device, net, train_d, loss_func, adam_optim, epoch=epoch, _args=args)
@@ -306,9 +309,11 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
         if epoch % args.val_interval == 0:
 
             val_perf, val_loss = test_model(running_device, net, val_d or train_d, loss_func,
-                                            _args=args, val_or_test="val", verbose=args.verbose)
+                                            _args=args, val_or_test="val", verbose=args.verbose,
+                                            run_link_prediction=(perf_task_for_val == "Link"))
             test_perf, test_loss = test_model(running_device, net, test_d or train_d, loss_func,
-                                              _args=args, val_or_test="test", verbose=0)
+                                              _args=args, val_or_test="test", verbose=0,
+                                              run_link_prediction=(perf_task_for_val == "Link"))
             if args.save_plot:
                 val_perf_list.append(val_perf)
                 test_perf_list.append(test_perf)
@@ -329,7 +334,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
                 if args.task_type == "Link_Prediction":
                     link_test_perf, _ = test_model(running_device, net, test_d or train_d, loss_func,
                                                    _args=args, val_or_test="test", verbose=0,
-                                                   run_link_prediction=True, layer_idx_for_link_prediction=-1)
+                                                   run_link_prediction=True)
                     link_test_perf_at_best_val = link_test_perf
 
                 if args.save_model:
@@ -430,10 +435,10 @@ if __name__ == '__main__':
     num_total_runs = 7
 
     main_args = get_args(
-        model_name="CGAT",  # GAT, CGAT, LargeGAT, GCN
+        model_name="GAT",  # GAT, CGAT, LargeGAT, GCN
         dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
         dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
-        custom_key="SKO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
+        custom_key="NEO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
     pprint_args(main_args)
 
@@ -450,6 +455,5 @@ if __name__ == '__main__':
     many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
 
     pprint_args(main_args)
-    summary_results(many_seeds_result, keys_to_print=["best_test_perf", "best_val_perf",
-                                                      "test_perf_at_best_val", "best_test_perf_at_best_val"])
+    summary_results(many_seeds_result)
     cprint("Time for runs (s): {}".format(time.perf_counter() - t0))
