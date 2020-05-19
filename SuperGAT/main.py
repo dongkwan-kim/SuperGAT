@@ -125,9 +125,12 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
                 pretraining_epoch=_args.total_pretraining_epoch,
             )
 
-        if _args.is_cgat:
+        if _args.is_cgat_full:
             masked_y = batch.y.clone()
-            masked_y[~batch.train_mask] = -1
+            try:
+                masked_y[~batch.train_mask] = -1
+            except Exception as e:
+                cprint(e, "red")
             loss = CGATConv.mix_regularization_loss(
                 loss=loss,
                 model=model,
@@ -436,9 +439,9 @@ if __name__ == '__main__':
 
     main_args = get_args(
         model_name="GAT",  # GAT, CGAT, LargeGAT, GCN
-        dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
+        dataset_class="FullPlanetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, FullPlanetoid, RandomPartitionGraph
         dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
-        custom_key="NEO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
+        custom_key="EV20NSO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
     pprint_args(main_args)
 
