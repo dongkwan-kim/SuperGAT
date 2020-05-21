@@ -171,7 +171,7 @@ class LinkPlanetoid(Planetoid):
 
     def __init__(self, root, name, train_val_test_ratio=None, seed=42):
         super().__init__(root, name)
-        self.train_val_test_ratio = train_val_test_ratio or (0.9, 0.0, 0.1)
+        self.train_val_test_ratio = train_val_test_ratio or (1.0 - 0.15, 0.05, 0.1)
         self.seed = seed
 
         tpei, vei, tei = self.train_val_test_split()
@@ -272,7 +272,7 @@ class LinkRandomPartitionGraph(RandomPartitionGraph):
 
     def __init__(self, root, name, train_val_test_ratio=None, seed=42):
         super().__init__(root, name)
-        self.train_val_test_ratio = train_val_test_ratio or (0.9, 0.0, 0.1)
+        self.train_val_test_ratio = train_val_test_ratio or (1.0 - 0.15, 0.05, 0.1)
         self.seed = seed
 
         tpei, vei, tei = self.train_val_test_split()
