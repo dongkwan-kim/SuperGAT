@@ -132,7 +132,7 @@ def visualize_perf_against_att_lambda(att_lambda_list: List[float],
         tuple_to_mean_list=tuple_to_mean_list,
         tuple_to_std_list=tuple_to_std_list,
         x_label="Mixing Coefficient (Log)",
-        y_label="Test Perf. (Acc., AUC)",
+        y_label="Test Perf. ({}., AUC)".format("Acc" if args.dataset_name != "PPI" else "F1"),
         name_label_list=["Task"],
         x_list=[float(np.log10(al)) for al in att_lambda_list],
         hue="Task",
@@ -162,17 +162,25 @@ if __name__ == '__main__':
 
         main_kwargs = {
             "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
-            "dataset_class": "Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
-            "dataset_name": "Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.9-0.025
-            "custom_key": "NEDPO8-ES",  # NE, EV1, EV2
+            "dataset_class": "PPI",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
+            "dataset_name": "PPI",  # Cora, CiteSeer, PubMed, rpg-10-500-0.9-0.025
+            "custom_key": "EV2O8-ES",  # NE, EV1, EV2
         }
         main_args = get_args(**main_kwargs)
         pprint_args(main_args)
-        visualize_perf_against_att_lambda(
-            att_lambda_list=[1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
-            args=main_args,
-            num_total_runs=10,
-        )
+
+        if main_kwargs["dataset_name"] != "PPI":
+            visualize_perf_against_att_lambda(
+                att_lambda_list=[1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
+                args=main_args,
+                num_total_runs=10,
+            )
+        else:
+            visualize_perf_against_att_lambda(
+                att_lambda_list=[1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
+                args=main_args,
+                num_total_runs=5,
+            )
 
     elif MODE == "visualize_perf_against_nsr_or_esr":
 

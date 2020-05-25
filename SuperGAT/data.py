@@ -167,6 +167,88 @@ class ADPlanetoid(Planetoid):
         return datum
 
 
+class LinkPPI(PPI):
+
+    def __init__(self, root, split, train_val_test_ratio=None, seed=42):
+        super().__init__(root, split)
+        self.split = split
+        self.train_val_test_ratio = train_val_test_ratio or (1.0 - 0.15, 0.05, 0.1)
+        self.seed = seed
+
+        if split == 'train':
+            data_list = []
+            for g in tqdm(self):
+                train_e, _ = self.train_test_split(g.x, g.edge_index, 1 - self.train_val_test_ratio[0])
+                g.edge_index = train_e
+                data_list.append(g)
+            self.data, self.slices = self.collate(data_list)
+
+        elif split == 'val':
+            val_ratio = self.train_val_test_ratio[1]
+            data_list = []
+            val_edge_index_list = []
+            for g in self:
+                train_e, val_e = self.train_test_split(g.x, g.edge_index, val_ratio)
+                g.edge_index = train_e
+                data_list.append(g)
+                val_edge_index_list.append(val_e)
+            self.val_edge_index_list = val_edge_index_list
+            self.val_edge_y_list = [self.get_edge_y(vei.size(1)) for vei in val_edge_index_list]
+
+        elif split == 'test':
+            test_ratio = self.train_val_test_ratio[2]
+            data_list = []
+            test_edge_index_list = []
+            for g in self:
+                train_e, test_e = self.train_test_split(g.x, g.edge_index, test_ratio)
+                g.edge_index = train_e
+                data_list.append(g)
+                test_edge_index_list.append(test_e)
+            self.test_edge_index_list = test_edge_index_list
+            self.test_edge_y_list = [self.get_edge_y(vei.size(1)) for vei in test_edge_index_list]
+
+    def train_test_split(self, x, edge_index, ratio):
+        edge_index, _ = remove_self_loops(edge_index)
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+
+        data = deepcopy(self.data)
+        data.edge_index = edge_index
+        data.x = x
+
+        data = train_test_split_edges(data, 0, ratio)
+        data.__delattr__("train_neg_adj_mask")
+
+        test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
+                                    to_undirected(data.test_neg_edge_index)], dim=1)
+
+        return data.train_pos_edge_index, test_edge_index
+
+    @staticmethod
+    def get_edge_y(num_edges, pos_num_or_ratio=0.5, device=None):
+        num_pos = pos_num_or_ratio if isinstance(pos_num_or_ratio, int) else int(pos_num_or_ratio * num_edges)
+        y = torch.zeros(num_edges).float()
+        y[:num_pos] = 1.
+        y = y if device is None else y.to(device)
+        return y
+
+    def __getitem__(self, item) -> torch.Tensor:
+        """
+        :param item:
+        :return: Draw negative samples, and return [2, E * 0.8 * 2] tensor
+        """
+        datum = super().__getitem__(item)
+        try:
+            if self.split == "val":
+                datum.__setitem__("val_edge_index", self.val_edge_index_list[item])
+                datum.__setitem__("val_edge_y", self.val_edge_y_list[item])
+            elif self.split == "test":
+                datum.__setitem__("test_edge_index", self.test_edge_index_list[item])
+                datum.__setitem__("test_edge_y", self.test_edge_y_list[item])
+        except AttributeError as e:
+            print(e)
+        return datum
+
+
 class LinkPlanetoid(Planetoid):
 
     def __init__(self, root, name, train_val_test_ratio=None, seed=42):
@@ -370,6 +452,7 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in (pyg.datasets.__all__ +
                              ["ENSPlanetoid"] +
                              ["LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic"] +
+                             ["LinkPPI"] +
                              ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
                              ["WebKB4Univ"])
     return eval(dataset_class)
@@ -405,7 +488,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     :param kwargs:
     :return:
     """
-    if dataset_class not in ["PPI", "WebKB4Univ"]:
+    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI"]:
         kwargs["name"] = dataset_name
 
     torch.manual_seed(seed)
@@ -441,12 +524,12 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
-    elif dataset_class in ["PPI"]:  # Node (Multiple graphs)
-        train_dataset = dataset_cls(root=root, split='train', **kwargs)
+    elif dataset_class in ["PPI", "LinkPPI"]:  # Node (Multiple graphs)
         val_dataset = dataset_cls(root=root, split='val', **kwargs)
+        val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
+        train_dataset = dataset_cls(root=root, split='train', **kwargs)
         test_dataset = dataset_cls(root=root, split='test', **kwargs)
         train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
         return train_loader, val_loader, test_loader
 
@@ -508,6 +591,10 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    _test_data("LinkPlanetoid", "Cora", "~/graph-data")
+    _test_data("LinkPPI", "LinkPPI", '~/graph-data')
+    exit()
 
     _test_data("FullPlanetoid", "Cora", '~/graph-data')
     _test_data("FullPlanetoid", "CiteSeer", '~/graph-data')
