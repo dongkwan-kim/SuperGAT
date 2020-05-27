@@ -33,6 +33,10 @@ def negative_sampling_numpy(edge_index_numpy: np.ndarray, num_nodes=None, num_ne
     return np.stack([row, col], axis=0)
 
 
+def s_join(concat, lst):
+    return concat.join([str(e) for e in lst])
+
+
 def sigmoid(x):
     return float(np_sigmoid(x))
 
