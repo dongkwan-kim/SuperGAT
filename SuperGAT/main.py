@@ -405,6 +405,14 @@ def run_with_many_seeds(args, num_seeds, gpu_id=None, **kwargs):
     return results
 
 
+def run_with_many_seeds_with_gpu(args, num_seeds, **kwargs):
+    gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total)
+                                    if g not in args.black_list], 1))][0]
+    if args.verbose >= 1:
+        cprint("Use GPU the ID of which is {}".format(gpu_id), "yellow")
+    return run_with_many_seeds(args, num_seeds, gpu_id=gpu_id, **kwargs)
+
+
 def summary_results(results_dict: Dict[str, list or float], num_digits=3, keys_to_print=None):
     line_list = []
 
