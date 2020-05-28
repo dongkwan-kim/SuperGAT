@@ -594,7 +594,6 @@ if __name__ == '__main__':
 
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
     _test_data("LinkPPI", "LinkPPI", '~/graph-data')
-    exit()
 
     _test_data("FullPlanetoid", "Cora", '~/graph-data')
     _test_data("FullPlanetoid", "CiteSeer", '~/graph-data')
@@ -611,20 +610,17 @@ if __name__ == '__main__':
     _test_data("ENSPlanetoid", "CiteSeer", '~/graph-data', neg_sample_ratio=0.5)
     _test_data("ENSPlanetoid", "PubMed", '~/graph-data', neg_sample_ratio=0.5)
 
-    # RandomPartitionGraph
-    for d in [0.01, 0.025, 0.04]:
+    num_nodes_per_class = 500
+    for d in [2.5, 5.0, 50.0, 100.0]:
         for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
-            _test_data("RandomPartitionGraph", "rpg-10-500-{}-{}".format(h, d), "~/graph-data")
-
-    # ADRandomPartitionGraph
-    for d in [0.01, 0.025, 0.04]:
-        for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
-            _test_data("ADRandomPartitionGraph", "rpg-10-500-{}-{}".format(h, d), "~/graph-data")
-
-    # LinkRandomPartitionGraph
-    for d in [0.01, 0.025, 0.04]:
-        for h in [0.1, 0.3, 0.5, 0.7, 0.9]:
-            _test_data("LinkRandomPartitionGraph", "rpg-10-500-{}-{}".format(h, d), "~/graph-data")
+            avg_degree_ratio = d / num_nodes_per_class
+            rpg_name = "rpg-10-{}-{}-{}".format(num_nodes_per_class, h, avg_degree_ratio)
+            # RandomPartitionGraph
+            _test_data("RandomPartitionGraph", rpg_name, "~/graph-data")
+            # ADRandomPartitionGraph
+            _test_data("ADRandomPartitionGraph", rpg_name, "~/graph-data")
+            # LinkRandomPartitionGraph
+            _test_data("LinkRandomPartitionGraph", rpg_name, "~/graph-data")
 
     # Link Prediction
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")

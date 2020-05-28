@@ -17,6 +17,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser = argparse.ArgumentParser(description='Parser for Supervised Graph Attention Networks')
 
     # Basics
+    parser.add_argument("--m", default="", type=str, help="Memo")
     parser.add_argument("--num-gpus-total", default=0, type=int)
     parser.add_argument("--num-gpus-to-use", default=0, type=int)
     parser.add_argument("--black-list", default=None, type=int, nargs="+")

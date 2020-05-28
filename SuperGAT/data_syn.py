@@ -45,6 +45,10 @@ class RandomPartitionGraph(InMemoryDataset):
         return p_out
 
     @property
+    def degree(self):
+        return self.avg_degree_ratio * self.nodes_per_class
+
+    @property
     def raw_dir(self):
         return os.path.join(self.root, "RandomPartitionGraph", self.name, 'raw')
 
@@ -106,7 +110,7 @@ class RandomPartitionGraph(InMemoryDataset):
     def _get_split_mask(self, y):
 
         def _mask0(sz):
-            return torch.zeros(sz, dtype=torch.uint8)
+            return torch.zeros(sz, dtype=torch.bool)
 
         def _fill_mask(index, mask0):
             index = torch.Tensor(index).long()
@@ -181,6 +185,8 @@ if __name__ == '__main__':
     MODE = "RPG"
     for p_in_ratio in [0.9, 0.7, 0.5, 0.3, 0.1]:
         rpg = RandomPartitionGraph(root="~/graph-data",
-                                   name="rpg-10-500-{}-0.025".format(p_in_ratio))
+                                   name="rpg-10-500-{}-0.005".format(p_in_ratio))
+        print(rpg.degree)
         for b in rpg:
             print(b)
+        print("---")
