@@ -14,13 +14,17 @@ except ImportError:
     pass
 
 
-def _get_key(args, no_args_key=None):
-    return "{}-{}-{}".format(args.model_name, args.dataset_name, args.custom_key) if args is not None \
+def _get_key(args, no_args_key=None, args_prefix=None):
+    _k = "{}-{}-{}".format(args.model_name, args.dataset_name, args.custom_key) if args is not None \
         else (no_args_key or "raw")
+    if args_prefix:
+        _k = "{}-{}".format(args_prefix, _k)
+    return _k
 
 
-def _get_key_and_makedirs(args=None, no_args_key=None, base_path="./", exist_ok=True, **kwargs) -> Tuple[str, str]:
-    _key = _get_key(args, no_args_key)
+def _get_key_and_makedirs(args=None, no_args_key=None, base_path="./", args_prefix=None,
+                          exist_ok=True, **kwargs) -> Tuple[str, str]:
+    _key = _get_key(args, no_args_key, args_prefix)
     _path = os.path.join(base_path, _key)
     os.makedirs(_path, exist_ok=exist_ok, **kwargs)
     return _key, _path
