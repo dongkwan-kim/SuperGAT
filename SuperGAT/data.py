@@ -87,7 +87,7 @@ class ENSPlanetoid(Planetoid):
 
 def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
                        with_self_loops=True, return_agree_dist_sum=False,
-                       epsilon=1e-11) -> List[torch.Tensor]:
+                       epsilon=1e-11) -> List[torch.Tensor] or (List, List):
     """
     :param edge_index: tensor the shape of which is [2, E]
     :param y: tensor the shape of which is [N]
@@ -454,7 +454,7 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
                              ["LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic"] +
                              ["LinkPPI"] +
                              ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
-                             ["WebKB4Univ"])
+                             ["WebKB4Univ"]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
 
