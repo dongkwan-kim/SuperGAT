@@ -96,8 +96,11 @@ def get_entropy_tensor_by_iter(x_list: List[torch.Tensor], is_prob_dist=False) -
     """
     entropy_list = []
     for x in x_list:
-        entropy = get_entropy_tensor(x, is_prob_dist)  # []
-        entropy_list.append(entropy)
+        try:
+            entropy = get_entropy_tensor(x, is_prob_dist)  # []
+            entropy_list.append(entropy)
+        except AssertionError as e:
+            print("Error: get_entropy_tensor_by_iter ({})".format(e))
     entropy_tensor = torch.stack(entropy_list)  # [*]
     return entropy_tensor.to(x_list[0].device)
 

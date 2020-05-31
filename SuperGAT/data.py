@@ -124,7 +124,8 @@ def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
             agree_dist[agree_dist == 0] = epsilon  # For KLD
             agree_dist = agree_dist / agree_dist.sum()
         else:
-            agree_dist[:] = epsilon
+            agree_dist[:] = 1.0
+            agree_dist = agree_dist / agree_dist.sum()
 
         agree_dist_list.append(agree_dist)
 
@@ -164,6 +165,30 @@ class ADPlanetoid(Planetoid):
         datum = super().__getitem__(item)
         datum.__setitem__("agreement_dist", self.agreement_dist)
         datum.__setitem__("uniform_att_dist", self.uniform_att_dist)
+        return datum
+
+
+class ADPPI(PPI):
+
+    def __init__(self, root, split):
+        super().__init__(root, split)
+        self.agreement_dist_list = []
+        self.uniform_att_dist_list = []
+
+        self.initialized = False
+        for data in self:
+            edge_index, y = data.edge_index, data.y
+            agreement_dist = get_agreement_dist(edge_index, y)
+            uniform_att_dist = get_uniform_dist_like(agreement_dist)
+            self.agreement_dist_list.append(agreement_dist)
+            self.uniform_att_dist_list.append(uniform_att_dist)
+        self.initialized = True
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        if self.initialized:
+            datum.__setitem__("agreement_dist", self.agreement_dist_list[item])
+            datum.__setitem__("uniform_att_dist", self.uniform_att_dist_list[item])
         return datum
 
 
@@ -452,7 +477,7 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in (pyg.datasets.__all__ +
                              ["ENSPlanetoid"] +
                              ["LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic"] +
-                             ["LinkPPI"] +
+                             ["LinkPPI", "ADPPI"] +
                              ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
                              ["WebKB4Univ"]), f"{dataset_class} is not good."
     return eval(dataset_class)
@@ -488,7 +513,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     :param kwargs:
     :return:
     """
-    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI"]:
+    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI"]:
         kwargs["name"] = dataset_name
 
     torch.manual_seed(seed)
@@ -524,7 +549,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
-    elif dataset_class in ["PPI", "LinkPPI"]:  # Node (Multiple graphs)
+    elif dataset_class in ["PPI", "LinkPPI", "ADPPI"]:  # Node (Multiple graphs)
         val_dataset = dataset_cls(root=root, split='val', **kwargs)
         val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
         train_dataset = dataset_cls(root=root, split='train', **kwargs)
@@ -591,6 +616,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    _test_data("ADPPI", "ADPPI", '~/graph-data')
+    exit()
 
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
     _test_data("LinkPPI", "LinkPPI", '~/graph-data')
