@@ -106,6 +106,25 @@ def plot_nodes_by_tsne(xs, ys, args=None, extension="png"):
     plt.clf()
 
 
+def plot_scatter(xs, ys, hues, xlabel, ylabel, hue_name, custom_key, extension="pdf"):
+    df = pd.DataFrame({
+        xlabel: xs,
+        ylabel: ys,
+        hue_name: hues,
+    })
+    plot = sns.scatterplot(x=xlabel, y=ylabel, hue=hue_name, data=df,
+                           palette="Set1")
+    plot.set_xlabel(xlabel)
+    plot.set_ylabel(ylabel)
+
+    key, path = _get_key_and_makedirs(no_args_key=custom_key, base_path="../figs")
+    plot_info = "_".join([k for k in [xlabel, ylabel, hue_name] if k])
+    path_and_name = "{}/fig_scatter_{}_{}.{}".format(path, key, plot_info, extension)
+
+    plot.get_figure().savefig(path_and_name, bbox_inches='tight')
+    plt.clf()
+
+
 def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None, extension="png", layout="tsne"):
     _key, path = _get_key_and_makedirs(args, base_path="../figs")
     key = _key if key is None else "{}_{}".format(_key, key)
