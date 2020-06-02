@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
+from torch_geometric.nn import SAGEConv
 
 from torch_geometric.nn.conv import GCNConv, GATConv
 from torch_geometric.utils import remove_self_loops, add_self_loops
@@ -20,6 +21,8 @@ def _get_gn_cls(cls_name: str):
         return GATConv
     elif cls_name == "LinkGCN":
         return GCNConv
+    elif cls_name == "LinkSAGE":
+        return SAGEConv
     else:
         raise ValueError
 
@@ -29,6 +32,8 @@ def _get_gn_kwargs(cls_name: str, args, **kwargs):
         return {"heads": args.heads, "dropout": args.dropout, **kwargs}
     elif cls_name == "LinkGCN":
         return {}
+    elif cls_name == "LinkSAGE":
+        return {}
     else:
         raise ValueError
 
@@ -37,6 +42,8 @@ def _get_last_features(cls_name: str, args):
     if cls_name == "LinkGAT":
         return args.num_hidden_features * args.heads
     elif cls_name == "LinkGCN":
+        return args.num_hidden_features
+    elif cls_name == "LinkSAGE":
         return args.num_hidden_features
     else:
         raise ValueError
@@ -110,10 +117,11 @@ class LinkGNN(nn.Module):
                              concat=False),
         )
 
-        self.r_scaling_11, self.r_bias_11 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
-        self.r_scaling_12, self.r_bias_12 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
-        self.r_scaling_21, self.r_bias_21 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
-        self.r_scaling_22, self.r_bias_22 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+        if args.is_link_gnn:
+            self.r_scaling_11, self.r_bias_11 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+            self.r_scaling_12, self.r_bias_12 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+            self.r_scaling_21, self.r_bias_21 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
+            self.r_scaling_22, self.r_bias_22 = Parameter(torch.Tensor(1)), Parameter(torch.Tensor(1))
 
         self.cache = {"num_updated": 0, "batch": None, "x_conv1": None, "x_conv2": None, "label": None}
 

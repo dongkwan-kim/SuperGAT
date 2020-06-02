@@ -245,7 +245,7 @@ def _get_model_cls(model_name: str):
         return SuperGATNet
     elif model_name == "GATPPI":
         return ResSuperGATNet
-    elif model_name.startswith("LinkG"):
+    elif model_name.startswith("Link"):
         return LinkGNN
     elif model_name == "LargeGAT":
         return LargeSuperGATNet
