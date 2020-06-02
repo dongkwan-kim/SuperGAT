@@ -94,8 +94,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
         try:
             parser.set_defaults(**dict(YAML().load(args_file)[args_key].items()))
         except KeyError:
-            cprint("KeyError: there's no {} in yamls".format(args_key), "red")
-            exit()
+            raise AssertionError("KeyError: there's no {} in yamls".format(args_key), "red")
 
     # Update params from .yamls
     args = parser.parse_args()
