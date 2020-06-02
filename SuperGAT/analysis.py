@@ -175,6 +175,7 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
             deg_and_legend_to_mean_over_hp_list[deg_and_legend] = mean_over_hp_list
             deg_and_legend_to_std_over_hp_list[deg_and_legend] = std_over_hp_list
 
+    pprint(deg_and_legend_to_mean_over_hp_list)
     plot_line_with_std(
         tuple_to_mean_list=deg_and_legend_to_mean_over_hp_list,  # (deg, legend) -> List[perf] by homophily
         tuple_to_std_list=deg_and_legend_to_std_over_hp_list,
@@ -233,7 +234,7 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
         hue="Model",
         style="Model",
         col="Homophily",
-        aspect=0.8,
+        aspect=0.75,
         order=legend_list,
         x_lim=(0, None),
         custom_key=base_key,
@@ -985,14 +986,14 @@ if __name__ == '__main__':
             main_name_prefix_list = ["GO", "DP"]
             unit_width = 3
         else:
-            main_name_prefix_list = ["SG"]
+            main_name_prefix_list = ["SGO", "SDP"]
             unit_width = 3
 
         if is_super_gat:
             if main_kwargs["dataset_name"] != "PubMed":
-                main_custom_key_list = ["EV12NSO8-ES-ATT"]
+                main_custom_key_list = ["EV1O8-ES-ATT", "EV2O8-ES-ATT"]
             else:
-                main_custom_key_list = ["EV12NSO8-500-ES-ATT"]
+                main_custom_key_list = ["EV1-500-ES-ATT", "EV2-500-ES-ATT"]
 
         elif main_kwargs["model_name"] == "GAT":
             if main_kwargs["dataset_name"] != "PubMed":
@@ -1098,10 +1099,8 @@ if __name__ == '__main__':
 
     elif MODE == "analyze_rpg_by_degree_and_homophily":
 
-        PART = True
-
-        MODEL_IDX = 2  # 0, 1, 2, 3, 4, None
-        degree_list = [75.0]  # [2.5, 5.0, 25.0, 50.0, 75.0, 100.0]
+        MODEL_IDX = 4  # 0, 1, 2, 3, 4, None
+        degree_list = [10.0]  # [2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0]
 
         legend_list = ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX", "SuperGAT-MT"]
         model_list = ["GCN", "GAT", "GAT", "GAT", "GAT"]
@@ -1110,22 +1109,10 @@ if __name__ == '__main__':
         if MODEL_IDX is not None:
             analyze_rpg_by_degree_and_homophily(
                 degree_list=degree_list,
-                homophily_list=[0.3],
+                homophily_list=[0.1],
                 legend_list=legend_list[MODEL_IDX:MODEL_IDX + 1],
                 model_list=model_list[MODEL_IDX:MODEL_IDX + 1],
                 custom_key_list=custom_key_list[MODEL_IDX:MODEL_IDX + 1],
-                att_lambda_list=[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e-3, 1e-4, 1e-5],
-                l2_lambda_list=[1e-7, 1e-5, 1e-3],
-                num_total_runs=5,
-                verbose=0,
-            )
-        elif PART:
-            analyze_rpg_by_degree_and_homophily(
-                degree_list=[2.5, 5.0, 25.0, 50.0, 100.0],
-                homophily_list=[0.1, 0.3, 0.5, 0.7, 0.9],
-                legend_list=["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"],
-                model_list=["GCN", "GAT", "GAT", "GAT", "GAT"],
-                custom_key_list=["NE-ES", "NE-ES", "EV3-ES", "EV13-ES", "EV20-ES"],
                 att_lambda_list=[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e-3, 1e-4, 1e-5],
                 l2_lambda_list=[1e-7, 1e-5, 1e-3],
                 num_total_runs=5,
