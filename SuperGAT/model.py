@@ -183,7 +183,7 @@ class LargeSuperGATNet(nn.Module):
             dropout=args.dropout,
             is_super_gat=args.is_super_gat,
             attention_type=args.attention_type,
-            super_gat_criterion=args.super_gat_criterion, logit_temperature=args.logit_temperature,
+            super_gat_criterion=args.super_gat_criterion,
             neg_sample_ratio=args.neg_sample_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio,
             use_pretraining=args.use_pretraining,
