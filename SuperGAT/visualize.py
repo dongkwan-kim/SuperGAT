@@ -31,13 +31,15 @@ def _get_key_and_makedirs(args=None, no_args_key=None, base_path="./", args_pref
 
 
 def plot_line_with_std(tuple_to_mean_list, tuple_to_std_list, x_label, y_label, name_label_list, x_list,
-                       hue=None, size=None, style=None,
-                       row=None, col=None, order=None,
+                       hue=None, size=None, style=None, palette=None,
+                       row=None, col=None, hue_order=None,
                        markers=True, dashes=False,
                        height=5, aspect=1.0,
-                       n=150,  err_style="band",
-                       x_lim=None, y_lim=None,
-                       args=None, custom_key="", extension="png"):
+                       legend="full",
+                       n=150, err_style="band",
+                       x_lim=None, y_lim=None, use_xlabel=True, use_ylabel=True,
+                       facet_kws=None,
+                       args=None, custom_key="", extension="png", **kwargs):
     pd_data = {x_label: [], y_label: [], **{name_label: [] for name_label in name_label_list}}
     for name_tuple, mean_list in tuple_to_mean_list.items():
         std_list = tuple_to_std_list[name_tuple]
@@ -53,13 +55,19 @@ def plot_line_with_std(tuple_to_mean_list, tuple_to_std_list, x_label, y_label, 
     path_and_name = "{}/fig_line_{}_{}.{}".format(path, key, plot_info, extension).replace(". ", "_")
 
     plot = sns.relplot(x=x_label, y=y_label, kind="line",
-                       row=row, col=col, hue=hue, style=style,
+                       row=row, col=col, hue=hue, style=style, palette=palette,
                        markers=markers, dashes=dashes,
                        height=height, aspect=aspect,
-                       legend="full", hue_order=order, ci="sd", err_style=err_style,
-                       data=df)
+                       legend=legend, hue_order=hue_order, ci="sd", err_style=err_style,
+                       facet_kws=facet_kws,
+                       data=df,
+                       **kwargs)
     plot.set(xlim=x_lim)
     plot.set(ylim=y_lim)
+    if not use_xlabel:
+        plot.set_axis_labels(x_var="")
+    if not use_ylabel:
+        plot.set_axis_labels(y_var="")
     plot.savefig(path_and_name, bbox_inches='tight')
     plt.clf()
 
