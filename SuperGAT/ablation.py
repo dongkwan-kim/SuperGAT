@@ -9,6 +9,7 @@ from termcolor import cprint
 
 from arguments import get_args, pprint_args, get_args_key
 from main import run_with_many_seeds_with_gpu
+from utils import s_join
 from visualize import plot_line_with_std
 
 try:
@@ -67,7 +68,7 @@ def visualize_perf_against_hparam(hparam_list: List[float],
                 x_list=[float(np.log10(al)) for al in hparam_list] if use_log_x else hparam_list,
                 hue="Task",
                 style="Task",
-                order=[t.capitalize() for t in tasks],
+                hue_order=[t.capitalize() for t in tasks],
                 x_lim=(None, None),
                 err_style="band",
                 custom_key=custom_key,
@@ -79,15 +80,39 @@ def visualize_perf_against_hparam(hparam_list: List[float],
             tuple_to_mean_list=model_data_task_to_mean_list,
             tuple_to_std_list=model_data_task_to_std_list,
             x_label=xlabel or "Mixing Coefficient (Log)",
-            y_label=ylabel or "Test Performance",
+            y_label=ylabel or "Test Perf.",
             name_label_list=["GAT", "Dataset", "Task"],
             x_list=[float(np.log10(al)) for al in hparam_list] if use_log_x else hparam_list,
-            hue="GAT",
-            style="GAT",
+            hue="Dataset",
+            style="Dataset",
             row="Task",
+            col="GAT",
+            hue_order=["Cora", "CiteSeer", "PubMed", "PPI"],
+            aspect=1.6,
+            err_style="band",
+            custom_key="perf_against_{}_real_world_datasets".format(hparam_name),
+            extension="pdf",
+        )
+
+        mt_data_to_mean_list = {(s_join(" & ", [m, t]), d): ml for (m, d, t), ml
+                                in model_data_task_to_mean_list.items()}
+        mt_data_to_std_list = {(s_join(" & ", [m, t]), d): sl for (m, d, t), sl
+                               in model_data_task_to_std_list.items()}
+
+        sns.set_context("poster", font_scale=1.2)
+        plot_line_with_std(
+            tuple_to_mean_list=mt_data_to_mean_list,
+            tuple_to_std_list=mt_data_to_std_list,
+            x_label=xlabel or "Mixing Coeff. (Log)",
+            y_label=ylabel or "Test Perf.",
+            name_label_list=["GAT & Task", "Dataset"],
+            x_list=[float(np.log10(al)) for al in hparam_list] if use_log_x else hparam_list,
+            hue="GAT & Task",
+            palette=["darkred", "red", "dimgrey", "silver"],
+            style="GAT & Task",
             col="Dataset",
-            aspect=1.5,
-            order=["GO", "DP"],
+            hue_order=["GO & Link", "DP & Link", "GO & Node", "DP & Node"],
+            aspect=1.0,
             err_style="band",
             custom_key="perf_against_{}_real_world_datasets".format(hparam_name),
             extension="pdf",
@@ -154,7 +179,7 @@ if __name__ == '__main__':
 
     os.makedirs("../figs", exist_ok=True)
 
-    MODE = "visualize_perf_against_mixing_coefficient"
+    MODE = "visualize_perf_against_hparam_real_world_datasets"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "visualize_perf_against_hparam_real_world_datasets":
@@ -182,6 +207,8 @@ if __name__ == '__main__':
                 main_args.m = m
                 main_args_list.append(main_args)
 
+        sns.set_context("poster", font_scale=1.3)
+
         visualize_perf_against_hparam(
             hparam_list=[1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
             hparam_name="att_lambda",
@@ -195,10 +222,11 @@ if __name__ == '__main__':
         main_kwargs = {
             "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
             "dataset_class": "Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
-            "dataset_name": "CiteSeer",  # Cora, CiteSeer, PubMed, rpg-10-500-h-d
-            "custom_key": "EV1O8-ES",  # NE, EV1, EV2
+            "dataset_name": "PubMed",  # Cora, CiteSeer, PubMed, rpg-10-500-h-d
+            "custom_key": "EV13NSO8-500-ES",  # NE, EV1, EV2
         }
         main_args = get_args(**main_kwargs)
+        main_args.verbose = 0
         pprint_args(main_args)
 
         if main_kwargs["dataset_class"] == "RandomPartitionGraph":
@@ -239,9 +267,9 @@ if __name__ == '__main__':
         NSR_OR_ESR = "ESR"
         main_kwargs = {
             "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
-            "dataset_class": "Planetoid",  # Planetoid, RandomPartitionGraph, PPI
-            "dataset_name": "CiteSeer",  # Cora, CiteSeer, PubMed, rpg-10-500-0.9-0.025
-            "custom_key": "EV20NSO8-ES",  # NE, EV1, EV2
+            "dataset_class": "PPI",  # Planetoid, RandomPartitionGraph, PPI
+            "dataset_name": "PPI",  # Cora, CiteSeer, PubMed, rpg-10-500-0.9-0.025
+            "custom_key": "EV3O8-ES",  # NE, EV1, EV2
         }
 
         h_name = "neg_sample_ratio" if NSR_OR_ESR == "NSR" else "edge_sampling_ratio"
