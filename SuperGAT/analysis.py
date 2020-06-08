@@ -101,8 +101,8 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
                                         num_classes: int = 10,
                                         verbose=2,
                                         is_test=False,
+                                        plot_part_by_part=False,
                                         extension="pdf"):
-
     base_key = "analysis_rpg" + ("" if not is_test else "_test")
     base_path = os.path.join("../figs", base_key)
 
@@ -186,7 +186,7 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
         hue="Model",
         style="Model",
         col="Avg. Degree",
-        order=legend_list,
+        hue_order=legend_list,
         x_lim=(0, None),
         custom_key=base_key,
         extension=extension,
@@ -235,11 +235,80 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
         style="Model",
         col="Homophily",
         aspect=0.75,
-        order=legend_list,
+        hue_order=legend_list,
         x_lim=(0, None),
         custom_key=base_key,
         extension=extension,
     )
+
+    if plot_part_by_part:  # manual.
+
+        # deg: [2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0]
+        def filtered_by_hp(hp_list, num_deg=None):
+            return (
+                {(hp, legend): (mean_list if not num_deg else mean_list[:num_deg])
+                 for (hp, legend), mean_list in hp_and_legend_to_mean_over_deg_list.items() if hp in hp_list},
+                {(hp, legend): (std_list if not num_deg else std_list[:num_deg])
+                 for (hp, legend), std_list in hp_and_legend_to_std_over_deg_list.items() if hp in hp_list}
+            )
+
+        hp135_and_legend_to_mean_over_deg_list, hp135_and_legend_to_std_over_deg_list = filtered_by_hp([0.1, 0.3, 0.5])
+        hp7_and_legend_to_mean_over_deg_list, hp7_and_legend_to_std_over_deg_list = filtered_by_hp([0.7], num_deg=5)
+        hp9_and_legend_to_mean_over_deg_list, hp9_and_legend_to_std_over_deg_list = filtered_by_hp([0.9], num_deg=4)
+
+        plot_line_with_std(
+            tuple_to_mean_list=hp135_and_legend_to_mean_over_deg_list,
+            tuple_to_std_list=hp135_and_legend_to_std_over_deg_list,
+            x_label="Avg. Degree",
+            y_label="Test Accuracy",
+            name_label_list=["Homophily", "Model"],
+            x_list=degree_list,
+            hue="Model",
+            style="Model",
+            col="Homophily",
+            aspect=0.75,
+            hue_order=legend_list,
+            legend=False,
+            x_lim=(0, None),
+            custom_key=base_key + "_part135",
+            extension=extension,
+        )
+        plot_line_with_std(
+            tuple_to_mean_list=hp7_and_legend_to_mean_over_deg_list,
+            tuple_to_std_list=hp7_and_legend_to_std_over_deg_list,
+            x_label="Avg. Degree",
+            y_label="Test Accuracy",
+            name_label_list=["Homophily", "Model"],
+            x_list=degree_list,
+            hue="Model",
+            style="Model",
+            col="Homophily",
+            aspect=1.0,
+            hue_order=legend_list,
+            legend=False,
+            x_lim=(0, None),
+            use_ylabel=False,
+            custom_key=base_key + "_part7",
+            extension=extension,
+        )
+        plot_line_with_std(
+            tuple_to_mean_list=hp9_and_legend_to_mean_over_deg_list,
+            tuple_to_std_list=hp9_and_legend_to_std_over_deg_list,
+            x_label="Avg. Degree",
+            y_label="Test Accuracy",
+            name_label_list=["Homophily", "Model"],
+            x_list=degree_list,
+            hue="Model",
+            style="Model",
+            col="Homophily",
+            aspect=1.0,
+            hue_order=legend_list,
+            legend="full",
+            x_lim=(0, None),
+            use_ylabel=False,
+            custom_key=base_key + "_part9",
+            extension=extension,
+        )
 
 
 def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarray:
@@ -934,7 +1003,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "analyze_rpg_by_degree_and_homophily"
+    MODE = "attention_metric_for_multiple_models"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":
@@ -973,7 +1042,7 @@ if __name__ == '__main__':
 
         is_super_gat = False  # False
 
-        main_kwargs["model_name"] = "GAT"  # GAT, LargeGAT
+        main_kwargs["model_name"] = "LargeGAT"  # GAT, LargeGAT
         main_kwargs["dataset_name"] = "PPI"  # Cora, CiteSeer, PubMed
         main_num_layers = 4  # Only for LargeGAT 3, 4
 
@@ -1083,7 +1152,7 @@ if __name__ == '__main__':
     elif MODE == "degree_and_homophily":
         analyze_degree_and_homophily()
 
-    elif MODE == "print_rpg_analysis":
+    elif MODE == "get_and_print_rpg_analysis":
 
         degree_list = [2.5, 5.0, 25.0, 50.0]
         homophily_list = [0.1, 0.3, 0.5, 0.7, 0.9]
@@ -1097,82 +1166,31 @@ if __name__ == '__main__':
                 for _legend, _custom_key in zip(legend_list, custom_key_list):
                     print_rpg_analysis(_degree, _hp, _legend, _custom_key, model="GAT")
 
+    elif MODE == "analyze_rpg_by_degree_and_homophily_part_by_part":
+        analyze_rpg_by_degree_and_homophily(
+            degree_list=[2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0],
+            homophily_list=[0.1, 0.3, 0.5, 0.7, 0.9],
+            legend_list=["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"],
+            model_list=["GCN", "GAT", "GAT", "GAT"],
+            custom_key_list=["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"],
+            att_lambda_list=[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e-3, 1e-4, 1e-5],
+            l2_lambda_list=[1e-7, 1e-5, 1e-3],
+            num_total_runs=5,
+            plot_part_by_part=True,
+            verbose=0,
+        )
+
     elif MODE == "analyze_rpg_by_degree_and_homophily":
-
-        MODEL_IDX = 4  # 0, 1, 2, 3, 4, None
-        degree_list = [10.0]  # [2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0]
-
-        legend_list = ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX", "SuperGAT-MT"]
-        model_list = ["GCN", "GAT", "GAT", "GAT", "GAT"]
-        custom_key_list = ["NE-ES", "NE-ES", "EV3-ES", "EV13-ES", "EV20-ES"]
-
-        if MODEL_IDX is not None:
-            analyze_rpg_by_degree_and_homophily(
-                degree_list=degree_list,
-                homophily_list=[0.1],
-                legend_list=legend_list[MODEL_IDX:MODEL_IDX + 1],
-                model_list=model_list[MODEL_IDX:MODEL_IDX + 1],
-                custom_key_list=custom_key_list[MODEL_IDX:MODEL_IDX + 1],
-                att_lambda_list=[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e-3, 1e-4, 1e-5],
-                l2_lambda_list=[1e-7, 1e-5, 1e-3],
-                num_total_runs=5,
-                verbose=0,
-            )
-        else:
-            analyze_rpg_by_degree_and_homophily(
-                degree_list=[2.5, 5.0, 25.0, 50.0, 75.0, 100.0],
-                homophily_list=[0.1, 0.3, 0.5, 0.7, 0.9],
-                legend_list= ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"],
-                model_list=model_list,
-                custom_key_list=custom_key_list,
-                att_lambda_list=[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e-3, 1e-4, 1e-5],
-                l2_lambda_list=[1e-7, 1e-5, 1e-3],
-                num_total_runs=5,
-                verbose=0,
-            )
-        print("End: analyze_rpg_by_degree_and_homophily")
-
-    elif MODE == "performance_synthetic":
-        plot_line_with_std(
-            tuple_to_mean_list={
-                (20, "GCN"): [0.24008, 0.46788, 0.85649, 0.98591, 1],
-                (20, "GAT-GO8"): [0.35761, 0.55295, 0.84871, 0.98708, 0.99771],
-                (20, "GAT-DP8"): [0.40997, 0.53756, 0.76837, 0.91099, 0.9713],
-                (20, "SuperGAT"): [0.38751, 0.61508, 0.87356, 0.98674, 0.99955],
-                (12.5, "GCN"): [0.25025, 0.3936, 0.72674, 0.94985, 0.99694],
-                (12.5, "GAT-GO8"): [0.31979, 0.46839, 0.7487, 0.95127, 0.9948],
-                (12.5, "GAT-DP8"): [0.39322, 0.49541, 0.67294, 0.86431, 0.95439],
-                (12.5, "SuperGAT"): [0.35552, 0.5193, 0.78104, 0.94951, 0.99646],
-                (5, "GCN"): [0.27805, 0.30722, 0.54352, 0.69841, 0.88001],
-                (5, "GAT-GO8"): [0.2978, 0.36233, 0.54607, 0.70381, 0.88528],
-                (5, "GAT-DP8"): [0.39047, 0.44268, 0.56799, 0.65115, 0.80486],
-                (5, "SuperGAT"): [0.32552, 0.40137, 0.59095, 0.74638, 0.90562],
-            },
-            tuple_to_std_list={
-                (20, "GCN"): [0.005764859062, 0.006408244689, 0.003850960919, 0.001312211873, 0],
-                (20, "GAT-GO8"): [0.01277567611, 0.01050464183, 0.0116724419, 0.003164427278, 0.001321325092],
-                (20, "GAT-DP8"): [0.009649305675, 0.0103472895, 0.01333540776, 0.01174946382, 0.02417043649],
-                (20, "SuperGAT"): [0.01565534733, 0.01074865573, 0.00828893238, 0.003288221404, 0.000668954408],
-                (12.5, "GCN"): [0.006174746958, 0.007363423117, 0.0006329730072, 0.003491060011, 0.0005624944444],
-                (12.5, "GAT-GO8"): [0.01237682916, 0.01146463693, 0.0111350797, 0.006684093057, 0.001542724862],
-                (12.5, "GAT-DP8"): [0.009930337356, 0.01046335988, 0.01658060313, 0.01661005418, 0.02025778616],
-                (12.5, "SuperGAT"): [0.014369746, 0.01068877916, 0.008749765711, 0.006091789556, 0.001283900308],
-                (5, "GCN"): [0.006107986575, 0.006671701432, 0.00847995283, 0.004002736564, 0.004652945304],
-                (5, "GAT-GO8"): [0.01141227409, 0.0117711979, 0.0113518765, 0.009844485766, 0.00579496333],
-                (5, "GAT-DP8"): [0.01070649803, 0.009168293189, 0.0083791348, 0.01342488361, 0.01143767459],
-                (5, "SuperGAT"): [0.01224620758, 0.00980576871, 0.009284799405, 0.007544242838, 0.006159188258],
-            },
-            x_label="Homophily",
-            y_label="Test Accuracy",
-            name_label_list=["Avg. Degree", "Model"],
-            x_list=[0.1, 0.3, 0.5, 0.7, 0.9],
-            hue="Model",
-            style="Model",
-            col="Avg. Degree",
-            order=["GCN", "GAT-GO8", "GAT-DP8", "SuperGAT"],
-            x_lim=(0, None),
-            custom_key="performance-synthetic",
-            extension="pdf",
+        analyze_rpg_by_degree_and_homophily(
+            degree_list=[2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0],
+            homophily_list=[0.1, 0.3, 0.5, 0.7, 0.9],
+            legend_list=["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"],
+            model_list=["GCN", "GAT", "GAT", "GAT"],
+            custom_key_list=["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"],
+            att_lambda_list=[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e-3, 1e-4, 1e-5],
+            l2_lambda_list=[1e-7, 1e-5, 1e-3],
+            num_total_runs=5,
+            verbose=0,
         )
 
     elif MODE == "attention_dist_by_sample_type":  # deprecated
@@ -1217,3 +1235,5 @@ if __name__ == '__main__':
 
     else:
         raise ValueError
+
+    print("End: {}".format(MODE))
