@@ -155,6 +155,21 @@ def get_task_to_mean_and_std_per_against_hparam(hparam_list: List[float],
             result_array = np.asarray(task_to_test_perf_at_best_val_list[t])
             result_array.dump(result_path)
             cprint("Dump: {}".format(result_path), "green")
+
+        loaded_num_hparam = result_array.shape[0]
+        if loaded_num_hparam < len(hparam_list):
+            num_need_hparam = len(hparam_list) - loaded_num_hparam
+            # manual_setting: first
+            for hparam in hparam_list[:num_need_hparam]:
+                setattr(args, hparam_name, hparam)
+                many_seeds_result = run_with_many_seeds_with_gpu(args, num_total_runs)
+                task_to_test_perf_at_best_val_list[t].append(many_seeds_result["test_perf_at_best_val"])
+                torch.cuda.empty_cache()
+            new_result_array = np.asarray(task_to_test_perf_at_best_val_list[t])  # [|new_lambda|, T]
+            result_array = np.concatenate((new_result_array, result_array))
+            result_array.dump(result_path)
+            cprint("Dump: {} (shape: {})".format(result_path, result_array.shape), "green")
+
         task_to_test_perf_at_best_val_array[t] = result_array
         print(t, result_array.mean())
 
@@ -164,7 +179,6 @@ def get_task_to_mean_and_std_per_against_hparam(hparam_list: List[float],
         tuple_name = (t.capitalize(),)
         task_to_mean_list[tuple_name] = result_array.mean(axis=1)  # [|lambda|]
         task_to_std_list[tuple_name] = result_array.std(axis=1)  # [|lambda|]
-        result_array.dump("{}/{}.npy".format(path, t))
 
     return task_to_mean_list, task_to_std_list
 
@@ -179,7 +193,7 @@ if __name__ == '__main__':
 
     os.makedirs("../figs", exist_ok=True)
 
-    MODE = "visualize_perf_against_hparam_real_world_datasets"
+    MODE = "visualize_perf_against_mixing_coefficient"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "visualize_perf_against_hparam_real_world_datasets":
@@ -219,11 +233,13 @@ if __name__ == '__main__':
 
     elif MODE == "visualize_perf_against_mixing_coefficient":
 
+        NUM_TOTAL_RUNS = 5
+
         main_kwargs = {
             "model_name": "GAT",  # GAT, BaselineGAT, LargeGAT
-            "dataset_class": "Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
-            "dataset_name": "PubMed",  # Cora, CiteSeer, PubMed, rpg-10-500-h-d
-            "custom_key": "EV13NSO8-500-ES",  # NE, EV1, EV2
+            "dataset_class": "PPI",  # ADPlanetoid, LinkPlanetoid, Planetoid, RandomPartitionGraph
+            "dataset_name": "PPI",  # Cora, CiteSeer, PubMed, rpg-10-500-h-d
+            "custom_key": "EV3O8-ES",  # NE, EV1, EV2
         }
         main_args = get_args(**main_kwargs)
         main_args.verbose = 0
@@ -247,19 +263,12 @@ if __name__ == '__main__':
                 )
                 print(f"Done: {main_args.dataset_name}")
 
-        elif main_kwargs["dataset_name"] != "PPI":
-            visualize_perf_against_hparam(
-                hparam_list=[1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
-                hparam_name="att_lambda",
-                args_or_args_list=main_args,
-                num_total_runs=10,
-            )
         else:
             visualize_perf_against_hparam(
-                hparam_list=[1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
+                hparam_list=[1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
                 hparam_name="att_lambda",
                 args_or_args_list=main_args,
-                num_total_runs=5,
+                num_total_runs=NUM_TOTAL_RUNS,
             )
 
     elif MODE == "visualize_perf_against_nsr_or_esr":
