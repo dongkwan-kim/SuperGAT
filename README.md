@@ -9,8 +9,8 @@ Official implementation of Supervised Graph Attention Networks.
 ## Installation
 
 ```bash
-pip3 install -r requirements.txt
-
+# In SuperGAT/
+bash install.sh ${CUDA, default is cu100}
 ```
 
 - If you have any trouble in installing PyTorch Geometric, please install PYG dependencies manually.
@@ -19,22 +19,27 @@ pip3 install -r requirements.txt
 ## Run
 
 ```text
-$ python3 SuperGAT/main.py --dataset-name Cora --custom-key EV12NSO8-ES
+python3 SuperGAT/main.py \
+    --dataset-class Planetoid \
+    --dataset-name Cora \
+    --custom-key EV13NSO8-ES
  
 ...
- 
+
 ## RESULTS SUMMARY ##
-best_test_perf: 0.851 +- 0.003
-best_val_perf: 0.822 +- 0.003
-test_perf_at_best_val: 0.845 +- 0.004
+best_test_perf: 0.853 +- 0.003
+best_test_perf_at_best_val: 0.851 +- 0.004
+best_val_perf: 0.825 +- 0.003
+test_perf_at_best_val: 0.849 +- 0.004
 ## RESULTS DETAILS ##
-best_test_perf: [0.848, 0.849, ..., 0.853]
-best_val_perf: [0.826, 0.82, ..., 0.82]
-test_perf_at_best_val: [0.843, 0.843, ..., 0.845]
-Time for runs (s): 767.8024312630296
+best_test_perf: [0.851, 0.853, 0.857, 0.852, 0.858, 0.852, 0.847]
+best_test_perf_at_best_val: [0.851, 0.849, 0.855, 0.852, 0.858, 0.848, 0.844]
+best_val_perf: [0.82, 0.824, 0.83, 0.826, 0.828, 0.824, 0.822]
+test_perf_at_best_val: [0.851, 0.844, 0.853, 0.849, 0.857, 0.848, 0.844]
+Time for runs (s): 173.85422565042973
 ```
 
-Default setting is 25 runs with different random seeds. If you want to change this number, change `num_total_runs` in the main block of `SuperGAT/main.py`.
+Default setting is 7 runs with different random seeds. If you want to change this number, change `num_total_runs` in the main block of `SuperGAT/main.py`.
 
 
 ### GPU Setting
@@ -47,31 +52,32 @@ Default values are from the author's machine, so we recommend you modify these v
 
 If you have four GPUs and want to use the first (cuda:0),
 ```bash
-python3 SuperGAT/main.py --dataset-name Cora --custom-key EV12NSO8-ES --num-gpus-total 4 --black-list 1 2 3
-
+python3 SuperGAT/main.py \
+    --dataset-class Planetoid \
+    --dataset-name Cora \
+    --custom-key EV13NSO8-ES \
+    --num-gpus-total 4 \
+    --black-list 1 2 3
 ```
 
 
-### Dataset Name (`--dataset-name`)
+### Dataset (`--dataset-class`, `--dataset-name`)
 
-| Type       | Dataset Name                                                         |
-|------------|----------------------------------------------------------------------|
-| Real-world | Cora, CiteSeer, PubMed                                               |
-| Synthetic  | rpg-{`#class`}-{`#nodes/class`}-{`p_in/delta`}-{`avg.degree/#nodes`} |
-
-For Synthetic datasets, we provide hyperparameters in `SuperGAT/args.yaml` for `#class` of 10, `#nodes/class` of 500, `p_in/delta` of {0.1, 0.3, 0.5, 0.7, 0.9}, and `avg.degree/#nodes` of {0.01, 0.025, 0.04} as we used in the paper. (e.g., rpg-10-500-0.1-0.01)
+| Dataset class   | Dataset Name                  |
+|-----------------|-------------------------------|
+| Planetoid       | Cora                          |
+| Planetoid       | CiteSeer                      |
+| Planetoid       | PubMed                        |
+| PPI             | PPI                           |
 
 ### Custom Key (`--custom-key`)
 
 | Type                   | Custom Key (excl. PubMed) | Custom Key (for PubMed) |
 |------------------------|---------------------------|-------------------------|
-| GAT<sub>GO8</sub>      | NEO8-ES                   | NE-500-ES               |
-| GAT<sub>DP8</sub>      | NEDPO8-ES                 | NEDP-500-ES             |
-| GAT<sub>GO8</sub> + LP | EVL12O8-ES                | EVL12O8-500-ES          |
-| SuperGAT<sub>GO8</sub> | EV1O8-ES                  | EV1-500-ES              |
-| SuperGAT<sub>DP8</sub> | EV2O8-ES                  | EV2-500-ES              |
-| SuperGAT               | EV12NSO8-ES               | EV12NSO8-500-ES         |
-| SuperGAT + PT          | EV9NSO8-ES                | EV9NSO8-500-ES          |
+| SuperGAT<sub>GO</sub> | EV1O8-ES                   | EV1-500-ES              |
+| SuperGAT<sub>DP</sub> | EV2O8-ES                   | EV2-500-ES              |
+| SuperGAT<sub>SD</sub> | EV3O8-ES                   | EV3-500-ES              |
+| SuperGAT<sub>MX</sub> | EV13NSO8-ES                | EV13NSO8-500-ES         |
 
 
 ### Other Hyperparameters
