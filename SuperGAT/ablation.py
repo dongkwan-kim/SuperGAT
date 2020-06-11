@@ -25,6 +25,7 @@ def visualize_perf_against_hparam(hparam_list: List[float],
                                   num_total_runs: int,
                                   tasks=None,
                                   plot_individual=True,
+                                  plot_ablation=False,
                                   xlabel=None, ylabel=None, use_log_x=True,
                                   ):
     if type(args_or_args_list) is not list:
@@ -57,7 +58,7 @@ def visualize_perf_against_hparam(hparam_list: List[float],
             model_data_task_to_mean_list[(args.m, args.dataset_name, task)] = mean_list
             model_data_task_to_std_list[(args.m, args.dataset_name, task)] = std_list
 
-        if plot_individual:
+        if plot_individual and not plot_ablation:
             plot_line_with_std(
                 tuple_to_mean_list=task_to_mean_list,
                 tuple_to_std_list=task_to_std_list,
@@ -74,8 +75,25 @@ def visualize_perf_against_hparam(hparam_list: List[float],
                 custom_key=custom_key,
                 extension="png",
             )
+        elif plot_individual and plot_ablation:
+            sns.set_context("poster")
+            plot_line_with_std(
+                tuple_to_mean_list=task_to_mean_list,
+                tuple_to_std_list=task_to_std_list,
+                x_label=xlabel + f" ({args.dataset_name})" or "Mixing Coefficient (Log)",
+                y_label=ylabel or "Test Perf.",
+                name_label_list=["Task"],
+                x_list=[float(np.log10(al)) for al in hparam_list] if use_log_x else hparam_list,
+                hue="Task",
+                style="Task",
+                aspect=1.5,
+                legend=False,
+                err_style="band",
+                custom_key="ablation_against_{}_{}".format(hparam_name, custom_key),
+                extension="pdf",
+            )
 
-    if not plot_individual:
+    if not plot_individual and not plot_ablation:
         plot_line_with_std(
             tuple_to_mean_list=model_data_task_to_mean_list,
             tuple_to_std_list=model_data_task_to_std_list,
@@ -193,10 +211,115 @@ if __name__ == '__main__':
 
     os.makedirs("../figs", exist_ok=True)
 
-    MODE = "visualize_perf_against_mixing_coefficient"
+    MODE = "ablation_against_att_lambda_real_world_datasets"
     cprint("MODE: {}".format(MODE), "red")
 
-    if MODE == "visualize_perf_against_hparam_real_world_datasets":
+    if MODE == "ablation_against_esr_real_world_datasets":
+        dataset_class_list = ["Planetoid", "Planetoid", "Planetoid", "PPI"]
+        dataset_name_list = ["Cora", "CiteSeer", "PubMed", "PPI"]
+        custom_key_list = ["EV13NSO8-ES", "EV13NSO8-ES", "EV13NSO8-500-ES", "EV3O8-ES"]
+        model_list = ["MX", "MX", "MX", "SD"]
+
+        main_args_list = []
+        for dc, dn, ck, m in zip(dataset_class_list, dataset_name_list, custom_key_list, model_list):
+            main_kwargs = {
+                "model_name": "GAT",
+                "dataset_class": dc,
+                "dataset_name": dn,
+                "custom_key": ck,
+            }
+            main_args = get_args(**main_kwargs)
+            main_args.m = m
+            main_args_list.append(main_args)
+
+        main_hparams = [0.1, 0.3, 0.5, 0.7, 0.9]
+        visualize_perf_against_hparam(
+            hparam_list=main_hparams,
+            hparam_name="edge_sampling_ratio",
+            args_or_args_list=main_args_list,
+            tasks=["node"],
+            num_total_runs=5,
+            xlabel="Edge Sampling Ratio",
+            use_log_x=False,
+            plot_individual=True,
+            plot_ablation=True,
+        )
+
+    elif MODE == "ablation_against_nsr_real_world_datasets":
+        dataset_class_list = ["Planetoid", "Planetoid", "Planetoid", "PPI"]
+        dataset_name_list = ["Cora", "CiteSeer", "PubMed", "PPI"]
+        custom_key_list = ["EV13NSO8-ES", "EV13NSO8-ES", "EV13NSO8-500-ES", "EV3O8-ES"]
+        model_list = ["MX", "MX", "MX", "SD"]
+
+        main_args_list = []
+        for dc, dn, ck, m in zip(dataset_class_list, dataset_name_list, custom_key_list, model_list):
+            main_kwargs = {
+                "model_name": "GAT",
+                "dataset_class": dc,
+                "dataset_name": dn,
+                "custom_key": ck,
+            }
+            main_args = get_args(**main_kwargs)
+            main_args.m = m
+            main_args_list.append(main_args)
+
+        sns.set_context("poster", font_scale=1.3)
+        main_hparams = list(reversed([0.1, 0.5, 1.0, 2.5, 5.0]))
+        visualize_perf_against_hparam(
+            hparam_list=main_hparams,
+            hparam_name="neg_sample_ratio",
+            args_or_args_list=main_args_list[:3],
+            tasks=["node"],
+            num_total_runs=5,
+            xlabel="Negative Sampling Ratio",
+            use_log_x=False,
+            plot_individual=True,
+            plot_ablation=True,
+        )
+        main_hparams = list(reversed([0.1, 0.5, 1.0, 2.5]))
+        visualize_perf_against_hparam(
+            hparam_list=main_hparams,
+            hparam_name="neg_sample_ratio",
+            args_or_args_list=main_args_list[3],
+            tasks=["node"],
+            num_total_runs=5,
+            xlabel="Negative Sampling Ratio",
+            use_log_x=False,
+            plot_individual=True,
+            plot_ablation=True,
+        )
+
+    elif MODE == "ablation_against_att_lambda_real_world_datasets":
+        dataset_class_list = ["Planetoid", "Planetoid", "Planetoid", "PPI"]
+        dataset_name_list = ["Cora", "CiteSeer", "PubMed", "PPI"]
+        custom_key_list = ["EV13NSO8-ES", "EV13NSO8-ES", "EV13NSO8-500-ES", "EV3O8-ES"]
+        model_list = ["MX", "MX", "MX", "SD"]
+
+        main_args_list = []
+        for dc, dn, ck, m in zip(dataset_class_list, dataset_name_list, custom_key_list, model_list):
+            main_kwargs = {
+                "model_name": "GAT",
+                "dataset_class": dc,
+                "dataset_name": dn,
+                "custom_key": ck,
+            }
+            main_args = get_args(**main_kwargs)
+            main_args.m = m
+            main_args_list.append(main_args)
+
+        sns.set_context("poster", font_scale=1.3)
+        visualize_perf_against_hparam(
+            hparam_list=[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
+            hparam_name="att_lambda",
+            args_or_args_list=main_args_list,
+            num_total_runs=5,
+            xlabel="Mixing Coefficient (Log)",
+            plot_individual=True,
+            plot_ablation=True,
+            tasks=["node"],
+        )
+
+    elif MODE == "visualize_perf_against_hparam_real_world_datasets":
         dataset_class_list = ["Planetoid", "Planetoid", "Planetoid", "PPI"]
         dataset_name_list = ["Cora", "CiteSeer", "PubMed", "PPI"]
         custom_key_list = ["EV1O8-ES", "EV2O8-ES", "EV1-500-ES", "EV2-500-ES"]
@@ -265,7 +388,7 @@ if __name__ == '__main__':
 
         else:
             visualize_perf_against_hparam(
-                hparam_list=[1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
+                hparam_list=[1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3],
                 hparam_name="att_lambda",
                 args_or_args_list=main_args,
                 num_total_runs=NUM_TOTAL_RUNS,
