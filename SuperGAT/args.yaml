@@ -1,5 +1,5 @@
 DEFAULT: &DEFAULT
-  black_list: [0, 1, 2]
+  black_list: [1, 2, 3]
   num_gpus_total: 4
   num_gpus_to_use: 1
   heads: 8
@@ -429,22 +429,32 @@ GAT-PPI-EV13NSO8-ES-ATT:
 GAT-PPI-NEO8-ES-Link:
   <<: *GAT-PPI-NEO8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-PPI-NEDPO8-ES-Link:
   <<: *GAT-PPI-NEDPO8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-PPI-EV1O8-ES-Link:
   <<: *GAT-PPI-EV1O8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-PPI-EV2O8-ES-Link:
   <<: *GAT-PPI-EV2O8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
+
+GAT-PPI-EV3O8-ES-Link:
+  <<: *GAT-PPI-EV3O8-ES
+  task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-PPI-EV13NSO8-ES-Link:
   <<: *GAT-PPI-EV13NSO8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 
 GAT-Cora: &GAT-Cora
@@ -654,22 +664,27 @@ GAT-Cora-EV13NSO8-ES-ATT:
 GAT-Cora-NEO8-ES-Link:
   <<: *GAT-Cora-NEO8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-Cora-NEDPO8-ES-Link:
   <<: *GAT-Cora-NEDPO8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-Cora-EV1O8-ES-Link:
   <<: *GAT-Cora-EV1O8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-Cora-EV2O8-ES-Link:
   <<: *GAT-Cora-EV2O8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-Cora-EV13NSO8-ES-Link:
   <<: *GAT-Cora-EV13NSO8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 
 GAT-CiteSeer: &GAT-CiteSeer
@@ -879,22 +894,27 @@ GAT-CiteSeer-EV13NSO8-ES-ATT:
 GAT-CiteSeer-NEO8-ES-Link:
   <<: *GAT-CiteSeer-NEO8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-CiteSeer-NEDPO8-ES-Link:
   <<: *GAT-CiteSeer-NEDPO8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-CiteSeer-EV1O8-ES-Link:
   <<: *GAT-CiteSeer-EV1O8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-CiteSeer-EV2O8-ES-Link:
   <<: *GAT-CiteSeer-EV2O8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-CiteSeer-EV13NSO8-ES-Link:
   <<: *GAT-CiteSeer-EV13NSO8-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-PubMed: &GAT-PubMed
   <<: *GAT
@@ -1095,22 +1115,27 @@ GAT-PubMed-EV13NSO8-500-ES-ATT:
 GAT-PubMed-NE-500-ES-Link:
   <<: *GAT-PubMed-NE-500-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-PubMed-NEDP-500-ES-Link:
   <<: *GAT-PubMed-NEDP-500-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-PubMed-EV1-500-ES-Link:
   <<: *GAT-PubMed-EV1-500-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-PubMed-EV2-500-ES-Link:
   <<: *GAT-PubMed-EV2-500-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 GAT-PubMed-EV13NSO8-500-ES-Link:
   <<: *GAT-PubMed-EV13NSO8-500-ES
   task_type: Link_Prediction
+  perf_task_for_val: Link
 
 
 LargeGAT: &LargeGAT
