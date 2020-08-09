@@ -24,8 +24,9 @@ class SuperGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
                  is_super_gat=True, attention_type="basic", super_gat_criterion=None,
-                 neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False, cache_label=False,
-                 cache_attention=False, **kwargs):
+                 neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False,
+                 scaling_factor=None,
+                 cache_label=False, cache_attention=False, **kwargs):
         super(SuperGAT, self).__init__(aggr='add', **kwargs)
 
         self.in_channels = in_channels
@@ -54,7 +55,7 @@ class SuperGAT(MessagePassing):
                 pass
 
             elif self.attention_type == "scaled_dot_product":
-                pass
+                self.scaling_factor = scaling_factor or np.sqrt(self.out_channels)
 
             elif self.attention_type.endswith("mask"):
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
@@ -235,7 +236,7 @@ class SuperGAT(MessagePassing):
                                  self.att_mh_1)
 
         elif self.attention_type == "scaled_dot_product":
-            alpha = torch.einsum("ehf,ehf->eh", x_i, x_j) / np.sqrt(self.out_channels)
+            alpha = torch.einsum("ehf,ehf->eh", x_i, x_j) / self.scaling_factor
 
         elif self.attention_type == "dot_product":
             # [E, heads, F] * [E, heads, F] -> [E, heads]
