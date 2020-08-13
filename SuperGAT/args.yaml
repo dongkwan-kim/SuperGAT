@@ -238,6 +238,32 @@ GAT: &GAT
   model_name: GAT
   <<: *DEFAULT
 
+GAT-Reddit: &GAT-Reddit
+  <<: *GAT
+  model_name: GAT
+  dropout: 0.
+  lr: 0.005
+  val_interval: 1
+  num_hidden_features: 8
+  heads: 8
+
+GAT-Reddit-E: &GAT-Reddit-E
+  <<: *GAT-Reddit
+  epochs: 400
+  is_super_gat: True
+
+GAT-Reddit-EV13: &GAT-Reddit-EV13
+  <<: *GAT-Reddit-E
+  attention_type: "prob_mask_only"
+
+GAT-Reddit-EV13NSO8: &GAT-Reddit-EV13NSO8
+  <<: *GAT-Reddit-EV13
+  out_heads: 8
+  edge_sampling_ratio: 1.0
+  l2_lambda: 1e-7
+  att_lambda: 1.7854424927031092e-06
+  neg_sample_ratio: 0.5
+
 GAT-PPI: &GAT-PPI
   <<: *GAT
   model_name: GAT
@@ -266,6 +292,28 @@ SAGE-PPI-NE-ES: &SAGE-PPI-NE-ES
   early_stop_queue_length: 300
   early_stop_threshold_loss: 0.0001
   early_stop_threshold_perf: 0.0001
+
+GAAN-PPI-NE: &GAAN-PPI-NE
+  <<: *GAT-PPI
+  model_name: LinkGAAN
+  epochs: 400
+  num_hidden_features: 64
+  key_and_query_channels: 8
+  value_channels: 8
+  projected_channels: 8
+  heads: 8
+  dropout: 0.1  # paper
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 1e-07
+
+GAAN-PPI-NE-ES: &GAAN-PPI-NE-ES
+  <<: *GAAN-PPI-NE
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
 
 GAT-PPI-NE:  &GAT-PPI-NE
   <<: *GAT-PPI
@@ -413,6 +461,42 @@ GAT-PPI-EV20NSO8-ES: &GAT-PPI-EV20NSO8-ES
   early_stop_threshold_loss: 4.550899079706525e-05
   early_stop_threshold_perf: 0.0003350026730367951
   epochs: 398
+
+GAT-PPI-EV21: &GAT-PPI-EV21
+  <<: *GAT-PPI-E
+  attention_type: "prob_mask_addition"
+
+GAT-PPI-EV21NSO8: &GAT-PPI-EV21NSO8
+  <<: *GAT-PPI-EV21
+  out_heads: 8
+  edge_sampling_ratio: 1.0
+  l2_lambda: 3.5252233566556443e-07
+  att_lambda: 0.0018021139261777809
+  neg_sample_ratio: 0.5
+
+GAT-PPI-EV22: &GAT-PPI-EV22
+  <<: *GAT-PPI-E
+  attention_type: "prob_mask_addition"
+
+GAT-PPI-EV22NSO8: &GAT-PPI-EV22NSO8
+  <<: *GAT-PPI-EV22
+  out_heads: 8
+  edge_sampling_ratio: 1.0
+  l2_lambda: 3.5252233566556443e-07
+  att_lambda: 0.0018021139261777809
+  neg_sample_ratio: 0.5
+
+GAT-PPI-EV30: &GAT-PPI-EV30
+  <<: *GAT-PPI-E
+  attention_type: "gated"
+
+GAT-PPI-EV30NSO8: &GAT-PPI-EV30NSO8
+  <<: *GAT-PPI-EV30
+  out_heads: 8
+  edge_sampling_ratio: 1.0
+  l2_lambda: 3.5252233566556443e-07
+  att_lambda: 0.0018021139261777809
+  neg_sample_ratio: 0.5
 
 GAT-PPI-NEO8-ES-ATT:
   <<: *GAT-PPI-NEO8-ES
@@ -636,6 +720,70 @@ GAT-Cora-EV20NSO8-ES: &GAT-Cora-EV20NSO8-ES
   early_stop_threshold_loss: 1.0159941582315542e-05
   early_stop_threshold_perf: 0.0002068266022060699
   epochs: 417
+
+GAT-Cora-EV21: &GAT-Cora-EV21
+  <<: *GAT-Cora-E
+  attention_type: "prob_mask_addition"
+
+GAT-Cora-EV21NSO8: &GAT-Cora-EV21NSO8
+  <<: *GAT-Cora-EV21
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  l2_lambda: 0.005679570271920109
+  att_lambda: 17.113816485735622
+  neg_sample_ratio: 0.5
+
+GAT-Cora-EV21NSO8-ES: &GAT-Cora-EV21NSO8-ES
+  <<: *GAT-Cora-EV21NSO8
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
+  epochs:
+
+GAT-Cora-EV22: &GAT-Cora-EV22
+  <<: *GAT-Cora-E
+  attention_type: "prob_mask_scaled_addition"
+
+GAT-Cora-EV22NSO8: &GAT-Cora-EV22NSO8
+  <<: *GAT-Cora-EV22
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  l2_lambda: 0.008417293437610275
+  att_lambda: 14.60265722258438
+  neg_sample_ratio: 0.5
+
+GAT-Cora-EV22NSO8-ES: &GAT-Cora-EV22NSO8-ES
+  <<: *GAT-Cora-EV22NSO8
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
+  epochs:
+
+GAT-Cora-EV30: &GAT-Cora-EV30
+  <<: *GAT-Cora-E
+  attention_type: "gated"
+
+GAT-Cora-EV30NSO8: &GAT-Cora-EV30NSO8
+  <<: *GAT-Cora-EV30
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  l2_lambda: 0.007469028924784551
+  att_lambda: 9.581472880379694
+  neg_sample_ratio: 0.5
+
+GAT-Cora-EV30NSO8-ES: &GAT-Cora-EV30NSO8-ES
+  <<: *GAT-Cora-EV20NSO8
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
+  epochs:
+
 
 GAT-Cora-NEO8-ES-ATT:
   <<: *GAT-Cora-NEO8-ES
@@ -867,6 +1015,69 @@ GAT-CiteSeer-EV20NSO8-ES: &GAT-CiteSeer-EV20NSO8-ES
   early_stop_threshold_perf: 0.00015446951471764588
   epochs: 392
 
+GAT-CiteSeer-EV21: &GAT-CiteSeer-EV21
+  <<: *GAT-CiteSeer-E
+  attention_type: "prob_mask_addition"
+
+GAT-CiteSeer-EV21NSO8: &GAT-CiteSeer-EV21NSO8
+  <<: *GAT-CiteSeer-EV21
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.5
+  l2_lambda: 0.021116161195883026
+  att_lambda: 6.808641441793541
+
+GAT-CiteSeer-EV21NSO8-ES: &GAT-CiteSeer-EV21NSO8-ES
+  <<: *GAT-CiteSeer-EV21NSO8
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
+  epochs:
+
+GAT-CiteSeer-EV22: &GAT-CiteSeer-EV22
+  <<: *GAT-CiteSeer-E
+  attention_type: "prob_mask_scaled_addition"
+
+GAT-CiteSeer-EV22NSO8: &GAT-CiteSeer-EV22NSO8
+  <<: *GAT-CiteSeer-EV22
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.5
+  l2_lambda: 0.04388104874705615
+  att_lambda: 0.19004734269569096
+
+GAT-CiteSeer-EV22NSO8-ES: &GAT-CiteSeer-EV22NSO8-ES
+  <<: *GAT-CiteSeer-EV22NSO8
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
+  epochs:
+
+GAT-CiteSeer-EV30: &GAT-CiteSeer-EV30
+  <<: *GAT-CiteSeer-E
+  attention_type: "gated"
+
+GAT-CiteSeer-EV30NSO8: &GAT-CiteSeer-EV30NSO8
+  <<: *GAT-CiteSeer-EV30
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.3
+  l2_lambda: 0.021332889571763387
+  att_lambda: 2.2066674415330834
+
+GAT-CiteSeer-EV30NSO8-ES: &GAT-CiteSeer-EV30NSO8-ES
+  <<: *GAT-CiteSeer-EV30NSO8
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
+  epochs:
+
 GAT-CiteSeer-NEO8-ES-ATT:
   <<: *GAT-CiteSeer-NEO8-ES
   task_type: Attention_Dist
@@ -1086,6 +1297,72 @@ GAT-PubMed-EV20NSO8-500-ES: &GAT-PubMed-EV20NSO8-500-ES
   early_stop_threshold_loss: 0.03166753857957948
   early_stop_threshold_perf: 0.015173201095026267
   epochs: 452
+
+GAT-PubMed-EV21-500: &GAT-PubMed-EV21-500
+  <<: *GAT-PubMed-E
+  attention_type: "prob_mask_addition"
+
+GAT-PubMed-EV21NSO8-500: &GAT-PubMed-EV21NSO8-500
+  <<: *GAT-PubMed-EV21-500
+  epochs: 500
+  out_heads: 8
+  edge_sampling_ratio: 0.6
+  l2_lambda: 0.00033122858448396305
+  att_lambda: 24.07224360004708
+  neg_sample_ratio: 0.5
+
+GAT-PubMed-EV21NSO8-500-ES: &GAT-PubMed-EV21NSO8-500-ES
+  <<: *GAT-PubMed-EV21NSO8-500
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
+  epochs:
+
+GAT-PubMed-EV22-500: &GAT-PubMed-EV22-500
+  <<: *GAT-PubMed-E
+  attention_type: "prob_mask_scaled_addition"
+
+GAT-PubMed-EV22NSO8-500: &GAT-PubMed-EV22NSO8-500
+  <<: *GAT-PubMed-EV21-500
+  epochs: 500
+  out_heads: 8
+  edge_sampling_ratio: 0.6
+  l2_lambda: 0.00034007178082927396
+  att_lambda: 22.377475322153163
+  neg_sample_ratio: 0.5
+
+GAT-PubMed-EV22NSO8-500-ES: &GAT-PubMed-EV22NSO8-500-ES
+  <<: *GAT-PubMed-EV22NSO8-500
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
+  epochs:
+
+GAT-PubMed-EV30-500: &GAT-PubMed-EV30-500
+  <<: *GAT-PubMed-E
+  attention_type: "gated"
+
+GAT-PubMed-EV30NSO8-500: &GAT-PubMed-EV30NSO8-500
+  <<: *GAT-PubMed-EV30-500
+  epochs: 500
+  out_heads: 8
+  edge_sampling_ratio: 0.6
+  l2_lambda: 1.0056996224960937e-05  # 9.952674409448928e-05
+  att_lambda: 7.74945343443468 #  7.970357814844453
+  neg_sample_ratio: 0.5
+
+GAT-PubMed-EV30NSO8-500-ES: &GAT-PubMed-EV30NSO8-500-ES
+  <<: *GAT-PubMed-EV30NSO8-500
+  use_early_stop: True
+  early_stop_patience:
+  early_stop_queue_length:
+  early_stop_threshold_loss:
+  early_stop_threshold_perf:
+  epochs:
 
 
 GAT-PubMed-NE-500-ES-ATT:
