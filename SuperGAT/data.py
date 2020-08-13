@@ -19,13 +19,13 @@ from data_syn import RandomPartitionGraph
 from webkb4univ import WebKB4Univ
 from utils import negative_sampling_numpy
 
-
 from multiprocessing import Process, Queue
 import os
 
 
 class ENSPlanetoid(Planetoid):
     """Efficient Negative Sampling for Planetoid"""
+
     def __init__(self, root, name, neg_sample_ratio, q_trial=110):
         super().__init__(root, name)
 
@@ -244,7 +244,7 @@ class LinkPPI(PPI):
         data.__delattr__("train_neg_adj_mask")
 
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
-                                    to_undirected(data.test_neg_edge_index)], dim=1)
+                                     to_undirected(data.test_neg_edge_index)], dim=1)
 
         return data.train_pos_edge_index, test_edge_index
 
@@ -308,7 +308,7 @@ class LinkPlanetoid(Planetoid):
         data.__delattr__("train_neg_adj_mask")
 
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
-                                    to_undirected(data.test_neg_edge_index)], dim=1)
+                                     to_undirected(data.test_neg_edge_index)], dim=1)
 
         if data.val_pos_edge_index.size(1) > 0:
             val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
@@ -409,7 +409,7 @@ class LinkRandomPartitionGraph(RandomPartitionGraph):
         data.__delattr__("train_neg_adj_mask")
 
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
-                                    to_undirected(data.test_neg_edge_index)], dim=1)
+                                     to_undirected(data.test_neg_edge_index)], dim=1)
 
         if data.val_pos_edge_index.size(1) > 0:
             val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
@@ -513,7 +513,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     :param kwargs:
     :return:
     """
-    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI"]:
+    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI", "Reddit"]:
         kwargs["name"] = dataset_name
 
     torch.manual_seed(seed)
@@ -568,6 +568,14 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
         return train_loader, val_loader, test_loader
 
+    elif dataset_class in ["Reddit"]:
+        dataset = dataset_cls(root=root, **kwargs)
+        from sampler import RandomNodeSampler
+        loader = RandomNodeSampler(dataset[0], num_parts=40, shuffle=True)
+        setattr(loader, "num_node_features", dataset[0].x.size(1))
+        setattr(loader, "num_classes", torch.unique(dataset[0].y).size(0))
+        return loader, None, None
+
     else:
         raise ValueError
 
@@ -580,7 +588,6 @@ def getattr_d(dataset_or_loader, name):
 
 
 def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, **kwargs):
-
     def print_d(dataset_or_loader, prefix: str):
         if dataset_or_loader is None:
             return
@@ -617,8 +624,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 if __name__ == '__main__':
 
-    _test_data("ADPPI", "ADPPI", '~/graph-data')
+    _test_data("Reddit", "Reddit", '~/graph-data')
     exit()
+    _test_data("ADPPI", "ADPPI", '~/graph-data')
 
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
     _test_data("LinkPPI", "LinkPPI", '~/graph-data')
