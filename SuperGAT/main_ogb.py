@@ -18,65 +18,12 @@ from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
+from main import _get_model_cls, load_model, save_model, save_loss_and_perf_plot, summary_results
 from model import SuperGATNet, LargeSuperGATNet, ResSuperGATNet
 from model_baseline import LinkGNN, CGATNet
 from layer import SuperGAT
 from layer_cgat import CGATConv
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
-
-
-def get_model_path(target_epoch, _args, **kwargs):
-    args_key = get_args_key(_args)
-
-    dir_path = os.path.join(
-        _args.checkpoint_dir, args_key,
-        create_hash({**get_important_args(_args), **kwargs})[:7],
-    )
-
-    if target_epoch is not None:  # If you want to load the model of specific epoch.
-        return os.path.join(dir_path, "{}.pth".format(str(target_epoch).rjust(7, "0")))
-    else:
-        files_in_checkpoints = [f for f in os.listdir(dir_path) if f.endswith(".pth")]
-        if len(files_in_checkpoints) > 0:
-            latest_file = sorted(files_in_checkpoints)[-1]
-            return os.path.join(dir_path, latest_file)
-        else:
-            raise FileNotFoundError("There should be saved files in {} if target_epoch is None".format(
-                os.path.join(_args.checkpoint_dir, args_key),
-            ))
-
-
-def save_model(model, _args, target_epoch, perf, **kwargs) -> bool:
-    try:
-        full_path = get_model_path(target_epoch, _args, **kwargs)
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        torch.save(
-            obj={
-                'model_state_dict': model.state_dict(),
-                'epoch': target_epoch,
-                'perf': perf,
-                **kwargs,
-            },
-            f=full_path,
-        )
-        save_args(os.path.dirname(full_path), _args)
-        cprint("Save {}".format(full_path), "green")
-        return True
-    except Exception as e:
-        cprint("Cannot save model, {}".format(e), "red")
-        return False
-
-
-def load_model(model, _args, target_epoch=None, **kwargs) -> Tuple[Any, dict] or None:
-    try:
-        full_path = get_model_path(target_epoch, _args, **kwargs)
-        checkpoint = torch.load(full_path)
-        model.load_state_dict(checkpoint["model_state_dict"])
-        cprint("Load {}".format(full_path), "green")
-        return model, {k: v for k, v in checkpoint.items() if k != "model_state_dict"}
-    except Exception as e:
-        cprint("Cannot load model, {}".format(e), "red")
-        return None
 
 
 def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _args):
@@ -218,41 +165,6 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
         cprint("\t- Perfs: {}".format(perfs), "yellow")
 
     return perfs, total_loss
-
-
-def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
-    import seaborn as sns
-    import matplotlib.pyplot as plt
-    sns.set(style="whitegrid")
-    sz = len(list_of_list[0])
-    columns = columns or ["col_{}".format(i) for i in range(sz)]
-    df = pd.DataFrame(np.transpose(np.asarray([*list_of_list])), list(range(sz)), columns=columns)
-
-    print("\t".join(["epoch"] + list(str(r) for r in range(sz))))
-    for col_name, row in zip(df, df.values.transpose()):
-        print("\t".join([col_name] + [str(round(r, 5)) for r in row]))
-    cprint_multi_lines("\t- ", "yellow", **return_dict)
-
-    plot = sns.lineplot(data=df, palette="tab10", linewidth=2.5)
-    title = "{}-{}-{}".format(args.model_name, args.dataset_name, args.custom_key)
-    plot.set_title(title)
-    plot.get_figure().savefig("../plots/{}_{}_{}.png".format(title, args.seed, return_dict["best_test_perf_at_best_val"]))
-    plt.clf()
-
-
-def _get_model_cls(model_name: str):
-    if model_name == "GAT":
-        return SuperGATNet
-    elif model_name == "GATPPI":
-        return ResSuperGATNet
-    elif model_name.startswith("Link"):
-        return LinkGNN
-    elif model_name == "LargeGAT":
-        return LargeSuperGATNet
-    elif model_name == "CGAT":
-        return CGATNet
-    else:
-        raise ValueError
 
 
 def run(args, gpu_id=None, return_model=False, return_time_series=False):
@@ -403,42 +315,6 @@ def run_with_many_seeds(args, num_seeds, gpu_id=None, **kwargs):
         for rk, rv in ret.items():
             results[rk].append(rv)
     return results
-
-
-def run_with_many_seeds_with_gpu(args, num_seeds, **kwargs):
-    gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total)
-                                    if g not in args.black_list], 1))][0]
-    if args.verbose >= 1:
-        cprint("Use GPU the ID of which is {}".format(gpu_id), "yellow")
-    return run_with_many_seeds(args, num_seeds, gpu_id=gpu_id, **kwargs)
-
-
-def summary_results(results_dict: Dict[str, list or float], num_digits=3, keys_to_print=None):
-    line_list = []
-
-    def cprint_and_append(x, color=None):
-        cprint(x, color)
-        line_list.append(x)
-
-    cprint_and_append("## RESULTS SUMMARY ##", "yellow")
-    is_value_list = False
-    for rk, rv in sorted(results_dict.items()):
-        if keys_to_print is not None and rk not in keys_to_print:
-            continue
-        if isinstance(rv, list):
-            cprint_and_append("{}: {} +- {}".format(
-                rk, round(float(np.mean(rv)), num_digits), round(float(np.std(rv)), num_digits))
-            )
-            is_value_list = True
-        else:
-            cprint_and_append("{}: {}".format(rk, rv))
-    cprint_and_append("## RESULTS DETAILS ##", "yellow")
-    if is_value_list:
-        for rk, rv in sorted(results_dict.items()):
-            if keys_to_print is not None and rk not in keys_to_print:
-                continue
-            cprint_and_append("{}: {}".format(rk, rv))
-    return line_list
 
 
 if __name__ == '__main__':
