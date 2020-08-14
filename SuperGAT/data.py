@@ -569,6 +569,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         return train_loader, val_loader, test_loader
 
     elif dataset_class in ["Reddit"]:
+        root = os.path.join(root, "reddit")
         dataset = dataset_cls(root=root, **kwargs)
         from sampler import RandomNodeSampler
         loader = RandomNodeSampler(dataset[0], num_parts=40, shuffle=True)
@@ -625,7 +626,6 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 if __name__ == '__main__':
 
     _test_data("Reddit", "Reddit", '~/graph-data')
-    exit()
     _test_data("ADPPI", "ADPPI", '~/graph-data')
 
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
