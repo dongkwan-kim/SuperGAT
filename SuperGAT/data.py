@@ -1,12 +1,15 @@
+import inspect
+
 import torch
 import torch_geometric as pyg
 from copy import deepcopy
 from termcolor import cprint
 from torch_geometric.datasets import *
-from torch_geometric.data import DataLoader, InMemoryDataset, Data
-from torch_geometric.nn.models import GAE
+from torch_geometric.data import DataLoader, InMemoryDataset, Data, NeighborSampler
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops, negative_sampling, train_test_split_edges
+import ogb
+from ogb.nodeproppred import PygNodePropPredDataset
 import numpy as np
 
 import os
@@ -479,15 +482,15 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
                              ["LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic"] +
                              ["LinkPPI", "ADPPI"] +
                              ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
-                             ["WebKB4Univ"]), f"{dataset_class} is not good."
+                             ["WebKB4Univ"] +
+                             ["PygNodePropPredDataset"]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
 
 def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: str,
-                          batch_size: int = 128,
+                          batch_size: int = 1024,
                           train_val_test: Tuple[float, float, float] = (0.9 * 0.9, 0.9 * 0.1, 0.1),
-                          seed: int = 42, **kwargs) \
-        -> Tuple[InMemoryDataset or DataLoader, DataLoader or None, DataLoader or None]:
+                          seed: int = 42, **kwargs):
     """
     Note that datasets structure in torch_geometric varies.
     :param dataset_class: ['KarateClub', 'TUDataset', 'Planetoid', 'CoraFull', 'Coauthor', 'Amazon', 'PPI', 'Reddit',
@@ -513,6 +516,9 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     :param kwargs:
     :return:
     """
+
+    root = os.path.expanduser(root)
+
     if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI", "Reddit"]:
         kwargs["name"] = dataset_name
 
@@ -577,6 +583,37 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         setattr(loader, "num_classes", torch.unique(dataset[0].y).size(0))
         return loader, None, None
 
+    elif dataset_class == "PygNodePropPredDataset":
+
+        if dataset_name == "ogbn-arxiv":
+            dataset_kwargs, loader_kwargs = kwargs, {}
+        elif dataset_name == "ogbn-products":
+            loader_kwargs = {}
+            dataset_kwargs = {}
+            loader_argument_names = inspect.signature(NeighborSampler.__init__).parameters
+            for kw, v in kwargs.items():
+                if kw in loader_argument_names:
+                    #  data, size, num_hops, batch_size=1, shuffle=False,
+                    #  drop_last=False, bipartite=True, add_self_loops=False,
+                    #  flow='source_to_target'
+                    loader_kwargs[kw] = v
+                else:
+                    dataset_kwargs[kw] = v
+        else:
+            raise ValueError
+
+        dataset = PygNodePropPredDataset(root=root, **dataset_kwargs)
+        split_idx = dataset.get_idx_split()
+        dataset.train_mask = split_idx["train"]
+        dataset.val_mask = split_idx["valid"]
+        dataset.test_mask = split_idx["test"]
+
+        if dataset_name == "ogbn-arxiv":
+            return dataset, None, None
+        elif dataset_name == "ogbn-products":
+            loader = NeighborSampler(data=dataset[0], batch_size=batch_size, **loader_kwargs)
+            return dataset, loader
+
     else:
         raise ValueError
 
@@ -615,15 +652,32 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
             ))
 
     try:
-        train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, root, *args, **kwargs)
-        print_d(train_d, "[Train]")
-        print_d(val_d, "[Val]")
-        print_d(test_d, "[Test]")
+        _dl = get_dataset_or_loader(dataset_class, dataset_name, root, *args, **kwargs)
+        if len(_dl) == 3:
+            train_d, val_d, test_d = _dl
+            print_d(train_d, "[Train]")
+            print_d(val_d, "[Val]")
+            print_d(test_d, "[Test]")
+        elif len(_dl) == 2:
+            full_dataset, loader = _dl
+            _l = loader(full_dataset.train_mask)
+            cprint("[Loader] {} of {} (path={})".format(dataset_name, dataset_class, root), "yellow")
+            for i, b in enumerate(_l):
+                print("batch {}: ".format(i), b)
+                if i == 2:
+                    break
+            print_d(full_dataset, "[Dataset]")
+
     except NotImplementedError:
         cprint("NotImplementedError for {}, {}, {}".format(dataset_class, dataset_name, root), "red")
 
 
 if __name__ == '__main__':
+
+    _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
+               size=[10, 5], num_hops=2)
+    _test_data("PygNodePropPredDataset", "ogbn-arxiv", '~/graph-data')
+    exit()
 
     _test_data("Reddit", "Reddit", '~/graph-data')
     _test_data("ADPPI", "ADPPI", '~/graph-data')

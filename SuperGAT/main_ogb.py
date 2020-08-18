@@ -10,6 +10,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from ogb.nodeproppred import PygNodePropPredDataset, Evaluator
+
 import numpy as np
 import pandas as pd
 from termcolor import cprint
@@ -23,7 +25,7 @@ from model import SuperGATNet, LargeSuperGATNet, ResSuperGATNet
 from model_baseline import LinkGNN, CGATNet
 from layer import SuperGAT
 from layer_cgat import CGATConv
-from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
+from utils import create_hash, cprint_multi_lines, blind_other_gpus
 
 
 def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _args):
@@ -36,6 +38,7 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
     total_loss = 0.
     for batch in dataset_or_loader:
         batch = batch.to(device)
+        train_mask = dataset_or_loader.train_mask.to(device)
         optimizer.zero_grad()
 
         # Forward
@@ -44,10 +47,7 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
                         attention_edge_index=getattr(batch, "train_edge_index", None))
 
         # Loss
-        if "train_mask" in batch.__dict__:
-            loss = criterion(outputs[batch.train_mask], batch.y[batch.train_mask])
-        else:
-            loss = criterion(outputs, batch.y)
+        loss = criterion(outputs[train_mask], batch.y.squeeze()[train_mask])
 
         # Supervision Loss w/ pretraining
         if _args.is_super_gat:
@@ -99,7 +99,8 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
     return total_loss
 
 
-def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="val", verbose=0, **kwargs):
+@torch.no_grad()
+def test_model(device, model, dataset_or_loader, criterion, evaluator, _args, val_or_test="val", verbose=0, **kwargs):
     model.eval()
     try:
         model.set_layer_attrs("cache_attention", _args.task_type == "Attention_Dist")
@@ -110,61 +111,42 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     except AttributeError:
         pass
 
-    num_classes = getattr_d(dataset_or_loader, "num_classes")
+    if _args.dataset_name == "ogbn-arxiv":
 
-    total_loss = 0.
-    outputs_list, ys_list, batch = [], [], None
-    with torch.no_grad():
-        for batch in dataset_or_loader:
-            batch = batch.to(device)
+        val_mask = dataset_or_loader.val_mask.to(device)
+        test_mask = dataset_or_loader.test_mask.to(device)
 
-            # Forward
-            outputs = model(batch.x, batch.edge_index,
-                            batch=getattr(batch, "batch", None),
-                            attention_edge_index=getattr(batch, "{}_edge_index".format(val_or_test), None))
+        data = dataset_or_loader[0]
+        outputs = model(data.x, data.edge_index,
+                        batch=getattr(data, "batch", None),
+                        attention_edge_index=getattr(data, "{}_edge_index".format(val_or_test), None))
+        y_pred = outputs.argmax(dim=-1, keepdim=True)
 
-            # Loss
-            if "train_mask" in batch.__dict__:
-                val_or_test_mask = batch.val_mask if val_or_test == "val" else batch.test_mask
-                loss = criterion(outputs[val_or_test_mask], batch.y[val_or_test_mask])
-                outputs_ndarray = outputs[val_or_test_mask].cpu().numpy()
-                ys_ndarray = to_one_hot(batch.y[val_or_test_mask], num_classes)
-            elif _args.dataset_name == "PPI":  # PPI task
-                loss = criterion(outputs, batch.y)
-                outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), batch.y.cpu().numpy()
-            else:
-                loss = criterion(outputs, batch.y)
-                outputs_ndarray, ys_ndarray = outputs.cpu().numpy(), to_one_hot(batch.y, num_classes)
-            total_loss += loss.item()
+        val_acc = evaluator.eval({
+            'y_true': data.y[val_mask],
+            'y_pred': y_pred[val_mask],
+        })['acc']
+        val_loss = criterion(outputs[val_mask], data.y.squeeze()[val_mask])
 
-            outputs_list.append(outputs_ndarray)
-            ys_list.append(ys_ndarray)
+        test_acc = evaluator.eval({
+            'y_true': data.y[dataset_or_loader.test_mask],
+            'y_pred': y_pred[dataset_or_loader.test_mask],
+        })['acc']
+        test_loss = criterion(outputs[test_mask], data.y.squeeze()[test_mask])
 
-    outputs_total, ys_total = np.concatenate(outputs_list), np.concatenate(ys_list)
+    elif _args.dataset_name == "ogbn-products":
+        raise NotImplementedError
 
-    if _args.task_type == "Link_Prediction":
-        if "run_link_prediction" in kwargs and kwargs["run_link_prediction"]:
-            val_or_test_edge_y = batch.val_edge_y if val_or_test == "val" else batch.test_edge_y
-            layer_idx_for_lp = kwargs["layer_idx_for_link_prediction"] \
-                if "layer_idx_for_link_prediction" in kwargs else -1
-            perfs = SuperGAT.get_link_pred_perfs_by_attention(model=model, edge_y=val_or_test_edge_y,
-                                                              layer_idx=layer_idx_for_lp)
-        else:
-            perfs = get_accuracy(outputs_total, ys_total)
-    elif _args.perf_type == "micro-f1" and _args.dataset_name == "PPI":
-        preds = (outputs_total > 0).astype(int)
-        perfs = f1_score(ys_total, preds, average="micro") if preds.sum() > 0 else 0
-    elif _args.perf_type == "accuracy" or _args.task_type == "Attention_Dist":
-        perfs = get_accuracy(outputs_total, ys_total)
     else:
-        raise ValueError
+        raise ValueError(f"Wrong name: {_args.dataset_name}")
 
     if verbose >= 2:
         full_name = "Validation" if val_or_test == "val" else "Test"
         cprint("\n[{} of {}]".format(full_name, model.__class__.__name__), "yellow")
-        cprint("\t- Perfs: {}".format(perfs), "yellow")
+        cprint(f"\t-  val_acc: {val_acc}", "yellow")
+        cprint(f"\t- test_acc: {test_acc}", "yellow")
 
-    return perfs, total_loss
+    return val_acc, val_loss, test_acc, test_loss
 
 
 def run(args, gpu_id=None, return_model=False, return_time_series=False):
@@ -209,6 +191,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
 
     loss_func = eval(str(args.loss)) or nn.CrossEntropyLoss()  # nn.BCEWithLogitsLoss(), nn.CrossEntropyLoss()
     adam_optim = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.l2_lambda)
+    evaluator = Evaluator(name=args.dataset_name)
 
     ret = {}
     val_perf_list, test_perf_list, val_loss_list = [], [], []
@@ -223,12 +206,13 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
         # Validation.
         if epoch % args.val_interval == 0:
 
-            val_perf, val_loss = test_model(running_device, net, val_d or train_d, loss_func,
-                                            _args=args, val_or_test="val", verbose=args.verbose,
-                                            run_link_prediction=(perf_task_for_val == "Link"))
-            test_perf, test_loss = test_model(running_device, net, test_d or train_d, loss_func,
-                                              _args=args, val_or_test="test", verbose=0,
-                                              run_link_prediction=(perf_task_for_val == "Link"))
+            val_perf, val_loss, test_perf, test_loss = test_model(
+                running_device, net, val_d or train_d, loss_func,
+                evaluator=evaluator,
+                _args=args, val_or_test="val", verbose=args.verbose,
+                run_link_prediction=(perf_task_for_val == "Link"),
+            )
+
             if args.save_plot:
                 val_perf_list.append(val_perf)
                 test_perf_list.append(test_perf)
@@ -324,22 +308,27 @@ if __name__ == '__main__':
     main_args = get_args(
         model_name="GAT",
         dataset_class="PygNodePropPredDataset",
-        dataset_name="ogbn-products",  # ogbn-products, ogbn-arxiv
+        dataset_name="ogbn-arxiv",  # ogbn-products, ogbn-arxiv
         custom_key="EV13NSO8",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
     )
+    main_args.black_list = [0, 1, 2, 3]  # todo
     pprint_args(main_args)
 
-    alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
-                                 num_gpus_to_use=main_args.num_gpus_to_use,
-                                 black_list=main_args.black_list)
-    if not alloc_gpu:
-        alloc_gpu = [int(np.random.choice([g for g in range(main_args.num_gpus_total)
-                                           if g not in main_args.black_list], 1))]
-    cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
+    if len(main_args.black_list) == main_args.num_gpus_total:
+        alloc_gpu = None
+        cprint("Use CPU", "yellow")
+    else:
+        alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
+                                     num_gpus_to_use=main_args.num_gpus_to_use,
+                                     black_list=main_args.black_list)
+        if not alloc_gpu:
+            alloc_gpu = [int(np.random.choice([g for g in range(main_args.num_gpus_total)
+                                               if g not in main_args.black_list], 1))][0]
+        cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
     # noinspection PyTypeChecker
     t0 = time.perf_counter()
-    many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
+    many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu)
 
     pprint_args(main_args)
     summary_results(many_seeds_result)
