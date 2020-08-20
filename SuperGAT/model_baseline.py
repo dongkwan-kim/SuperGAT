@@ -148,7 +148,7 @@ class LinkGNN(nn.Module):
     def forward(self, x, edge_index, batch=None, **kwargs):
 
         # Labels
-        if self.training and self.cache["label"] is None:
+        if self.training and self.cache["label"] is None and self.args.is_link_gnn:
             device = next(self.parameters()).device
             num_pos, num_neg = edge_index.size(1), int(self.neg_sample_ratio * edge_index.size(1))
             label = torch.zeros(num_pos + num_neg).float().to(device)
