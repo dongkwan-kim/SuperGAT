@@ -50,6 +50,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--l1-lambda", default=0., type=float)
     parser.add_argument("--l2-lambda", default=0., type=float)
     parser.add_argument("--num-layers", default=2, type=int)
+    parser.add_argument("--use-bn", default=False, type=bool)
     parser.add_argument("--perf-task-for-val", default="Node", type=str)  # Node or Link
 
     # Early stop
@@ -105,6 +106,9 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
 def get_important_args(_args: argparse.Namespace) -> dict:
     important_args = [
         "lr",
+        "num_hidden_features",
+        "num_layers",
+        "use_bn",
         "l1_lambda",
         "l2_lambda",
         "att_lambda",

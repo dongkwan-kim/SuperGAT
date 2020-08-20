@@ -191,6 +191,7 @@ class LargeSuperGATNet(nn.Module):
             use_pretraining=args.use_pretraining,
         )
         self.conv_list = []
+        self.bn_list = []
         for conv_id in range(1, self.num_layers + 1):
             if conv_id == 1:  # first layer
                 in_channels, out_channels = num_input_features, args.num_hidden_features
@@ -201,11 +202,19 @@ class LargeSuperGATNet(nn.Module):
             else:
                 in_channels, out_channels = args.num_hidden_features * args.heads, args.num_hidden_features
                 heads, concat = args.heads, True
+            # conv
             conv = gat_cls(in_channels, out_channels, heads=heads, concat=concat, **conv_common_kwargs)
             conv_name = "conv{}".format(conv_id)
             self.conv_list.append(conv)
             setattr(self, conv_name, conv)
             self.add_module(conv_name, conv)
+            # bn
+            if args.use_bn and conv_id != self.num_layers:  # not last layer
+                bn = nn.BatchNorm1d(out_channels * heads)
+                bn_name = "bn{}".format(conv_id)
+                self.bn_list.append(bn)
+                setattr(self, bn_name, bn)
+                self.add_module(bn_name, bn)
 
         pprint(next(self.modules()))
 
@@ -214,6 +223,8 @@ class LargeSuperGATNet(nn.Module):
             x = F.dropout(x, p=self.args.dropout, training=self.training)
             x = conv(x, edge_index, **kwargs)
             if conv_idx != self.num_layers - 1:
+                if self.args.use_bn:
+                    x = self.bn_list[conv_idx](x)
                 x = F.elu(x)
         return x
 
