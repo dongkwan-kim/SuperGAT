@@ -116,7 +116,7 @@ def test_model(device, model, dataset_or_loader, criterion, evaluator, _args, va
         val_mask = dataset_or_loader.val_mask.to(device)
         test_mask = dataset_or_loader.test_mask.to(device)
 
-        data = dataset_or_loader[0]
+        data = dataset_or_loader[0].to(device)
         outputs = model(data.x, data.edge_index,
                         batch=getattr(data, "batch", None),
                         attention_edge_index=getattr(data, "{}_edge_index".format(val_or_test), None))
@@ -129,8 +129,8 @@ def test_model(device, model, dataset_or_loader, criterion, evaluator, _args, va
         val_loss = criterion(outputs[val_mask], data.y.squeeze()[val_mask])
 
         test_acc = evaluator.eval({
-            'y_true': data.y[dataset_or_loader.test_mask],
-            'y_pred': y_pred[dataset_or_loader.test_mask],
+            'y_true': data.y[test_mask],
+            'y_pred': y_pred[test_mask],
         })['acc']
         test_loss = criterion(outputs[test_mask], data.y.squeeze()[test_mask])
 
@@ -172,6 +172,10 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     dataset_kwargs = {}
     if args.dataset_class == "ENSPlanetoid":
         dataset_kwargs["neg_sample_ratio"] = args.neg_sample_ratio
+    if args.dataset_name == "ogbn-products":
+        dataset_kwargs["size"] = args.sampling_size
+        dataset_kwargs["num_hops"] = args.sampling_num_hops
+        dataset_kwargs["shuffle"] = True
 
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
@@ -216,7 +220,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
             if args.save_plot:
                 val_perf_list.append(val_perf)
                 test_perf_list.append(test_perf)
-                val_loss_list.append(val_loss)
+                val_loss_list.append(val_loss.item())
 
             if test_perf > best_test_perf:
                 best_test_perf = test_perf
@@ -306,7 +310,7 @@ if __name__ == '__main__':
     num_total_runs = 7
 
     main_args = get_args(
-        model_name="GAT",
+        model_name="LargeGAT",
         dataset_class="PygNodePropPredDataset",
         dataset_name="ogbn-arxiv",  # ogbn-products, ogbn-arxiv
         custom_key="EV13NSO8",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
