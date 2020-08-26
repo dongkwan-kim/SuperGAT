@@ -37,7 +37,6 @@ except ImportError:
 
 def print_rpg_analysis(deg, hp, legend, custom_key, model="GAT",
                        num_nodes_per_class=500, num_classes=10, print_all=False, print_tsv=True):
-
     regex = re.compile(r"ms_result_(\d+\.\d+|1e\-\d+)-(\d+\.\d+|1e\-\d+).pkl")
 
     base_key = "analysis_rpg"
@@ -358,21 +357,31 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarr
     return np.asarray(degree_and_homophily)
 
 
-def analyze_degree_and_homophily(extension="png", **data_kwargs):
+def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
+    targets = targets or ["OGB", "PPI", "Planetoid", "RPG"]
 
-    degree_and_homophily = get_degree_and_homophily("PPI", "PPI", data_root="~/graph-data")
-    dn_to_dg_and_h["PPI"] = degree_and_homophily
+    if "OGB" in targets:
+        degree_and_homophily = get_degree_and_homophily("PygNodePropPredDataset", "ogbn-arxiv",
+                                                        data_root="~/graph-data")
+        dn_to_dg_and_h["ogbn-arxiv"] = degree_and_homophily
 
-    for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
-        degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
-        dn_to_dg_and_h[dataset_name] = degree_and_homophily
+    if "PPI" in targets:
+        degree_and_homophily = get_degree_and_homophily("PPI", "PPI", data_root="~/graph-data")
+        dn_to_dg_and_h["PPI"] = degree_and_homophily
 
-    for adr in [0.025, 0.04, 0.01]:
-        for dataset_name in tqdm(["rpg-10-500-{}-{}".format(r, adr) for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
-            degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name,
-                                                            data_root="~/graph-data")
+    if "Planetoid" in targets:
+        for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
+            degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
             dn_to_dg_and_h[dataset_name] = degree_and_homophily
+
+    if "RPG" in targets:
+        for adr in [0.025, 0.04, 0.01]:
+            dataset_name: object
+            for dataset_name in tqdm(["rpg-10-500-{}-{}".format(r, adr) for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
+                degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name,
+                                                                data_root="~/graph-data")
+                dn_to_dg_and_h[dataset_name] = degree_and_homophily
 
     for dataset_name, degree_and_homophily in dn_to_dg_and_h.items():
         df = pd.DataFrame({
@@ -380,7 +389,8 @@ def analyze_degree_and_homophily(extension="png", **data_kwargs):
             "homophily": degree_and_homophily[:, 1],
         })
         plot = sns.scatterplot(x="homophily", y="degree", data=df,
-                               legend=False, palette="Set1")
+                               legend=False, palette="Set1",
+                               s=15)
         sns.despine(left=False, right=False, bottom=False, top=False)
 
         _key, _path = _get_key_and_makedirs(args=None, no_args_key="degree_homophily", base_path="../figs")
@@ -1003,7 +1013,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "attention_metric_for_multiple_models"
+    MODE = "degree_and_homophily"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":

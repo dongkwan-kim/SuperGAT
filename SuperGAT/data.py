@@ -102,6 +102,7 @@ def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
             - a(y_j, y_i) = 1 / L[i].sum() if y_j = y_i,
             - a(y_j, y_i) = 0 otherwise.
     """
+    y = y.squeeze()
     num_nodes = y.size(0)
 
     # Add self-loops and sort by index
