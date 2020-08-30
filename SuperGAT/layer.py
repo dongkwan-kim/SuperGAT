@@ -8,7 +8,7 @@ from torch.nn import Parameter
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, dropout_adj, \
-    is_undirected, accuracy, negative_sampling, batched_negative_sampling
+    is_undirected, accuracy, negative_sampling, batched_negative_sampling, to_undirected
 import torch_geometric.nn.inits as tgi
 
 from typing import List
@@ -25,7 +25,7 @@ class SuperGAT(MessagePassing):
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
                  is_super_gat=True, attention_type="basic", super_gat_criterion=None,
                  neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False,
-                 scaling_factor=None,
+                 to_undirected_at_neg=False, scaling_factor=None,
                  cache_label=False, cache_attention=False, **kwargs):
         super(SuperGAT, self).__init__(aggr='add', **kwargs)
 
@@ -41,6 +41,7 @@ class SuperGAT(MessagePassing):
         self.neg_sample_ratio = neg_sample_ratio
         self.pretraining_noise_ratio = pretraining_noise_ratio
         self.pretraining = None if not use_pretraining else True
+        self.to_undirected_at_neg = to_undirected_at_neg
         self.cache_label = cache_label
         self.cache_attention = cache_attention
 
@@ -153,8 +154,12 @@ class SuperGAT(MessagePassing):
                 neg_edge_index = None
 
             elif batch is None:
+                if self.to_undirected_at_neg:
+                    edge_index_for_ns = to_undirected(edge_index, num_nodes=x.size(0))
+                else:
+                    edge_index_for_ns = edge_index
                 neg_edge_index = negative_sampling(
-                    edge_index=edge_index,
+                    edge_index=edge_index_for_ns,
                     num_nodes=x.size(0),
                     num_neg_samples=num_neg_samples,
                 )

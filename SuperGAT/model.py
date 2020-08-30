@@ -60,7 +60,7 @@ class SuperGATNet(nn.Module):
             super_gat_criterion=args.super_gat_criterion,
             neg_sample_ratio=args.neg_sample_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio, use_pretraining=args.use_pretraining,
-            scaling_factor=args.scaling_factor,
+            to_undirected_at_neg=args.to_undirected_at_neg, scaling_factor=args.scaling_factor,
         )
 
         self.conv2 = gat_cls(
@@ -70,7 +70,7 @@ class SuperGATNet(nn.Module):
             super_gat_criterion=args.super_gat_criterion,
             neg_sample_ratio=args.neg_sample_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio, use_pretraining=args.use_pretraining,
-            scaling_factor=args.scaling_factor,
+            to_undirected_at_neg=args.to_undirected_at_neg, scaling_factor=args.scaling_factor,
         )
 
         pprint(next(self.modules()))
@@ -189,6 +189,8 @@ class LargeSuperGATNet(nn.Module):
             neg_sample_ratio=args.neg_sample_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio,
             use_pretraining=args.use_pretraining,
+            to_undirected_at_neg=args.to_undirected_at_neg,
+            scaling_factor=args.scaling_factor,
         )
         self.conv_list = []
         self.bn_list = []
