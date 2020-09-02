@@ -278,6 +278,8 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     dataset_kwargs = {}
     if args.dataset_class == "ENSPlanetoid":
         dataset_kwargs["neg_sample_ratio"] = args.neg_sample_ratio
+    if args.dataset_class == "WikiCS":
+        dataset_kwargs["split"] = args.seed % 20  # num_splits = 20
 
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
@@ -447,9 +449,9 @@ if __name__ == '__main__':
 
     main_args = get_args(
         model_name="GAT",  # GAT, CGAT, LargeGAT, GCN
-        dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, FullPlanetoid, RandomPartitionGraph
-        dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
-        custom_key="EV13NSO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
+        dataset_class="WikiCS",  # ADPlanetoid, LinkPlanetoid, Planetoid, FullPlanetoid, RandomPartitionGraph
+        dataset_name="WikiCS",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
+        custom_key="NEO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
     pprint_args(main_args)
 

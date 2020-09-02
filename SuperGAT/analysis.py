@@ -310,7 +310,7 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
         )
 
 
-def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarray:
+def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -> np.ndarray:
     """
     :param dataset_class: str
     :param dataset_name: str
@@ -325,7 +325,7 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarr
         else:
             return 0
 
-    train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42)
+    train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42, **kwargs)
     if dataset_name != "PPI":
         data = train_d[0]
         x, y, edge_index = data.x, data.y, data.edge_index
@@ -359,7 +359,11 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarr
 
 def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
-    targets = targets or ["OGB", "PPI", "Planetoid", "RPG"]
+    targets = targets or ["WikiCS", "OGB", "PPI", "Planetoid", "RPG"]
+
+    if "WikiCS" in targets:
+        degree_and_homophily = get_degree_and_homophily("WikiCS", "WikICS", data_root="~/graph-data", split=0)
+        dn_to_dg_and_h["WikiCS"] = degree_and_homophily
 
     if "OGB" in targets:
         degree_and_homophily = get_degree_and_homophily("PygNodePropPredDataset", "ogbn-arxiv",

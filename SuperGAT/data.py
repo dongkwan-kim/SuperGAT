@@ -10,6 +10,7 @@ from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edg
     add_self_loops, negative_sampling, train_test_split_edges
 import ogb
 from ogb.nodeproppred import PygNodePropPredDataset
+from data_wikics import WikiCS
 import numpy as np
 
 import os
@@ -484,7 +485,7 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
                              ["LinkPPI", "ADPPI"] +
                              ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
                              ["WebKB4Univ"] +
-                             ["PygNodePropPredDataset"]), f"{dataset_class} is not good."
+                             ["PygNodePropPredDataset", "WikiCS"]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
 
@@ -520,7 +521,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
 
     root = os.path.expanduser(root)
 
-    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI", "Reddit"]:
+    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI", "Reddit", "WikiCS"]:
         kwargs["name"] = dataset_name
 
     torch.manual_seed(seed)
@@ -583,6 +584,14 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         setattr(loader, "num_node_features", dataset[0].x.size(1))
         setattr(loader, "num_classes", torch.unique(dataset[0].y).size(0))
         return loader, None, None
+
+    elif dataset_class in ["WikiCS"]:
+        _split = kwargs["split"]
+        dataset = dataset_cls(root=root)
+        dataset.data.stopping_mask = None
+        dataset.data.train_mask = dataset.data.train_mask[:, _split]
+        dataset.data.val_mask = dataset.data.val_mask[:, _split]
+        return dataset, None, None
 
     elif dataset_class == "PygNodePropPredDataset":
 
@@ -675,10 +684,11 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 if __name__ == '__main__':
 
+    _test_data("WikiCS", "WikiCS", '~/graph-data', split=0)
+
     _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
                size=[10, 5], num_hops=2)
     _test_data("PygNodePropPredDataset", "ogbn-arxiv", '~/graph-data')
-    exit()
 
     _test_data("Reddit", "Reddit", '~/graph-data')
     _test_data("ADPPI", "ADPPI", '~/graph-data')
