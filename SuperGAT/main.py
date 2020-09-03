@@ -19,7 +19,7 @@ from sklearn.metrics import f1_score
 from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
 from model import SuperGATNet, LargeSuperGATNet, ResSuperGATNet
-from model_baseline import LinkGNN, CGATNet
+from model_baseline import LinkGNN, CGATNet, MLPNet
 from layer import SuperGAT
 from layer_cgat import CGATConv
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
@@ -251,6 +251,8 @@ def _get_model_cls(model_name: str):
         return LargeSuperGATNet
     elif model_name == "CGAT":
         return CGATNet
+    elif model_name == "MLP":
+        return MLPNet
     else:
         raise ValueError
 

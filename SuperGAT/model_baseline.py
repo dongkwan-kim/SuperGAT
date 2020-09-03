@@ -59,6 +59,28 @@ def _get_last_features(cls_name: str, args):
         raise ValueError
 
 
+class MLPNet(nn.Module):
+
+    def __init__(self, args, dataset_or_loader):
+        super(MLPNet, self).__init__()
+        self.args = args
+
+        num_input_features = getattr_d(dataset_or_loader, "num_node_features")
+        num_classes = getattr_d(dataset_or_loader, "num_classes")
+
+        self.fc = nn.Sequential(
+            nn.Dropout(p=args.dropout),
+            nn.Linear(num_input_features, args.num_hidden_features),
+            nn.ELU(),
+            nn.Dropout(p=args.dropout),
+            nn.Linear(args.num_hidden_features, num_classes),
+        )
+        pprint(next(self.modules()))
+
+    def forward(self, x, *args, **kwargs):
+        return self.fc(x)
+
+
 class CGATNet(nn.Module):
 
     def __init__(self, args, dataset_or_loader):
