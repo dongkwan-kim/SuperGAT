@@ -20,7 +20,7 @@ from typing import Tuple, Callable, List
 from tqdm import tqdm
 
 from data_syn import RandomPartitionGraph
-from webkb4univ import WebKB4Univ
+from data_webkb4univ import WebKB4Univ
 from utils import negative_sampling_numpy
 
 from multiprocessing import Process, Queue
@@ -684,6 +684,7 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 if __name__ == '__main__':
 
+    _test_data("WebKB4Univ", "WebKB4Univ", '~/graph-data')
     _test_data("WikiCS", "WikiCS", '~/graph-data', split=0)
 
     _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',

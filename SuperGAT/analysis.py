@@ -326,11 +326,7 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
             return 0
 
     train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42, **kwargs)
-    if dataset_name != "PPI":
-        data = train_d[0]
-        x, y, edge_index = data.x, data.y, data.edge_index
-        num_labels = 1
-    else:
+    if dataset_name in ["PPI", "WebKB4Univ"]:
         cum_sum = 0
         x_list, y_list, edge_index_list = [], [], []
         for _data in chain(train_d, val_d, test_d):
@@ -341,7 +337,14 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
         x = torch.cat(x_list, dim=0)
         y = torch.cat(y_list, dim=0)
         edge_index = torch.cat(edge_index_list, dim=1)
-        num_labels = y.size(1)
+        try:
+            num_labels = y.size(1)  # multi-labels
+        except IndexError:
+            num_labels = 1
+    else:
+        data = train_d[0]
+        x, y, edge_index = data.x, data.y, data.edge_index
+        num_labels = 1
 
     deg = degree(edge_index[1], num_nodes=x.size(0))
     agr_list, agr_sum_list = get_agreement_dist(edge_index, y,
@@ -360,6 +363,10 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
 def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
     targets = targets or ["WikiCS", "OGB", "PPI", "Planetoid", "RPG"]
+
+    if "WebKB4Univ" in targets:
+        degree_and_homophily = get_degree_and_homophily("WebKB4Univ", "WebKB4Univ", data_root="~/graph-data")
+        dn_to_dg_and_h["WebKB4Univ"] = degree_and_homophily
 
     if "WikiCS" in targets:
         degree_and_homophily = get_degree_and_homophily("WikiCS", "WikICS", data_root="~/graph-data", split=0)
@@ -1164,7 +1171,7 @@ if __name__ == '__main__':
         visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily()
+        analyze_degree_and_homophily(["WebKB4Univ"])
 
     elif MODE == "get_and_print_rpg_analysis":
 
