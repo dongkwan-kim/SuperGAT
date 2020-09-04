@@ -326,7 +326,7 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
             return 0
 
     train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42, **kwargs)
-    if dataset_name in ["PPI", "WebKB4Univ"]:
+    if dataset_name in ["PPI", "WebKB4Univ", "CLUSTER"]:
         cum_sum = 0
         x_list, y_list, edge_index_list = [], [], []
         for _data in chain(train_d, val_d, test_d):
@@ -362,7 +362,15 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
 
 def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
-    targets = targets or ["WikiCS", "OGB", "PPI", "Planetoid", "RPG"]
+    targets = targets or ["Flickr", "CLUSTER", "WikiCS", "OGB", "PPI", "Planetoid", "RPG"]
+
+    if "Flickr" in targets:
+        degree_and_homophily = get_degree_and_homophily("Flickr", "Flickr", data_root="~/graph-data")
+        dn_to_dg_and_h["Flickr"] = degree_and_homophily
+
+    if "CLUSTER" in targets:
+        degree_and_homophily = get_degree_and_homophily("GNNBenchmarkDataset", "CLUSTER", data_root="~/graph-data")
+        dn_to_dg_and_h["CLUSTER"] = degree_and_homophily
 
     if "WebKB4Univ" in targets:
         degree_and_homophily = get_degree_and_homophily("WebKB4Univ", "WebKB4Univ", data_root="~/graph-data")
@@ -1171,7 +1179,7 @@ if __name__ == '__main__':
         visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["WebKB4Univ"])
+        analyze_degree_and_homophily(["CLUSTER"])
 
     elif MODE == "get_and_print_rpg_analysis":
 

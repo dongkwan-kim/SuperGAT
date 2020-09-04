@@ -8,9 +8,6 @@ from torch_geometric.datasets import *
 from torch_geometric.data import DataLoader, InMemoryDataset, Data, NeighborSampler
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops, negative_sampling, train_test_split_edges
-import ogb
-from ogb.nodeproppred import PygNodePropPredDataset
-from data_wikics import WikiCS
 import numpy as np
 
 import os
@@ -19,8 +16,13 @@ from typing import Tuple, Callable, List
 
 from tqdm import tqdm
 
+import ogb
+from ogb.nodeproppred import PygNodePropPredDataset
 from data_syn import RandomPartitionGraph
 from data_webkb4univ import WebKB4Univ
+from data_bg import GNNBenchmarkDataset
+from data_flickr import Flickr
+from data_wikics import WikiCS
 from utils import negative_sampling_numpy
 
 from multiprocessing import Process, Queue
@@ -480,12 +482,12 @@ def get_dataset_class_name(dataset_name: str) -> str:
 
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in (pyg.datasets.__all__ +
-                             ["ENSPlanetoid"] +
-                             ["LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic"] +
-                             ["LinkPPI", "ADPPI"] +
-                             ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
-                             ["WebKB4Univ"] +
-                             ["PygNodePropPredDataset", "WikiCS"]), f"{dataset_class} is not good."
+                             [
+                                 "ENSPlanetoid", "LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic",
+                                 "LinkPPI", "ADPPI",
+                                 "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph",
+                                 "WebKB4Univ", "PygNodePropPredDataset", "WikiCS", "GNNBenchmarkDataset", "Flickr",
+                             ]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
 
@@ -593,6 +595,20 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset.data.val_mask = dataset.data.val_mask[:, _split]
         return dataset, None, None
 
+    elif dataset_class in ["GNNBenchmarkDataset"]:
+        train_dataset = dataset_cls(root=root, split="train", **kwargs)
+        val_dataset = dataset_cls(root=root, split="val", **kwargs)
+        test_dataset = dataset_cls(root=root, split="test", **kwargs)
+        train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+        return train_loader, val_loader, test_loader
+
+    elif dataset_class in ["Flickr"]:
+        root = os.path.join(root, "flickr")
+        dataset = dataset_cls(root=root)
+        return dataset, None, None
+
     elif dataset_class == "PygNodePropPredDataset":
 
         if dataset_name == "ogbn-arxiv":
@@ -684,6 +700,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 if __name__ == '__main__':
 
+    _test_data("Flickr", "Flickr", '~/graph-data')
+    exit()
+    _test_data("GNNBenchmarkDataset", "CLUSTER", '~/graph-data')
     _test_data("WebKB4Univ", "WebKB4Univ", '~/graph-data')
     _test_data("WikiCS", "WikiCS", '~/graph-data', split=0)
 
