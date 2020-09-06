@@ -363,9 +363,24 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
 def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
     targets = targets or [
-        "MyAmazon", "Flickr", "CLUSTER", "WikiCS", "OGB",
+        "MyCitationFull", "MyCoauthor", "MyAmazon",
+        "Flickr", "CLUSTER", "WikiCS", "OGB",
         "PPI", "Planetoid", "RPG",
     ]
+
+    if "MyCitationFull" in targets:
+        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora", data_root="~/graph-data")
+        dn_to_dg_and_h["CoraFull"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora_ML", data_root="~/graph-data")
+        dn_to_dg_and_h["Cora_ML"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "DBLP", data_root="~/graph-data")
+        dn_to_dg_and_h["DBLP"] = degree_and_homophily
+
+    if "MyCoauthor" in targets:
+        degree_and_homophily = get_degree_and_homophily("MyCoauthor", "CS", data_root="~/graph-data")
+        dn_to_dg_and_h["CS"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyCoauthor", "Physics", data_root="~/graph-data")
+        dn_to_dg_and_h["Physics"] = degree_and_homophily
 
     if "MyAmazon" in targets:
         degree_and_homophily = get_degree_and_homophily("MyAmazon", "Photo", data_root="~/graph-data")
@@ -1188,7 +1203,7 @@ if __name__ == '__main__':
         visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["MyAmazon"])
+        analyze_degree_and_homophily(["MyCitationFull", "MyCoauthor"])
 
     elif MODE == "get_and_print_rpg_analysis":
 
