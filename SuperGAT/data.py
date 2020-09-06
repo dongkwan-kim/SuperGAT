@@ -1,4 +1,5 @@
 import inspect
+import random
 
 import torch
 import torch_geometric as pyg
@@ -160,14 +161,17 @@ class FullPlanetoid(Planetoid):
         self.data.train_mask[self.data.test_mask] = False
 
 
-def mask_init(self, num_train_per_class=20, num_val_per_class=30):
+def mask_init(self, num_train_per_class=20, num_val_per_class=30, seed=12345):
     num_nodes = self.data.y.size(0)
     self.train_mask = torch.zeros([num_nodes], dtype=torch.bool)
     self.val_mask = torch.zeros([num_nodes], dtype=torch.bool)
     self.test_mask = torch.ones([num_nodes], dtype=torch.bool)
+    random.seed(seed)
     for c in range(self.num_classes):
         samples_idx = (self.data.y == c).nonzero().squeeze()
-        perm = torch.randperm(samples_idx.size(0))
+        perm = list(range(samples_idx.size(0)))
+        random.shuffle(perm)
+        perm = torch.as_tensor(perm).long()
         self.train_mask[samples_idx[perm][:num_train_per_class]] = True
         self.val_mask[samples_idx[perm][num_train_per_class:num_train_per_class + num_val_per_class]] = True
     self.test_mask[self.train_mask] = False
