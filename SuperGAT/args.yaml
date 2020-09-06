@@ -1923,12 +1923,13 @@ LargeGAT-ogbn-arxiv-EV13NSO8-UND-ES: &LargeGAT-ogbn-arxiv-EV13NSO8-UND-ES
 
 GAT-WikiCS: &GAT-WikiCS
   <<: *GAT
-  lr: 0.01 # 0.005
+  lr: 0.01
   out_heads: 1
   task_type: Node_Transductive
   val_interval: 1
   num_hidden_features: 8
   epochs: 500
+  to_undirected_at_neg: True
 
 GCN-WikiCS-NE: &GCN-WikiCS-NE
   <<: *GAT-WikiCS
@@ -1936,7 +1937,7 @@ GCN-WikiCS-NE: &GCN-WikiCS-NE
   num_hidden_features: 64
   is_super_gat: False
   is_link_gnn: False
-  l2_lambda: 3.9514262920393945e-09
+  l2_lambda: 3.3902435407244234e-06
 
 SAGE-WikiCS-NE: &SAGE-WikiCS-NE
   <<: *GAT-WikiCS
@@ -1944,7 +1945,7 @@ SAGE-WikiCS-NE: &SAGE-WikiCS-NE
   num_hidden_features: 64
   is_super_gat: False
   is_link_gnn: False
-  l2_lambda: 1.3564923851522799e-05
+  l2_lambda: 0.0001314343841661435
 
 GAT-WikiCS-NE:  &GAT-WikiCS-NE
   <<: *GAT-WikiCS
@@ -1954,11 +1955,7 @@ GAT-WikiCS-NE:  &GAT-WikiCS-NE
 GAT-WikiCS-NEO8: &GAT-WikiCS-NEO8
   <<: *GAT-WikiCS-NE
   out_heads: 8
-  l2_lambda: 0.02
-
-GAT-WikiCS-NEO8-Full: &GAT-WikiCS-NEO8-Full
-  <<: *GAT-WikiCS-NEO8
-  l2_lambda: 2.7008501865740714e-05
+  l2_lambda: 2.193426817200768e-08
 
 GAT-WikiCS-NEDP:
   <<: *GAT-WikiCS-NE
@@ -2039,7 +2036,7 @@ GAT-WikiCS-EV3O8: &GAT-WikiCS-EV3O8
   edge_sampling_ratio: 0.8
   l2_lambda: 0.007829935944807744
   att_lambda: 10.882669368965983
-  neg_sample_ratio: 0.5
+  neg_sample_ratio: 0.3
 
 GAT-WikiCS-EV1O8-ES: &GAT-WikiCS-EV1O8-ES
   <<: *GAT-WikiCS-EV1O8
@@ -2076,17 +2073,9 @@ GAT-WikiCS-EV13NSO8: &GAT-WikiCS-EV13NSO8
   <<: *GAT-WikiCS-EV13
   out_heads: 8
   edge_sampling_ratio: 0.8
-  neg_sample_ratio: 0.5
+  neg_sample_ratio: 0.3
   l2_lambda: 0.008228864972965771
   att_lambda: 11.346574532931719
-
-GAT-WikiCS-EV13NSO8-Full: &GAT-WikiCS-EV13NSO8-Full
-  <<: *GAT-WikiCS-EV13
-  out_heads: 8
-  edge_sampling_ratio: 0.8
-  neg_sample_ratio: 0.5
-  l2_lambda: 0.0017561748776907596
-  att_lambda: 0.09724404248083213
 
 GAT-WikiCS-EV13NSO8-ES: &GAT-WikiCS-EV13NSO8-ES
   <<: *GAT-WikiCS-EV13NSO8
@@ -2111,6 +2100,193 @@ GAT-WikiCS-EV20NSO8: &GAT-WikiCS-EV20NSO8
 
 GAT-WikiCS-EV20NSO8-ES: &GAT-WikiCS-EV20NSO8-ES
   <<: *GAT-WikiCS-EV20NSO8
+  use_early_stop: True
+  early_stop_patience: 471
+  early_stop_queue_length: 48
+  early_stop_threshold_loss: 1.0159941582315542e-05
+  early_stop_threshold_perf: 0.0002068266022060699
+  epochs: 417
+
+
+GAT-WebKB4Univ: &GAT-WebKB4Univ
+  <<: *GAT
+  lr: 0.001
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+  epochs: 500
+  to_undirected_at_neg: True
+
+GCN-WebKB4Univ-NE: &GCN-WebKB4Univ-NE
+  <<: *GAT-WebKB4Univ
+  model_name: LinkGCN
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 3.3902435407244234e-06
+
+SAGE-WebKB4Univ-NE: &SAGE-WebKB4Univ-NE
+  <<: *GAT-WebKB4Univ
+  model_name: LinkSAGE
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.0001314343841661435
+
+GAT-WebKB4Univ-NE:  &GAT-WebKB4Univ-NE
+  <<: *GAT-WebKB4Univ
+  epochs: 500
+  is_super_gat: False
+
+GAT-WebKB4Univ-NEO8: &GAT-WebKB4Univ-NEO8
+  <<: *GAT-WebKB4Univ-NE
+  out_heads: 8
+  l2_lambda: 2.193426817200768e-08
+
+GAT-WebKB4Univ-NEDP:
+  <<: *GAT-WebKB4Univ-NE
+  attention_type: "dot_product"
+
+GAT-WebKB4Univ-NEDPO8: &GAT-WebKB4Univ-NEDPO8
+  <<: *GAT-WebKB4Univ-NE
+  out_heads: 8
+  l2_lambda: 0.02
+  attention_type: "dot_product"
+
+GAT-WebKB4Univ-NESDPO8: &GAT-WebKB4Univ-NESDPO8
+  <<: *GAT-WebKB4Univ-NE
+  out_heads: 8
+  l2_lambda: 0.02
+  attention_type: "scaled_dot_product"
+
+GAT-WebKB4Univ-NEO8-ES: &GAT-WebKB4Univ-NEO8-ES
+  <<: *GAT-WebKB4Univ-NEO8
+  use_early_stop: True
+  early_stop_patience: 100
+  early_stop_queue_length: 300
+  early_stop_threshold_loss: 0.0001
+  early_stop_threshold_perf: 0.0001
+  epochs: 450
+
+GAT-WebKB4Univ-NEDPO8-ES: &GAT-WebKB4Univ-NEDPO8-ES
+  <<: *GAT-WebKB4Univ-NEDPO8
+  use_early_stop: True
+  early_stop_patience: 100
+  early_stop_queue_length: 300
+  early_stop_threshold_loss: 0.0001
+  early_stop_threshold_perf: 0.0001
+  epochs: 450
+
+GAT-WebKB4Univ-NESDPO8-ES: &GAT-WebKB4Univ-NESDPO8-ES
+  <<: *GAT-WebKB4Univ-NESDPO8
+  use_early_stop: True
+  early_stop_patience: 100
+  early_stop_queue_length: 300
+  early_stop_threshold_loss: 0.0001
+  early_stop_threshold_perf: 0.0001
+  epochs: 450
+
+GAT-WebKB4Univ-E: &GAT-WebKB4Univ-E
+  <<: *GAT-WebKB4Univ
+  epochs: 500
+  is_super_gat: True
+
+GAT-WebKB4Univ-EV1: &GAT-WebKB4Univ-EV1
+  <<: *GAT-WebKB4Univ-E
+  attention_type: "gat_originated"
+
+GAT-WebKB4Univ-EV1O8: &GAT-WebKB4Univ-EV1O8
+  <<: *GAT-WebKB4Univ-EV1
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  l2_lambda: 0.015
+  att_lambda: 1.0
+  neg_sample_ratio: 0.5
+
+GAT-WebKB4Univ-EV2: &GAT-WebKB4Univ-EV2
+  <<: *GAT-WebKB4Univ-E
+  attention_type: "dot_product"
+
+GAT-WebKB4Univ-EV2O8: &GAT-WebKB4Univ-EV2O8
+  <<: *GAT-WebKB4Univ-EV2
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  l2_lambda: 0.015
+  att_lambda: 1.0
+  neg_sample_ratio: 0.5
+
+GAT-WebKB4Univ-EV3O8: &GAT-WebKB4Univ-EV3O8
+  <<: *GAT-WebKB4Univ-E
+  attention_type: "scaled_dot_product"
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  l2_lambda: 0.007829935944807744
+  att_lambda: 10.882669368965983
+  neg_sample_ratio: 0.3
+
+GAT-WebKB4Univ-EV1O8-ES: &GAT-WebKB4Univ-EV1O8-ES
+  <<: *GAT-WebKB4Univ-EV1O8
+  use_early_stop: True
+  early_stop_patience: 100
+  early_stop_queue_length: 300
+  early_stop_threshold_loss: 0.0001
+  early_stop_threshold_perf: 0.0001
+  epochs: 450
+
+GAT-WebKB4Univ-EV2O8-ES: &GAT-WebKB4Univ-EV2O8-ES
+  <<: *GAT-WebKB4Univ-EV2O8
+  use_early_stop: True
+  early_stop_patience: 100
+  early_stop_queue_length: 300
+  early_stop_threshold_loss: 0.0001
+  early_stop_threshold_perf: 0.0001
+  epochs: 450
+
+GAT-WebKB4Univ-EV3O8-ES: &GAT-WebKB4Univ-EV3O8-ES
+  <<: *GAT-WebKB4Univ-EV3O8
+  use_early_stop: True
+  early_stop_patience: 59
+  early_stop_queue_length: 498
+  early_stop_threshold_loss: 0.0011497329907436272
+  early_stop_threshold_perf: 1.0140218530079797e-05
+  epochs: 491
+
+GAT-WebKB4Univ-EV13: &GAT-WebKB4Univ-EV13
+  <<: *GAT-WebKB4Univ-E
+  attention_type: "prob_mask_only"
+
+GAT-WebKB4Univ-EV13NSO8: &GAT-WebKB4Univ-EV13NSO8
+  <<: *GAT-WebKB4Univ-EV13
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.3
+  l2_lambda: 0.008228864972965771
+  att_lambda: 11.346574532931719
+
+GAT-WebKB4Univ-EV13NSO8-ES: &GAT-WebKB4Univ-EV13NSO8-ES
+  <<: *GAT-WebKB4Univ-EV13NSO8
+  use_early_stop: True
+  early_stop_patience: 485
+  early_stop_queue_length: 484
+  early_stop_threshold_loss: 0.009317052513589488
+  early_stop_threshold_perf: 0.0011587124922279313
+  epochs: 490
+
+GAT-WebKB4Univ-EV20: &GAT-WebKB4Univ-EV20
+  <<: *GAT-WebKB4Univ-E
+  attention_type: "prob_mask_scaling"
+
+GAT-WebKB4Univ-EV20NSO8: &GAT-WebKB4Univ-EV20NSO8
+  <<: *GAT-WebKB4Univ-EV20
+  out_heads: 8
+  edge_sampling_ratio: 1.0
+  l2_lambda: 0.01100436462830108
+  att_lambda: 1.4745541570922946
+  neg_sample_ratio: 0.7
+
+GAT-WebKB4Univ-EV20NSO8-ES: &GAT-WebKB4Univ-EV20NSO8-ES
+  <<: *GAT-WebKB4Univ-EV20NSO8
   use_early_stop: True
   early_stop_patience: 471
   early_stop_queue_length: 48

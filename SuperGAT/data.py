@@ -8,9 +8,6 @@ from torch_geometric.datasets import *
 from torch_geometric.data import DataLoader, InMemoryDataset, Data, NeighborSampler
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops, negative_sampling, train_test_split_edges
-import ogb
-from ogb.nodeproppred import PygNodePropPredDataset
-from data_wikics import WikiCS
 import numpy as np
 
 import os
@@ -19,8 +16,13 @@ from typing import Tuple, Callable, List
 
 from tqdm import tqdm
 
+import ogb
+from ogb.nodeproppred import PygNodePropPredDataset
 from data_syn import RandomPartitionGraph
-from webkb4univ import WebKB4Univ
+from data_webkb4univ import WebKB4Univ
+from data_bg import GNNBenchmarkDataset
+from data_flickr import Flickr
+from data_wikics import WikiCS
 from utils import negative_sampling_numpy
 
 from multiprocessing import Process, Queue
@@ -156,6 +158,78 @@ class FullPlanetoid(Planetoid):
         self.data.train_mask[:] = True
         self.data.train_mask[self.data.test_mask] = False
         self.data.train_mask[self.data.test_mask] = False
+
+
+def mask_init(self, num_train_per_class=20, num_val_per_class=30):
+    num_nodes = self.data.y.size(0)
+    self.train_mask = torch.zeros([num_nodes], dtype=torch.bool)
+    self.val_mask = torch.zeros([num_nodes], dtype=torch.bool)
+    self.test_mask = torch.ones([num_nodes], dtype=torch.bool)
+    for c in range(self.num_classes):
+        samples_idx = (self.data.y == c).nonzero().squeeze()
+        perm = torch.randperm(samples_idx.size(0))
+        self.train_mask[samples_idx[perm][:num_train_per_class]] = True
+        self.val_mask[samples_idx[perm][num_train_per_class:num_train_per_class + num_val_per_class]] = True
+    self.test_mask[self.train_mask] = False
+    self.test_mask[self.val_mask] = False
+
+
+def mask_getitem(self, datum):
+    datum.__setitem__("train_mask", self.train_mask)
+    datum.__setitem__("val_mask", self.val_mask)
+    datum.__setitem__("test_mask", self.test_mask)
+    return datum
+
+
+class MyCitationFull(CitationFull):
+
+    def __init__(self, root, name, transform=None, pre_transform=None):
+        super().__init__(root, name, transform, pre_transform)
+        mask_init(self)
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        return mask_getitem(self, datum)
+
+    def download(self):
+        return super().download()
+
+    def process(self):
+        return super().process()
+
+
+class MyCoauthor(Coauthor):
+
+    def __init__(self, root, name, transform=None, pre_transform=None):
+        super().__init__(root, name, transform, pre_transform)
+        mask_init(self)
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        return mask_getitem(self, datum)
+
+    def download(self):
+        return super().download()
+
+    def process(self):
+        return super().process()
+
+
+class MyAmazon(Amazon):
+
+    def __init__(self, root, name, transform=None, pre_transform=None):
+        super().__init__(root, name, transform, pre_transform)
+        mask_init(self)
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        return mask_getitem(self, datum)
+
+    def download(self):
+        return super().download()
+
+    def process(self):
+        return super().process()
 
 
 class ADPlanetoid(Planetoid):
@@ -480,12 +554,13 @@ def get_dataset_class_name(dataset_name: str) -> str:
 
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in (pyg.datasets.__all__ +
-                             ["ENSPlanetoid"] +
-                             ["LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic"] +
-                             ["LinkPPI", "ADPPI"] +
-                             ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
-                             ["WebKB4Univ"] +
-                             ["PygNodePropPredDataset", "WikiCS"]), f"{dataset_class} is not good."
+                             [
+                                 "ENSPlanetoid", "LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic",
+                                 "LinkPPI", "ADPPI",
+                                 "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph",
+                                 "WebKB4Univ", "PygNodePropPredDataset", "WikiCS", "GNNBenchmarkDataset", "Flickr",
+                                 "MyAmazon", "MyCoauthor", "MyCitationFull",
+                             ]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
 
@@ -547,11 +622,6 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
-    elif dataset_class == "CitationFull":
-        kwargs["name"] = kwargs["name"].lower()
-        dataset = dataset_cls(root=root, **kwargs)
-        raise NotImplementedError  # todo train-val-test split
-
     elif dataset_class in ["HomophilySynthetic",
                            "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"]:
         dataset = dataset_cls(root=root, **kwargs)
@@ -586,11 +656,32 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         return loader, None, None
 
     elif dataset_class in ["WikiCS"]:
+        root = os.path.join(root, "WikiCS")
         _split = kwargs["split"]
         dataset = dataset_cls(root=root)
         dataset.data.stopping_mask = None
         dataset.data.train_mask = dataset.data.train_mask[:, _split]
         dataset.data.val_mask = dataset.data.val_mask[:, _split]
+        return dataset, None, None
+
+    elif dataset_class in ["MyAmazon", "MyCoauthor", "MyCitationFull"]:
+        _name = kwargs["name"]
+        root = os.path.join(root, f"{dataset_class}{_name.capitalize()}")
+        dataset = dataset_cls(root=root, name=_name.lower())
+        return dataset, None, None
+
+    elif dataset_class in ["GNNBenchmarkDataset"]:
+        train_dataset = dataset_cls(root=root, split="train", **kwargs)
+        val_dataset = dataset_cls(root=root, split="val", **kwargs)
+        test_dataset = dataset_cls(root=root, split="test", **kwargs)
+        train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+        return train_loader, val_loader, test_loader
+
+    elif dataset_class in ["Flickr"]:
+        root = os.path.join(root, "flickr")
+        dataset = dataset_cls(root=root)
         return dataset, None, None
 
     elif dataset_class == "PygNodePropPredDataset":
@@ -683,7 +774,15 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
-
+    _test_data("MyCitationFull", "Cora", '~/graph-data')
+    _test_data("MyCitationFull", "Cora_ML", '~/graph-data')
+    _test_data("MyCitationFull", "DBLP", '~/graph-data')
+    _test_data("MyCoauthor", "Physics", '~/graph-data')
+    _test_data("MyCoauthor", "CS", '~/graph-data')
+    _test_data("MyAmazon", "Computers", '~/graph-data')
+    _test_data("MyAmazon", "Photo", '~/graph-data')
+    _test_data("Flickr", "Flickr", '~/graph-data')
+    _test_data("WebKB4Univ", "WebKB4Univ", '~/graph-data')
     _test_data("WikiCS", "WikiCS", '~/graph-data', split=0)
 
     _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
@@ -736,6 +835,9 @@ if __name__ == '__main__':
     _test_data("Planetoid", "CiteSeer", '~/graph-data')
     _test_data("Planetoid", "PubMed", '~/graph-data')
     _test_data("PPI", "PPI", '~/graph-data')
+
+    # Deprecated
+    _test_data("GNNBenchmarkDataset", "CLUSTER", '~/graph-data')
 
     # Graph Classification
     _test_data("TUDataset", "MUTAG", '~/graph-data')

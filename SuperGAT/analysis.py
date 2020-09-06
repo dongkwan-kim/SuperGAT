@@ -347,7 +347,7 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
     """
     print(f"{dataset_class} / {dataset_name} / {data_root}")
     train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42, **kwargs)
-    if dataset_name in ["PPI", "WebKB4Univ"]:
+    if dataset_name in ["PPI", "WebKB4Univ", "CLUSTER"]:
         cum_sum = 0
         x_list, y_list, edge_index_list = [], [], []
         for _data in chain(train_d, val_d, test_d):
@@ -358,9 +358,14 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
         x = torch.cat(x_list, dim=0)
         y = torch.cat(y_list, dim=0)
         edge_index = torch.cat(edge_index_list, dim=1)
+        try:
+            num_labels = y.size(1)  # multi-labels
+        except IndexError:
+            num_labels = 1
     else:
         data = train_d[0]
         x, y, edge_index = data.x, data.y, data.edge_index
+        num_labels = 1
 
     deg = degree(edge_index[0], num_nodes=x.size(0))
     homophily = get_homophily(edge_index, y)
@@ -374,7 +379,39 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
 
 def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
-    targets = targets or ["WebKB4Univ", "WikiCS", "OGB", "PPI", "Planetoid", "RPG"]
+    targets = targets or [
+        "MyCitationFull", "MyCoauthor", "MyAmazon",
+        "Flickr", "CLUSTER", "WikiCS", "OGB",
+        "PPI", "Planetoid", "RPG",
+    ]
+
+    if "MyCitationFull" in targets:
+        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora", data_root="~/graph-data")
+        dn_to_dg_and_h["CoraFull"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora_ML", data_root="~/graph-data")
+        dn_to_dg_and_h["Cora_ML"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "DBLP", data_root="~/graph-data")
+        dn_to_dg_and_h["DBLP"] = degree_and_homophily
+
+    if "MyCoauthor" in targets:
+        degree_and_homophily = get_degree_and_homophily("MyCoauthor", "CS", data_root="~/graph-data")
+        dn_to_dg_and_h["CS"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyCoauthor", "Physics", data_root="~/graph-data")
+        dn_to_dg_and_h["Physics"] = degree_and_homophily
+
+    if "MyAmazon" in targets:
+        degree_and_homophily = get_degree_and_homophily("MyAmazon", "Photo", data_root="~/graph-data")
+        dn_to_dg_and_h["Photo"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyAmazon", "Computers", data_root="~/graph-data")
+        dn_to_dg_and_h["Computers"] = degree_and_homophily
+
+    if "Flickr" in targets:
+        degree_and_homophily = get_degree_and_homophily("Flickr", "Flickr", data_root="~/graph-data")
+        dn_to_dg_and_h["Flickr"] = degree_and_homophily
+
+    if "CLUSTER" in targets:
+        degree_and_homophily = get_degree_and_homophily("GNNBenchmarkDataset", "CLUSTER", data_root="~/graph-data")
+        dn_to_dg_and_h["CLUSTER"] = degree_and_homophily
 
     if "WebKB4Univ" in targets:
         degree_and_homophily = get_degree_and_homophily("WebKB4Univ", "WebKB4Univ", data_root="~/graph-data")
@@ -1183,7 +1220,7 @@ if __name__ == '__main__':
         visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily()
+        analyze_degree_and_homophily(["MyCitationFull", "MyCoauthor"])
 
     elif MODE == "get_and_print_rpg_analysis":
 
