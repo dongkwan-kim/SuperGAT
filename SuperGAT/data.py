@@ -650,10 +650,10 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         root = os.path.join(root, "reddit")
         dataset = dataset_cls(root=root, **kwargs)
         from sampler import RandomNodeSampler
-        loader = RandomNodeSampler(dataset[0], num_parts=40, shuffle=True)
-        setattr(loader, "num_node_features", dataset[0].x.size(1))
-        setattr(loader, "num_classes", torch.unique(dataset[0].y).size(0))
-        return loader, None, None
+        train_loader = RandomNodeSampler(dataset[0], num_parts=40, shuffle=True)
+        setattr(train_loader, "num_node_features", dataset[0].x.size(1))
+        setattr(train_loader, "num_classes", torch.unique(dataset[0].y).size(0))
+        return train_loader, None, None
 
     elif dataset_class in ["WikiCS"]:
         root = os.path.join(root, "WikiCS")
@@ -712,8 +712,12 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         if dataset_name == "ogbn-arxiv":
             return dataset, None, None
         elif dataset_name == "ogbn-products":
-            loader = NeighborSampler(data=dataset[0], batch_size=batch_size, **loader_kwargs)
-            return dataset, loader
+            train_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
+                                           bipartite=False, **loader_kwargs)
+            test_batch_size = batch_size * 4
+            eval_loader = NeighborSampler(data=dataset[0], batch_size=test_batch_size,
+                                          bipartite=False, **loader_kwargs)
+            return dataset, train_loader, eval_loader
 
     else:
         raise ValueError

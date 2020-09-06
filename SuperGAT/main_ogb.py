@@ -21,7 +21,7 @@ from sklearn.metrics import f1_score
 from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
 from main import _get_model_cls, load_model, save_model, save_loss_and_perf_plot, summary_results
-from model import SuperGATNet, LargeSuperGATNet, ResSuperGATNet
+from model import SuperGATNet, LargeSuperGATNet
 from model_baseline import LinkGNN, CGATNet
 from layer import SuperGAT
 from layer_cgat import CGATConv
@@ -30,24 +30,43 @@ from utils import create_hash, cprint_multi_lines, blind_other_gpus
 
 def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _args):
     model.train()
-    try:
-        dataset_or_loader.train()
-    except AttributeError:
-        pass
+
+    if isinstance(dataset_or_loader, tuple):
+        dataset, _loader = dataset_or_loader
+        data = dataset[0]
+        loader = _loader(dataset.train_mask)
+    else:
+        dataset, data = None, None
+        loader = dataset_or_loader
 
     total_loss = 0.
-    for batch in dataset_or_loader:
-        batch = batch.to(device)
-        train_mask = dataset_or_loader.train_mask.to(device)
+    total_num_samples = 0
+    for batch_id, batch in enumerate(loader):
+
         optimizer.zero_grad()
 
-        # Forward
-        outputs = model(batch.x, batch.edge_index,
-                        batch=getattr(batch, "batch", None),
-                        attention_edge_index=getattr(batch, "train_edge_index", None))
+        if isinstance(dataset_or_loader, tuple):
+            # n_id: 전체 노드의 원래 ID
+            # b_id: 샘플된 노드의 원래 ID
+            # sub_b_id: 샘플된 노드의 샘플 ID
+            # Forward
+            outputs = model(data.x[batch.n_id].to(device), batch.edge_index.to(device))  # [#(n_id), #class]
 
-        # Loss
-        loss = criterion(outputs[train_mask], batch.y.squeeze()[train_mask])
+            # Loss
+            loss = criterion(outputs[batch.sub_b_id.to(device)], data.y.squeeze()[batch.b_id].to(device))
+            num_samples = batch.b_id.size(0)
+
+        else:
+            batch = batch.to(device)
+            # Forward
+            outputs = model(batch.x, batch.edge_index,
+                            batch=getattr(batch, "batch", None),
+                            attention_edge_index=getattr(batch, "train_edge_index", None))
+
+            # Loss
+            train_mask = dataset_or_loader.train_mask.to(device)
+            loss = criterion(outputs[train_mask], batch.y.squeeze()[train_mask])
+            num_samples = int(train_mask.sum().item())
 
         # Supervision Loss w/ pretraining
         if _args.is_super_gat:
@@ -94,9 +113,13 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
 
         loss.backward()
         optimizer.step()
-        total_loss += loss.item()
+        total_loss += loss.item() * num_samples
+        total_num_samples += num_samples
 
-    return total_loss
+        if batch_id == 2:  # todo: for test
+            break
+
+    return total_loss / total_num_samples
 
 
 @torch.no_grad()
@@ -104,10 +127,6 @@ def test_model(device, model, dataset_or_loader, criterion, evaluator, _args, va
     model.eval()
     try:
         model.set_layer_attrs("cache_attention", _args.task_type == "Attention_Dist")
-    except AttributeError:
-        pass
-    try:
-        dataset_or_loader.eval()
     except AttributeError:
         pass
 
@@ -135,7 +154,19 @@ def test_model(device, model, dataset_or_loader, criterion, evaluator, _args, va
         test_loss = criterion(outputs[test_mask], data.y.squeeze()[test_mask])
 
     elif _args.dataset_name == "ogbn-products":
-        raise NotImplementedError
+        dataset, _loader = dataset_or_loader
+        data = dataset[0]
+        val_mask = dataset.val_mask
+        test_mask = dataset.test_mask
+        print(data)
+        print(dataset.train_mask.size())
+        print(dataset.val_mask.size())
+        print(dataset.test_mask.size())
+
+        loader = _loader()
+        for batch_id, batch in enumerate(loader):
+            print(batch_id, batch)
+        exit()
 
     else:
         raise ValueError(f"Wrong name: {_args.dataset_name}")
@@ -173,15 +204,25 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     if args.dataset_class == "ENSPlanetoid":
         dataset_kwargs["neg_sample_ratio"] = args.neg_sample_ratio
     if args.dataset_name == "ogbn-products":
-        dataset_kwargs["size"] = args.sampling_size
-        dataset_kwargs["num_hops"] = args.sampling_num_hops
+        dataset_kwargs["size"] = args.data_sampling_size
+        dataset_kwargs["num_hops"] = args.data_sampling_num_hops
         dataset_kwargs["shuffle"] = True
 
-    train_d, val_d, test_d = get_dataset_or_loader(
+    _data_attr = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
         batch_size=args.batch_size, seed=args.seed,
         **dataset_kwargs,
     )
+    if _data_attr[-1] is None:
+        train_d, val_d, test_d = _data_attr
+        loader = None
+        dataset_or_loader = train_d
+        eval_dataset_or_loader = None
+    else:
+        train_d, train_loader, eval_loader = _data_attr
+        val_d, test_d = None, None
+        dataset_or_loader = (train_d, train_loader)
+        eval_dataset_or_loader = (train_d, eval_loader)
 
     net_cls = _get_model_cls(args.model_name)
     net = net_cls(args, train_d)
@@ -202,7 +243,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     perf_task_for_val = getattr(args, "perf_task_for_val", "Node")
     for current_iter, epoch in enumerate(tqdm(range(args.start_epoch, args.start_epoch + args.epochs))):
 
-        train_loss = train_model(running_device, net, train_d, loss_func, adam_optim, epoch=epoch, _args=args)
+        train_loss = train_model(running_device, net, dataset_or_loader, loss_func, adam_optim, epoch=epoch, _args=args)
 
         if args.verbose >= 2 and epoch % args.val_interval == 0:
             print("\n\t- Train loss: {}".format(train_loss))
@@ -211,7 +252,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
         if epoch % args.val_interval == 0:
 
             val_perf, val_loss, test_perf, test_loss = test_model(
-                running_device, net, val_d or train_d, loss_func,
+                running_device, net, eval_dataset_or_loader or dataset_or_loader, loss_func,
                 evaluator=evaluator,
                 _args=args, val_or_test="val", verbose=args.verbose,
                 run_link_prediction=(perf_task_for_val == "Link"),
@@ -312,7 +353,7 @@ if __name__ == '__main__':
     main_args = get_args(
         model_name="LargeGAT",
         dataset_class="PygNodePropPredDataset",
-        dataset_name="ogbn-arxiv",  # ogbn-products, ogbn-arxiv
+        dataset_name="ogbn-products",  # ogbn-products, ogbn-arxiv
         custom_key="EV13NSO8",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
     )
     main_args.black_list = [0, 1, 2, 3]  # todo

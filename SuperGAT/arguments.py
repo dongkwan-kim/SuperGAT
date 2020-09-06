@@ -22,17 +22,21 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--num-gpus-to-use", default=0, type=int)
     parser.add_argument("--black-list", default=None, type=int, nargs="+")
     parser.add_argument("--checkpoint-dir", default="../checkpoints")
-    parser.add_argument('--data-root', default="~/graph-data", metavar='DIR', help='path to dataset')
     parser.add_argument("--model-name", default=model_name)
     parser.add_argument("--task-type", default="", type=str)
     parser.add_argument("--perf-type", default="accuracy", type=str)
-    parser.add_argument("--dataset-class", default=dataset_class)
-    parser.add_argument("--dataset-name", default=dataset_name)
     parser.add_argument("--custom-key", default=custom_key)
     parser.add_argument("--save-model", default=True)
     parser.add_argument("--verbose", default=2)
     parser.add_argument("--save-plot", default=False)
     parser.add_argument("--seed", default=42)
+
+    # Dataset
+    parser.add_argument('--data-root', default="~/graph-data", metavar='DIR', help='path to dataset')
+    parser.add_argument("--dataset-class", default=dataset_class)
+    parser.add_argument("--dataset-name", default=dataset_name)
+    parser.add_argument("--data-sampling-size", default=None, type=int, nargs="+")
+    parser.add_argument("--data-sampling-num-hops", default=None, type=int)
 
     # Training
     parser.add_argument('--lr', '--learning-rate', default=0.0025, type=float,
