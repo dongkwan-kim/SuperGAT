@@ -4,9 +4,12 @@ import random
 import torch
 import torch_geometric as pyg
 from copy import deepcopy
+
+from sklearn.decomposition import PCA
 from termcolor import cprint
 from torch_geometric.datasets import *
 from torch_geometric.data import DataLoader, InMemoryDataset, Data, NeighborSampler
+from torch_geometric.transforms import Compose
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops, negative_sampling, train_test_split_edges
 import numpy as np
@@ -20,10 +23,13 @@ from tqdm import tqdm
 import ogb
 from ogb.nodeproppred import PygNodePropPredDataset
 from data_syn import RandomPartitionGraph
+from data_transform_digitize import DigitizeY
+from data_utils import mask_init, mask_getitem, StandardizeFeatures
 from data_webkb4univ import WebKB4Univ
 from data_bg import GNNBenchmarkDataset
 from data_flickr import Flickr
 from data_wikics import WikiCS
+from data_snap import SNAPDataset, Crocodile
 from utils import negative_sampling_numpy
 
 from multiprocessing import Process, Queue
@@ -159,30 +165,6 @@ class FullPlanetoid(Planetoid):
         self.data.train_mask[:] = True
         self.data.train_mask[self.data.test_mask] = False
         self.data.train_mask[self.data.test_mask] = False
-
-
-def mask_init(self, num_train_per_class=20, num_val_per_class=30, seed=12345):
-    num_nodes = self.data.y.size(0)
-    self.train_mask = torch.zeros([num_nodes], dtype=torch.bool)
-    self.val_mask = torch.zeros([num_nodes], dtype=torch.bool)
-    self.test_mask = torch.ones([num_nodes], dtype=torch.bool)
-    random.seed(seed)
-    for c in range(self.num_classes):
-        samples_idx = (self.data.y == c).nonzero().squeeze()
-        perm = list(range(samples_idx.size(0)))
-        random.shuffle(perm)
-        perm = torch.as_tensor(perm).long()
-        self.train_mask[samples_idx[perm][:num_train_per_class]] = True
-        self.val_mask[samples_idx[perm][num_train_per_class:num_train_per_class + num_val_per_class]] = True
-    self.test_mask[self.train_mask] = False
-    self.test_mask[self.val_mask] = False
-
-
-def mask_getitem(self, datum):
-    datum.__setitem__("train_mask", self.train_mask)
-    datum.__setitem__("val_mask", self.val_mask)
-    datum.__setitem__("test_mask", self.test_mask)
-    return datum
 
 
 class MyCitationFull(CitationFull):
@@ -564,6 +546,7 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
                                  "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph",
                                  "WebKB4Univ", "PygNodePropPredDataset", "WikiCS", "GNNBenchmarkDataset", "Flickr",
                                  "MyAmazon", "MyCoauthor", "MyCitationFull",
+                                 "Crocodile",
                              ]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
@@ -649,6 +632,10 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
         return train_loader, val_loader, test_loader
+
+    elif dataset_class in ["Crocodile"]:
+        dataset = dataset_cls(root=root, transform=StandardizeFeatures())
+        return dataset, None, None
 
     elif dataset_class in ["Reddit"]:
         root = os.path.join(root, "reddit")
@@ -782,6 +769,8 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+    _test_data("Crocodile", "Crocodile", '~/graph-data')
+    exit()
     _test_data("MyCitationFull", "Cora", '~/graph-data')
     _test_data("MyCitationFull", "Cora_ML", '~/graph-data')
     _test_data("MyCitationFull", "DBLP", '~/graph-data')

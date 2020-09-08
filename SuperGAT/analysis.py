@@ -380,10 +380,15 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
 def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
     targets = targets or [
+        "Crocodile",
         "MyCitationFull", "MyCoauthor", "MyAmazon",
         "Flickr", "CLUSTER", "WikiCS", "OGB",
         "PPI", "Planetoid", "RPG",
     ]
+
+    if "Crocodile" in targets:
+        degree_and_homophily = get_degree_and_homophily("Crocodile", "Crocodile", data_root="~/graph-data")
+        dn_to_dg_and_h["Crocodile"] = degree_and_homophily
 
     if "MyCitationFull" in targets:
         degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora", data_root="~/graph-data")
@@ -1220,7 +1225,7 @@ if __name__ == '__main__':
         visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["MyCitationFull", "MyCoauthor"])
+        analyze_degree_and_homophily(["Crocodile"])
 
     elif MODE == "get_and_print_rpg_analysis":
 
