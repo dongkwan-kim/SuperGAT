@@ -309,11 +309,61 @@ class Crocodile(SNAPDataset):
         return 6
 
     def __repr__(self):
-        return 'Crocodile()'
+        return '{}()'.format(self.__class__.__name__)
+
+
+class Squirrel(SNAPDataset):
+
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, "musae-wiki", transform,
+                         pre_transform=DigitizeY(bins=[3, 3.4, 3.8, 4.2, 4.6], transform_y=np.log10),
+                         pre_filter=self.pre_filter)
+        mask_init(self)
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        return mask_getitem(self, datum)
+
+    def pre_filter(self, data):
+        return data.topic == "squirrel"
+
+    @property
+    def raw_file_names(self):
+        return super().raw_file_names
+
+    @property
+    def raw_dir(self):
+        return osp.join(self.root, self.name, 'raw')
+
+    @property
+    def processed_dir(self):
+        return osp.join(self.root, self.name, "Squirrel", 'processed')
+
+    def process(self):
+        return super().process()
+
+    def download(self):
+        return super().download()
+
+    @property
+    def num_classes(self):
+        return 6
+
+    def __repr__(self):
+        return '{}()'.format(self.__class__.__name__)
 
 
 if __name__ == '__main__':
-    crocodile = Crocodile(root="~/graph-data")
-    for b in crocodile:
+    from collections import Counter
+
+    _dataset = Squirrel(root="~/graph-data")
+    print(_dataset)
+    for b in _dataset:
         print(b)
-        print(b.train_mask.sum())
+        print(Counter(b.y.numpy()))
+
+    _dataset = Crocodile(root="~/graph-data")
+    print(_dataset)
+    for b in _dataset:
+        print(b)
+        print(Counter(b.y.numpy()))
