@@ -1,5 +1,6 @@
 import torch
 import random
+from sklearn.decomposition import PCA
 
 
 def mask_init(self, num_train_per_class=20, num_val_per_class=30, seed=12345):
@@ -24,6 +25,13 @@ def mask_getitem(self, datum):
     datum.__setitem__("val_mask", self.val_mask)
     datum.__setitem__("test_mask", self.test_mask)
     return datum
+
+
+def collate_and_pca(self, data_list, pca_dim):
+    collated = self.collate(data_list)
+    pca = PCA(n_components=pca_dim)
+    collated[0].x = torch.from_numpy(pca.fit_transform(collated[0].x)).float()
+    return collated
 
 
 class StandardizeFeatures(object):

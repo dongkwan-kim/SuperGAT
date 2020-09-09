@@ -24,7 +24,7 @@ import ogb
 from ogb.nodeproppred import PygNodePropPredDataset
 from data_syn import RandomPartitionGraph
 from data_transform_digitize import DigitizeY
-from data_utils import mask_init, mask_getitem, StandardizeFeatures
+from data_utils import mask_init, mask_getitem, collate_and_pca
 from data_webkb4univ import WebKB4Univ
 from data_bg import GNNBenchmarkDataset
 from data_flickr import Flickr
@@ -187,6 +187,7 @@ class MyCitationFull(CitationFull):
 class MyCoauthor(Coauthor):
 
     def __init__(self, root, name, transform=None, pre_transform=None):
+        self.pca_dim = 500
         super().__init__(root, name, transform, pre_transform)
         mask_init(self)
 
@@ -197,8 +198,16 @@ class MyCoauthor(Coauthor):
     def download(self):
         return super().download()
 
+    @property
+    def processed_dir(self):
+        return os.path.join(self.root, 'processed_{}'.format(self.pca_dim))
+
     def process(self):
-        return super().process()
+        from torch_geometric.io import read_npz
+        data = read_npz(self.raw_paths[0])
+        data = data if self.pre_transform is None else self.pre_transform(data)
+        data, slices = collate_and_pca(self, [data], pca_dim=self.pca_dim)
+        torch.save((data, slices), self.processed_paths[0])
 
 
 class MyAmazon(Amazon):
@@ -634,7 +643,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         return train_loader, val_loader, test_loader
 
     elif dataset_class in ["Crocodile", "Squirrel", "Chameleon"]:
-        dataset = dataset_cls(root=root, transform=StandardizeFeatures())
+        dataset = dataset_cls(root=root)
         return dataset, None, None
 
     elif dataset_class in ["Reddit"]:
@@ -655,7 +664,13 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset.data.val_mask = dataset.data.val_mask[:, _split]
         return dataset, None, None
 
-    elif dataset_class in ["MyAmazon", "MyCoauthor", "MyCitationFull"]:
+    elif dataset_class in ["MyCoauthor"]:
+        _name = kwargs["name"]
+        root = os.path.join(root, f"{dataset_class}{_name}")
+        dataset = dataset_cls(root=root, name=_name.lower())
+        return dataset, None, None
+
+    elif dataset_class in ["MyAmazon", "MyCitationFull"]:
         _name = kwargs["name"]
         root = os.path.join(root, f"{dataset_class}{_name.capitalize()}")
         dataset = dataset_cls(root=root, name=_name.lower())
@@ -769,20 +784,21 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+    _test_data("MyCoauthor", "CS", '~/graph-data')
+    _test_data("MyCoauthor", "Physics", '~/graph-data')
+    exit()
+
     _test_data("Chameleon", "Chameleon", '~/graph-data')
     _test_data("Squirrel", "Squirrel", '~/graph-data')
-    exit()
     _test_data("Crocodile", "Crocodile", '~/graph-data')
-    _test_data("MyCitationFull", "Cora", '~/graph-data')
     _test_data("MyCitationFull", "Cora_ML", '~/graph-data')
-    _test_data("MyCitationFull", "DBLP", '~/graph-data')
-    _test_data("MyCoauthor", "Physics", '~/graph-data')
-    _test_data("MyCoauthor", "CS", '~/graph-data')
     _test_data("MyAmazon", "Computers", '~/graph-data')
     _test_data("MyAmazon", "Photo", '~/graph-data')
     _test_data("Flickr", "Flickr", '~/graph-data')
     _test_data("WebKB4Univ", "WebKB4Univ", '~/graph-data')
     _test_data("WikiCS", "WikiCS", '~/graph-data', split=0)
+    # _test_data("MyCitationFull", "Cora", '~/graph-data')
+    # _test_data("MyCitationFull", "DBLP", '~/graph-data')
 
     _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
                size=[10, 5], num_hops=2)

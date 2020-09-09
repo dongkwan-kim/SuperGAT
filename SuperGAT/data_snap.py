@@ -12,7 +12,7 @@ from torch_geometric.data import (Data, InMemoryDataset, download_url,
 from torch_geometric.data.makedirs import makedirs
 
 from data_transform_digitize import DigitizeY
-from data_utils import mask_init, mask_getitem
+from data_utils import mask_init, mask_getitem, collate_and_pca
 
 
 class EgoData(Data):
@@ -260,11 +260,7 @@ class SNAPDataset(InMemoryDataset):
             data_list = [self.pre_transform(data) for data in data_list]
 
         # PCA
-        collated = self.collate(data_list)
-        from sklearn.decomposition import PCA
-        pca = PCA(n_components=500)
-        collated[0].x = torch.from_numpy(pca.fit_transform(collated[0].x)).float()
-        torch.save(collated, self.processed_paths[0])
+        torch.save(collate_and_pca(self, data_list, pca_dim=500), self.processed_paths[0])
         # torch.save(self.collate(data_list), self.processed_paths[0])
 
     def __repr__(self):
