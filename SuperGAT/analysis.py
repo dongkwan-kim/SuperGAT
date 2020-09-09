@@ -380,7 +380,7 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
 def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
     targets = targets or [
-        "Crocodile", "Squirrel",
+        "Crocodile", "Squirrel", "Chameleon",
         "MyCitationFull", "MyCoauthor", "MyAmazon",
         "Flickr", "CLUSTER", "WikiCS", "OGB",
         "PPI", "Planetoid", "RPG",
@@ -389,6 +389,10 @@ def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     if "Squirrel" in targets:
         degree_and_homophily = get_degree_and_homophily("Squirrel", "Squirrel", data_root="~/graph-data")
         dn_to_dg_and_h["Squirrel"] = degree_and_homophily
+
+    if "Chameleon" in targets:
+        degree_and_homophily = get_degree_and_homophily("Chameleon", "Chameleon", data_root="~/graph-data")
+        dn_to_dg_and_h["Chameleon"] = degree_and_homophily
 
     if "Crocodile" in targets:
         degree_and_homophily = get_degree_and_homophily("Crocodile", "Crocodile", data_root="~/graph-data")
@@ -1229,7 +1233,7 @@ if __name__ == '__main__':
         visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["Squirrel"])
+        analyze_degree_and_homophily(["Crocodile", "Squirrel", "Chameleon"])
 
     elif MODE == "get_and_print_rpg_analysis":
 

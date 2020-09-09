@@ -29,7 +29,7 @@ from data_webkb4univ import WebKB4Univ
 from data_bg import GNNBenchmarkDataset
 from data_flickr import Flickr
 from data_wikics import WikiCS
-from data_snap import SNAPDataset, Crocodile, Squirrel
+from data_snap import SNAPDataset, Crocodile, Squirrel, Chameleon
 from utils import negative_sampling_numpy
 
 from multiprocessing import Process, Queue
@@ -546,7 +546,7 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
                                  "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph",
                                  "WebKB4Univ", "PygNodePropPredDataset", "WikiCS", "GNNBenchmarkDataset", "Flickr",
                                  "MyAmazon", "MyCoauthor", "MyCitationFull",
-                                 "Crocodile", "Squirrel",
+                                 "Crocodile", "Squirrel", "Chameleon",
                              ]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
@@ -633,7 +633,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
         return train_loader, val_loader, test_loader
 
-    elif dataset_class in ["Crocodile", "Squirrel"]:
+    elif dataset_class in ["Crocodile", "Squirrel", "Chameleon"]:
         dataset = dataset_cls(root=root, transform=StandardizeFeatures())
         return dataset, None, None
 
@@ -769,6 +769,7 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+    _test_data("Chameleon", "Chameleon", '~/graph-data')
     _test_data("Squirrel", "Squirrel", '~/graph-data')
     exit()
     _test_data("Crocodile", "Crocodile", '~/graph-data')
