@@ -4,9 +4,12 @@ import random
 import torch
 import torch_geometric as pyg
 from copy import deepcopy
+
+from sklearn.decomposition import PCA
 from termcolor import cprint
 from torch_geometric.datasets import *
 from torch_geometric.data import DataLoader, InMemoryDataset, Data, NeighborSampler
+from torch_geometric.transforms import Compose
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops, negative_sampling, train_test_split_edges
 import numpy as np
@@ -20,10 +23,13 @@ from tqdm import tqdm
 import ogb
 from ogb.nodeproppred import PygNodePropPredDataset
 from data_syn import RandomPartitionGraph
+from data_transform_digitize import DigitizeY
+from data_utils import mask_init, mask_getitem, collate_and_pca
 from data_webkb4univ import WebKB4Univ
 from data_bg import GNNBenchmarkDataset
 from data_flickr import Flickr
 from data_wikics import WikiCS
+from data_snap import SNAPDataset, Crocodile, Squirrel, Chameleon
 from utils import negative_sampling_numpy
 
 from multiprocessing import Process, Queue
@@ -161,30 +167,6 @@ class FullPlanetoid(Planetoid):
         self.data.train_mask[self.data.test_mask] = False
 
 
-def mask_init(self, num_train_per_class=20, num_val_per_class=30, seed=12345):
-    num_nodes = self.data.y.size(0)
-    self.train_mask = torch.zeros([num_nodes], dtype=torch.bool)
-    self.val_mask = torch.zeros([num_nodes], dtype=torch.bool)
-    self.test_mask = torch.ones([num_nodes], dtype=torch.bool)
-    random.seed(seed)
-    for c in range(self.num_classes):
-        samples_idx = (self.data.y == c).nonzero().squeeze()
-        perm = list(range(samples_idx.size(0)))
-        random.shuffle(perm)
-        perm = torch.as_tensor(perm).long()
-        self.train_mask[samples_idx[perm][:num_train_per_class]] = True
-        self.val_mask[samples_idx[perm][num_train_per_class:num_train_per_class + num_val_per_class]] = True
-    self.test_mask[self.train_mask] = False
-    self.test_mask[self.val_mask] = False
-
-
-def mask_getitem(self, datum):
-    datum.__setitem__("train_mask", self.train_mask)
-    datum.__setitem__("val_mask", self.val_mask)
-    datum.__setitem__("test_mask", self.test_mask)
-    return datum
-
-
 class MyCitationFull(CitationFull):
 
     def __init__(self, root, name, transform=None, pre_transform=None):
@@ -205,6 +187,7 @@ class MyCitationFull(CitationFull):
 class MyCoauthor(Coauthor):
 
     def __init__(self, root, name, transform=None, pre_transform=None):
+        self.pca_dim = 500
         super().__init__(root, name, transform, pre_transform)
         mask_init(self)
 
@@ -215,8 +198,16 @@ class MyCoauthor(Coauthor):
     def download(self):
         return super().download()
 
+    @property
+    def processed_dir(self):
+        return os.path.join(self.root, 'processed_{}'.format(self.pca_dim))
+
     def process(self):
-        return super().process()
+        from torch_geometric.io import read_npz
+        data = read_npz(self.raw_paths[0])
+        data = data if self.pre_transform is None else self.pre_transform(data)
+        data, slices = collate_and_pca(self, [data], pca_dim=self.pca_dim)
+        torch.save((data, slices), self.processed_paths[0])
 
 
 class MyAmazon(Amazon):
@@ -564,6 +555,7 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
                                  "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph",
                                  "WebKB4Univ", "PygNodePropPredDataset", "WikiCS", "GNNBenchmarkDataset", "Flickr",
                                  "MyAmazon", "MyCoauthor", "MyCitationFull",
+                                 "Crocodile", "Squirrel", "Chameleon",
                              ]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
@@ -650,14 +642,18 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
         return train_loader, val_loader, test_loader
 
+    elif dataset_class in ["Crocodile", "Squirrel", "Chameleon"]:
+        dataset = dataset_cls(root=root)
+        return dataset, None, None
+
     elif dataset_class in ["Reddit"]:
         root = os.path.join(root, "reddit")
         dataset = dataset_cls(root=root, **kwargs)
         from sampler import RandomNodeSampler
-        loader = RandomNodeSampler(dataset[0], num_parts=40, shuffle=True)
-        setattr(loader, "num_node_features", dataset[0].x.size(1))
-        setattr(loader, "num_classes", torch.unique(dataset[0].y).size(0))
-        return loader, None, None
+        train_loader = RandomNodeSampler(dataset[0], num_parts=40, shuffle=True)
+        setattr(train_loader, "num_node_features", dataset[0].x.size(1))
+        setattr(train_loader, "num_classes", torch.unique(dataset[0].y).size(0))
+        return train_loader, None, None
 
     elif dataset_class in ["WikiCS"]:
         root = os.path.join(root, "WikiCS")
@@ -668,7 +664,13 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset.data.val_mask = dataset.data.val_mask[:, _split]
         return dataset, None, None
 
-    elif dataset_class in ["MyAmazon", "MyCoauthor", "MyCitationFull"]:
+    elif dataset_class in ["MyCoauthor"]:
+        _name = kwargs["name"]
+        root = os.path.join(root, f"{dataset_class}{_name}")
+        dataset = dataset_cls(root=root, name=_name.lower())
+        return dataset, None, None
+
+    elif dataset_class in ["MyAmazon", "MyCitationFull"]:
         _name = kwargs["name"]
         root = os.path.join(root, f"{dataset_class}{_name.capitalize()}")
         dataset = dataset_cls(root=root, name=_name.lower())
@@ -716,8 +718,12 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         if dataset_name == "ogbn-arxiv":
             return dataset, None, None
         elif dataset_name == "ogbn-products":
-            loader = NeighborSampler(data=dataset[0], batch_size=batch_size, **loader_kwargs)
-            return dataset, loader
+            train_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
+                                           bipartite=False, **loader_kwargs)
+            test_batch_size = batch_size * 4
+            eval_loader = NeighborSampler(data=dataset[0], batch_size=test_batch_size,
+                                          bipartite=False, **loader_kwargs)
+            return dataset, train_loader, eval_loader
 
     else:
         raise ValueError
@@ -778,16 +784,21 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
-    _test_data("MyCitationFull", "Cora", '~/graph-data')
-    _test_data("MyCitationFull", "Cora_ML", '~/graph-data')
-    _test_data("MyCitationFull", "DBLP", '~/graph-data')
-    _test_data("MyCoauthor", "Physics", '~/graph-data')
     _test_data("MyCoauthor", "CS", '~/graph-data')
+    _test_data("MyCoauthor", "Physics", '~/graph-data')
+    exit()
+
+    _test_data("Chameleon", "Chameleon", '~/graph-data')
+    _test_data("Squirrel", "Squirrel", '~/graph-data')
+    _test_data("Crocodile", "Crocodile", '~/graph-data')
+    _test_data("MyCitationFull", "Cora_ML", '~/graph-data')
     _test_data("MyAmazon", "Computers", '~/graph-data')
     _test_data("MyAmazon", "Photo", '~/graph-data')
     _test_data("Flickr", "Flickr", '~/graph-data')
     _test_data("WebKB4Univ", "WebKB4Univ", '~/graph-data')
     _test_data("WikiCS", "WikiCS", '~/graph-data', split=0)
+    # _test_data("MyCitationFull", "Cora", '~/graph-data')
+    # _test_data("MyCitationFull", "DBLP", '~/graph-data')
 
     _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
                size=[10, 5], num_hops=2)

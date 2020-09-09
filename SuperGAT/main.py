@@ -18,7 +18,7 @@ from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
-from model import SuperGATNet, LargeSuperGATNet, ResSuperGATNet
+from model import SuperGATNet, LargeSuperGATNet
 from model_baseline import LinkGNN, CGATNet, MLPNet
 from layer import SuperGAT
 from layer_cgat import CGATConv
@@ -243,8 +243,6 @@ def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
 def _get_model_cls(model_name: str):
     if model_name == "GAT":
         return SuperGATNet
-    elif model_name == "GATPPI":
-        return ResSuperGATNet
     elif model_name.startswith("Link"):
         return LinkGNN
     elif model_name == "LargeGAT":

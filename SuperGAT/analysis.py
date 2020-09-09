@@ -10,7 +10,7 @@ import re
 import pickle
 
 from torch_geometric.data import Data
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 from arguments import get_args, pprint_args, pdebug_args
 from data import get_dataset_or_loader, get_agreement_dist
@@ -310,6 +310,34 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
         )
 
 
+def get_homophily(edge_index, y):
+    num_nodes = y.size(0)
+    try:
+        num_labels = y.size(1)  # multi-labels
+    except IndexError:
+        num_labels = 1
+    e_j, e_i = edge_index
+    h_list = []
+    for node_id in trange(num_nodes):
+        neighbors = edge_index[1, e_j == node_id]
+        num_neighbors = neighbors.size(0)
+        if num_neighbors > 0:
+            if num_labels == 1:
+                y_i = y[node_id]
+                y_of_neighbors = y[neighbors]
+                num_neighbors_same_label = (y_of_neighbors == y_i).nonzero().size(0)
+                _h = num_neighbors_same_label / num_neighbors
+            else:  # multi-label
+                y_i = y[node_id]
+                y_of_neighbors = y[neighbors]
+                num_shared_label_ratio = (((y_i + y_of_neighbors) == 2).sum(dim=1).float() / num_labels).sum()
+                _h = num_shared_label_ratio / num_neighbors
+        else:
+            _h = np.nan
+        h_list.append(_h)
+    return torch.as_tensor(h_list)
+
+
 def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -> np.ndarray:
     """
     :param dataset_class: str
@@ -317,14 +345,7 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
     :param data_root: str
     :return: np.ndarray the shape of which is [N, 2] (degree, homophily) for Ns
     """
-
-    def get_h(agr_dist, agr_sum, n_labels=1):
-        num_neighbors = len(agr_dist)
-        if np.max(agr_sum) > 0:
-            return agr_sum / (num_neighbors * n_labels)
-        else:
-            return 0
-
+    print(f"{dataset_class} / {dataset_name} / {data_root}")
     train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42, **kwargs)
     if dataset_name in ["PPI", "WebKB4Univ", "CLUSTER"]:
         cum_sum = 0
@@ -346,27 +367,36 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
         x, y, edge_index = data.x, data.y, data.edge_index
         num_labels = 1
 
-    deg = degree(edge_index[1], num_nodes=x.size(0))
-    agr_list, agr_sum_list = get_agreement_dist(edge_index, y,
-                                                with_self_loops=False, epsilon=0, return_agree_dist_sum=True)
+    deg = degree(edge_index[0], num_nodes=x.size(0))
+    homophily = get_homophily(edge_index, y)
     degree_and_homophily = []
-    for i, (d, _a, _as) in enumerate(zip(deg, agr_list, agr_sum_list)):
-        if len(_a) == 0:
-            assert d == 0
-            degree_and_homophily.append([d, 1])
-        else:
-            _h = get_h(_a, _as, n_labels=num_labels)
-            degree_and_homophily.append([d, _h])
+    for _deg, _hom in zip(deg, homophily):
+        _deg, _hom = int(_deg), float(_hom)
+        if _deg != 0:
+            degree_and_homophily.append([_deg, _hom])
     return np.asarray(degree_and_homophily)
 
 
 def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
     targets = targets or [
+        "Crocodile", "Squirrel", "Chameleon",
         "MyCitationFull", "MyCoauthor", "MyAmazon",
         "Flickr", "CLUSTER", "WikiCS", "OGB",
         "PPI", "Planetoid", "RPG",
     ]
+
+    if "Squirrel" in targets:
+        degree_and_homophily = get_degree_and_homophily("Squirrel", "Squirrel", data_root="~/graph-data")
+        dn_to_dg_and_h["Squirrel"] = degree_and_homophily
+
+    if "Chameleon" in targets:
+        degree_and_homophily = get_degree_and_homophily("Chameleon", "Chameleon", data_root="~/graph-data")
+        dn_to_dg_and_h["Chameleon"] = degree_and_homophily
+
+    if "Crocodile" in targets:
+        degree_and_homophily = get_degree_and_homophily("Crocodile", "Crocodile", data_root="~/graph-data")
+        dn_to_dg_and_h["Crocodile"] = degree_and_homophily
 
     if "MyCitationFull" in targets:
         degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora", data_root="~/graph-data")
@@ -1203,7 +1233,7 @@ if __name__ == '__main__':
         visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["MyCitationFull", "MyCoauthor"])
+        analyze_degree_and_homophily(["Crocodile", "Squirrel", "Chameleon"])
 
     elif MODE == "get_and_print_rpg_analysis":
 
