@@ -12,6 +12,7 @@ from torch_geometric.data import DataLoader, InMemoryDataset, Data, NeighborSamp
 from torch_geometric.transforms import Compose
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops, negative_sampling, train_test_split_edges
+from torch_geometric.io import read_npz
 import numpy as np
 
 import os
@@ -170,6 +171,8 @@ class FullPlanetoid(Planetoid):
 class MyCitationFull(CitationFull):
 
     def __init__(self, root, name, transform=None, pre_transform=None):
+        self.pca_dim = 500
+        self.name = name
         super().__init__(root, name, transform, pre_transform)
         mask_init(self)
 
@@ -181,7 +184,13 @@ class MyCitationFull(CitationFull):
         return super().download()
 
     def process(self):
-        return super().process()
+        if self.name.lower() == "cora":
+            data = read_npz(self.raw_paths[0])
+            data = data if self.pre_transform is None else self.pre_transform(data)
+            data, slices = collate_and_pca(self, [data], pca_dim=self.pca_dim)
+            torch.save((data, slices), self.processed_paths[0])
+        else:
+            return super().process()
 
 
 class MyCoauthor(Coauthor):
@@ -203,7 +212,6 @@ class MyCoauthor(Coauthor):
         return os.path.join(self.root, 'processed_{}'.format(self.pca_dim))
 
     def process(self):
-        from torch_geometric.io import read_npz
         data = read_npz(self.raw_paths[0])
         data = data if self.pre_transform is None else self.pre_transform(data)
         data, slices = collate_and_pca(self, [data], pca_dim=self.pca_dim)
@@ -672,6 +680,8 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
 
     elif dataset_class in ["MyAmazon", "MyCitationFull"]:
         _name = kwargs["name"]
+        if _name.lower() == "corafull":
+            _name = "Cora"
         root = os.path.join(root, f"{dataset_class}{_name.capitalize()}")
         dataset = dataset_cls(root=root, name=_name.lower())
         return dataset, None, None
@@ -784,9 +794,12 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    _test_data("MyCitationFull", "CoraFull", '~/graph-data')
+    exit()
+
     _test_data("MyCoauthor", "CS", '~/graph-data')
     _test_data("MyCoauthor", "Physics", '~/graph-data')
-    exit()
 
     _test_data("Chameleon", "Chameleon", '~/graph-data')
     _test_data("Squirrel", "Squirrel", '~/graph-data')
