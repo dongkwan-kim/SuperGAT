@@ -773,29 +773,41 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
                 int(dataset[0].val_mask.sum()),
                 int(dataset[0].test_mask.sum()),
             ))
+        if "train_mask" in dataset.__dict__:
+            print("\t- #train: {} / #val: {} / #test: {}".format(
+                int(dataset.train_mask.size(0)),
+                int(dataset.val_mask.size(0)),
+                int(dataset.test_mask.size(0)),
+            ))
+
+    def print_l(loader, prefix):
+        cprint("[{}] {} of {} (path={})".format(prefix, dataset_name, dataset_class, root), "yellow")
+        for i, b in enumerate(loader):
+            print("batch {}: ".format(i), b)
+            if i == 2:
+                break
 
     try:
         _dl = get_dataset_or_loader(dataset_class, dataset_name, root, *args, **kwargs)
-        if len(_dl) == 3:
+        if isinstance(_dl[0], PygNodePropPredDataset) and _dl[1] is not None:
+            full_dataset, train_loader, eval_loader = _dl
+            print_d(full_dataset, "[Dataset]")
+            print_l(train_loader(full_dataset.train_mask), "[Train Loader]")
+            print_l(train_loader(full_dataset.val_mask), "[Eval Loader] ")
+        else:
             train_d, val_d, test_d = _dl
             print_d(train_d, "[Train]")
             print_d(val_d, "[Val]")
             print_d(test_d, "[Test]")
-        elif len(_dl) == 2:
-            full_dataset, loader = _dl
-            _l = loader(full_dataset.train_mask)
-            cprint("[Loader] {} of {} (path={})".format(dataset_name, dataset_class, root), "yellow")
-            for i, b in enumerate(_l):
-                print("batch {}: ".format(i), b)
-                if i == 2:
-                    break
-            print_d(full_dataset, "[Dataset]")
 
     except NotImplementedError:
         cprint("NotImplementedError for {}, {}, {}".format(dataset_class, dataset_name, root), "red")
 
 
 if __name__ == '__main__':
+    _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
+               size=[10, 5], num_hops=2)
+    exit()
 
     _test_data("MyCitationFull", "CoraFull", '~/graph-data')
     _test_data("MyCoauthor", "CS", '~/graph-data')
@@ -814,8 +826,6 @@ if __name__ == '__main__':
     # _test_data("MyCitationFull", "Cora", '~/graph-data')
     # _test_data("MyCitationFull", "DBLP", '~/graph-data')
 
-    _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
-               size=[10, 5], num_hops=2)
     _test_data("PygNodePropPredDataset", "ogbn-arxiv", '~/graph-data')
 
     _test_data("Reddit", "Reddit", '~/graph-data')
