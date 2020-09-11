@@ -37,6 +37,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--dataset-name", default=dataset_name)
     parser.add_argument("--data-sampling-size", default=None, type=int, nargs="+")
     parser.add_argument("--data-sampling-num-hops", default=None, type=int)
+    parser.add_argument("--data-num-splits", default=1, type=int)
 
     # Training
     parser.add_argument('--lr', '--learning-rate', default=0.0025, type=float,
@@ -130,6 +131,7 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "pretraining_noise_ratio",
         "neg_sample_ratio",
         "use_early_stop",
+        "data_num_splits",
     ]
     ret = {}
     for ia_key in important_args:

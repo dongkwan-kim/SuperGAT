@@ -283,7 +283,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
 
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
-        batch_size=args.batch_size, seed=args.seed,
+        batch_size=args.batch_size, seed=args.seed, num_splits=args.data_num_splits,
         **dataset_kwargs,
     )
 

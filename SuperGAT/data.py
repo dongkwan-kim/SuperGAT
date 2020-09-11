@@ -12,6 +12,7 @@ from torch_geometric.data import DataLoader, InMemoryDataset, Data, NeighborSamp
 from torch_geometric.transforms import Compose
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops, negative_sampling, train_test_split_edges
+from torch_geometric.io import read_npz
 import numpy as np
 
 import os
@@ -169,9 +170,11 @@ class FullPlanetoid(Planetoid):
 
 class MyCitationFull(CitationFull):
 
-    def __init__(self, root, name, transform=None, pre_transform=None):
+    def __init__(self, root, name, transform=None, pre_transform=None, seed=0):
+        self.pca_dim = 500
+        self.name = name
         super().__init__(root, name, transform, pre_transform)
-        mask_init(self)
+        mask_init(self, seed=12345 + seed)
 
     def __getitem__(self, item) -> torch.Tensor:
         datum = super().__getitem__(item)
@@ -181,15 +184,21 @@ class MyCitationFull(CitationFull):
         return super().download()
 
     def process(self):
-        return super().process()
+        if self.name.lower() == "cora":
+            data = read_npz(self.raw_paths[0])
+            data = data if self.pre_transform is None else self.pre_transform(data)
+            data, slices = collate_and_pca(self, [data], pca_dim=self.pca_dim)
+            torch.save((data, slices), self.processed_paths[0])
+        else:
+            return super().process()
 
 
 class MyCoauthor(Coauthor):
 
-    def __init__(self, root, name, transform=None, pre_transform=None):
+    def __init__(self, root, name, transform=None, pre_transform=None, seed=0):
         self.pca_dim = 500
         super().__init__(root, name, transform, pre_transform)
-        mask_init(self)
+        mask_init(self, seed=12345 + seed)
 
     def __getitem__(self, item) -> torch.Tensor:
         datum = super().__getitem__(item)
@@ -203,7 +212,6 @@ class MyCoauthor(Coauthor):
         return os.path.join(self.root, 'processed_{}'.format(self.pca_dim))
 
     def process(self):
-        from torch_geometric.io import read_npz
         data = read_npz(self.raw_paths[0])
         data = data if self.pre_transform is None else self.pre_transform(data)
         data, slices = collate_and_pca(self, [data], pca_dim=self.pca_dim)
@@ -212,9 +220,9 @@ class MyCoauthor(Coauthor):
 
 class MyAmazon(Amazon):
 
-    def __init__(self, root, name, transform=None, pre_transform=None):
+    def __init__(self, root, name, transform=None, pre_transform=None, seed=0):
         super().__init__(root, name, transform, pre_transform)
-        mask_init(self)
+        mask_init(self, seed=12345 + seed)
 
     def __getitem__(self, item) -> torch.Tensor:
         datum = super().__getitem__(item)
@@ -563,7 +571,8 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
 def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: str,
                           batch_size: int = 1024,
                           train_val_test: Tuple[float, float, float] = (0.9 * 0.9, 0.9 * 0.1, 0.1),
-                          seed: int = 42, **kwargs):
+                          seed: int = 42, num_splits: int = 1,
+                          **kwargs):
     """
     Note that datasets structure in torch_geometric varies.
     :param dataset_class: ['KarateClub', 'TUDataset', 'Planetoid', 'CoraFull', 'Coauthor', 'Amazon', 'PPI', 'Reddit',
@@ -586,6 +595,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     :param batch_size:
     :param train_val_test:
     :param seed: 42
+    :param num_splits: 1
     :param kwargs:
     :return:
     """
@@ -642,10 +652,6 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
         return train_loader, val_loader, test_loader
 
-    elif dataset_class in ["Crocodile", "Squirrel", "Chameleon"]:
-        dataset = dataset_cls(root=root)
-        return dataset, None, None
-
     elif dataset_class in ["Reddit"]:
         root = os.path.join(root, "reddit")
         dataset = dataset_cls(root=root, **kwargs)
@@ -667,13 +673,19 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     elif dataset_class in ["MyCoauthor"]:
         _name = kwargs["name"]
         root = os.path.join(root, f"{dataset_class}{_name}")
-        dataset = dataset_cls(root=root, name=_name.lower())
+        dataset = dataset_cls(root=root, name=_name.lower(), seed=seed % num_splits)
         return dataset, None, None
 
     elif dataset_class in ["MyAmazon", "MyCitationFull"]:
         _name = kwargs["name"]
+        if _name.lower() == "corafull":
+            _name = "Cora"
         root = os.path.join(root, f"{dataset_class}{_name.capitalize()}")
-        dataset = dataset_cls(root=root, name=_name.lower())
+        dataset = dataset_cls(root=root, name=_name.lower(), seed=seed % num_splits)
+        return dataset, None, None
+
+    elif dataset_class in ["Crocodile", "Squirrel", "Chameleon"]:
+        dataset = dataset_cls(root=root, seed=seed % num_splits)
         return dataset, None, None
 
     elif dataset_class in ["GNNBenchmarkDataset"]:
@@ -784,11 +796,13 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+
+    _test_data("MyCitationFull", "CoraFull", '~/graph-data')
     _test_data("MyCoauthor", "CS", '~/graph-data')
-    _test_data("MyCoauthor", "Physics", '~/graph-data')
+    _test_data("Chameleon", "Chameleon", '~/graph-data')
     exit()
 
-    _test_data("Chameleon", "Chameleon", '~/graph-data')
+    _test_data("MyCoauthor", "Physics", '~/graph-data')
     _test_data("Squirrel", "Squirrel", '~/graph-data')
     _test_data("Crocodile", "Crocodile", '~/graph-data')
     _test_data("MyCitationFull", "Cora_ML", '~/graph-data')
