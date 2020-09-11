@@ -6,6 +6,7 @@ from datetime import datetime
 from itertools import chain
 import os
 import re
+import multiprocessing as mp
 
 import pickle
 
@@ -310,39 +311,102 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
         )
 
 
-def get_homophily(edge_index, y):
-    num_nodes = y.size(0)
+def _get_h_of_one_node_torch(node_id, edge_index, e_j, y, num_labels):
+    neighbors = edge_index[1, e_j == node_id]
+    num_neighbors = neighbors.size(0)
+    if num_neighbors > 0:
+        if num_labels == 1:
+            y_i = y[node_id]
+            y_of_neighbors = y[neighbors]
+            num_neighbors_same_label = (y_of_neighbors == y_i).nonzero().size(0)
+            _h = num_neighbors_same_label / num_neighbors
+        else:  # multi-label
+            y_i = y[node_id]
+            y_of_neighbors = y[neighbors]
+            num_shared_label_ratio = (((y_i + y_of_neighbors) == 2).sum(dim=1).float() / num_labels).sum()
+            _h = num_shared_label_ratio / num_neighbors
+    else:
+        _h = np.nan
+    return _h
+
+
+def _get_h_of_one_node_numpy(node_id, edge_index, e_j, y, num_labels):
+    neighbors = edge_index[1, e_j == node_id]
+    num_neighbors = neighbors.shape[0]
+    if num_neighbors > 0:
+        if num_labels == 1:
+            y_i = y[node_id]
+            y_of_neighbors = y[neighbors]
+            num_neighbors_same_label = np.sum(y_of_neighbors == y_i)
+            _h = num_neighbors_same_label / num_neighbors
+        else:  # multi-label
+            raise NotImplementedError
+    else:
+        _h = np.nan
+    return _h
+
+
+def _get_h_of_one_node_numpy_global(node_id, num_labels):
+    global EDGE_INDEX, Y
+    e_j, _ = EDGE_INDEX
+    neighbors = EDGE_INDEX[1, e_j == node_id]
+    num_neighbors = neighbors.shape[0]
+    if num_neighbors > 0:
+        if num_labels == 1:
+            y_i = Y[node_id]
+            y_of_neighbors = Y[neighbors]
+            num_neighbors_same_label = np.sum(y_of_neighbors == y_i)
+            _h = num_neighbors_same_label / num_neighbors
+        else:  # multi-label
+            raise NotImplementedError
+    else:
+        _h = np.nan
+    return _h
+
+
+def get_homophily(edge_index, y, use_multiprocessing=False):
+    y = y.squeeze()
     try:
         num_labels = y.size(1)  # multi-labels
+        use_numpy = False
     except IndexError:
         num_labels = 1
-    e_j, e_i = edge_index
-    h_list = []
-    for node_id in trange(num_nodes):
-        neighbors = edge_index[1, e_j == node_id]
-        num_neighbors = neighbors.size(0)
-        if num_neighbors > 0:
-            if num_labels == 1:
-                y_i = y[node_id]
-                y_of_neighbors = y[neighbors]
-                num_neighbors_same_label = (y_of_neighbors == y_i).nonzero().size(0)
-                _h = num_neighbors_same_label / num_neighbors
-            else:  # multi-label
-                y_i = y[node_id]
-                y_of_neighbors = y[neighbors]
-                num_shared_label_ratio = (((y_i + y_of_neighbors) == 2).sum(dim=1).float() / num_labels).sum()
-                _h = num_shared_label_ratio / num_neighbors
-        else:
-            _h = np.nan
-        h_list.append(_h)
+        use_numpy = True
+
+    cprint(f"use_numpy: {use_numpy} / use_mp: {use_multiprocessing}", "green")
+
+    if use_numpy and not use_multiprocessing:
+        edge_index, y = edge_index.numpy(), y.numpy()
+        e_j, e_i = edge_index
+        h_list = []
+        for node_id in trange(y.shape[0]):
+            h_list.append(_get_h_of_one_node_numpy(node_id, edge_index, e_j, y, num_labels))
+    elif not use_numpy and not use_multiprocessing:
+        e_j, e_i = edge_index
+        h_list = []
+        for node_id in trange(y.size(0)):
+            h_list.append(_get_h_of_one_node_torch(node_id, edge_index, e_j, y, num_labels))
+    else:
+        edge_index, y = edge_index.numpy(), y.numpy()
+
+        global EDGE_INDEX, Y
+        EDGE_INDEX, Y = edge_index, y
+
+        pool = mp.Pool(mp.cpu_count())
+        h_list = pool.starmap(
+            _get_h_of_one_node_numpy_global,
+            [(node_id, num_labels) for node_id in range(y.shape[0])],
+        )
     return torch.as_tensor(h_list)
 
 
-def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -> np.ndarray:
+def get_degree_and_homophily(dataset_class, dataset_name, data_root,
+                             use_multiprocessing=False, **kwargs) -> np.ndarray:
     """
     :param dataset_class: str
     :param dataset_name: str
     :param data_root: str
+    :param use_multiprocessing:
     :return: np.ndarray the shape of which is [N, 2] (degree, homophily) for Ns
     """
     print(f"{dataset_class} / {dataset_name} / {data_root}")
@@ -368,7 +432,7 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
         num_labels = 1
 
     deg = degree(edge_index[0], num_nodes=x.size(0))
-    homophily = get_homophily(edge_index, y)
+    homophily = get_homophily(edge_index, y, use_multiprocessing=use_multiprocessing)
     degree_and_homophily = []
     for _deg, _hom in zip(deg, homophily):
         _deg, _hom = int(_deg), float(_hom)
@@ -382,7 +446,7 @@ def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     targets = targets or [
         "Crocodile", "Squirrel", "Chameleon",
         "MyCitationFull", "MyCoauthor", "MyAmazon",
-        "Flickr", "CLUSTER", "WikiCS", "OGB",
+        "Flickr", "CLUSTER", "WikiCS", "ogbn-arxiv", "ogbn-products",
         "PPI", "Planetoid", "RPG",
     ]
 
@@ -434,9 +498,18 @@ def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
         degree_and_homophily = get_degree_and_homophily("WikiCS", "WikICS", data_root="~/graph-data", split=0)
         dn_to_dg_and_h["WikiCS"] = degree_and_homophily
 
-    if "OGB" in targets:
-        degree_and_homophily = get_degree_and_homophily("PygNodePropPredDataset", "ogbn-arxiv",
-                                                        data_root="~/graph-data")
+    if "ogbn-products" in targets:
+        degree_and_homophily = get_degree_and_homophily(
+            "PygNodePropPredDataset", "ogbn-products",
+            data_root="~/graph-data", use_multiprocessing=True, size=[10, 5], num_hops=2,
+        )
+        dn_to_dg_and_h["ogbn-products"] = degree_and_homophily
+
+    if "ogbn-arxiv" in targets:
+        degree_and_homophily = get_degree_and_homophily(
+            "PygNodePropPredDataset", "ogbn-arxiv",
+            data_root="~/graph-data", use_multiprocessing=True,
+        )
         dn_to_dg_and_h["ogbn-arxiv"] = degree_and_homophily
 
     if "PPI" in targets:
@@ -1233,7 +1306,8 @@ if __name__ == '__main__':
         visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["Crocodile", "Squirrel", "Chameleon"])
+        analyze_degree_and_homophily(["ogbn-products"])
+        # analyze_degree_and_homophily(["ogbn-arxiv"])
 
     elif MODE == "get_and_print_rpg_analysis":
 
