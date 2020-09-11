@@ -269,11 +269,11 @@ class SNAPDataset(InMemoryDataset):
 
 class Crocodile(SNAPDataset):
 
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, seed=0):
         super().__init__(root, "musae-wiki", transform,
                          pre_transform=DigitizeY(bins=[2, 2.5, 3, 3.5, 4], transform_y=np.log10),
                          pre_filter=self.pre_filter)
-        mask_init(self)
+        mask_init(self, seed=12345 + seed)
 
     def __getitem__(self, item) -> torch.Tensor:
         datum = super().__getitem__(item)
@@ -310,11 +310,11 @@ class Crocodile(SNAPDataset):
 
 class Squirrel(SNAPDataset):
 
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, seed=0):
         super().__init__(root, "musae-wiki", transform,
                          pre_transform=DigitizeY(bins=[3, 3.4, 3.8, 4.2, 4.6], transform_y=np.log10),
                          pre_filter=self.pre_filter)
-        mask_init(self)
+        mask_init(self, seed=12345 + seed)
 
     def __getitem__(self, item) -> torch.Tensor:
         datum = super().__getitem__(item)
@@ -351,11 +351,11 @@ class Squirrel(SNAPDataset):
 
 class Chameleon(SNAPDataset):
 
-    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None):
+    def __init__(self, root, transform=None, pre_transform=None, pre_filter=None, seed=0):
         super().__init__(root, "musae-wiki", transform,
                          pre_transform=DigitizeY(bins=[2.5, 3, 3.5, 4, 4.5], transform_y=np.log10),
                          pre_filter=self.pre_filter)
-        mask_init(self)
+        mask_init(self, seed=12345 + seed)
 
     def __getitem__(self, item) -> torch.Tensor:
         datum = super().__getitem__(item)
