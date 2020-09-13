@@ -96,6 +96,7 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
                                         verbose=2,
                                         is_test=False,
                                         plot_part_by_part=False,
+                                        draw_plot=True,
                                         extension="pdf"):
     base_key = "analysis_rpg" + ("" if not is_test else "_test")
     base_path = os.path.join("../figs", base_key)
@@ -170,6 +171,10 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
             deg_and_legend_to_std_over_hp_list[deg_and_legend] = std_over_hp_list
 
     pprint(deg_and_legend_to_mean_over_hp_list)
+
+    if not draw_plot:
+        return
+
     plot_line_with_std(
         tuple_to_mean_list=deg_and_legend_to_mean_over_hp_list,  # (deg, legend) -> List[perf] by homophily
         tuple_to_std_list=deg_and_legend_to_std_over_hp_list,
@@ -316,12 +321,12 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "analyze_rpg_by_degree_and_homophily"
+    MODE = "sandbox_analyze_rpg_by_degree_and_homophily"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "get_and_print_rpg_analysis":
 
-        degree_list = [2.5, 5.0, 25.0, 50.0]
+        degree_list = [2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0]
         homophily_list = [0.1, 0.3, 0.5, 0.7, 0.9]
 
         model_list = ["GCN", "GAT", "GAT", "GAT"]
@@ -363,6 +368,23 @@ if __name__ == '__main__':
             l2_lambda_list=[1e-7, 1e-5, 1e-3],
             num_total_runs=5,
             verbose=0,
+        )
+
+    elif MODE == "sandbox_analyze_rpg_by_degree_and_homophily":
+        def rev(lst):
+            return list(reversed(lst))
+
+        analyze_rpg_by_degree_and_homophily(
+            degree_list=rev([2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0]),
+            homophily_list=[0.8],
+            legend_list=rev(["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"]),
+            model_list=rev(["GCN", "GAT", "GAT", "GAT"]),
+            custom_key_list=rev(["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"]),
+            att_lambda_list=[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e-3, 1e-4, 1e-5],
+            l2_lambda_list=[1e-7, 1e-5, 1e-3],
+            num_total_runs=5,
+            verbose=0,
+            draw_plot=False,
         )
 
     else:
