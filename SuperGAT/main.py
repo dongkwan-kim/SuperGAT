@@ -18,8 +18,8 @@ from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
-from model import SuperGATNet, LargeSuperGATNet, ResSuperGATNet
-from model_baseline import LinkGNN, CGATNet
+from model import SuperGATNet, LargeSuperGATNet
+from model_baseline import LinkGNN, CGATNet, MLPNet
 from layer import SuperGAT
 from layer_cgat import CGATConv
 from utils import create_hash, to_one_hot, get_accuracy, cprint_multi_lines, blind_other_gpus
@@ -243,14 +243,14 @@ def save_loss_and_perf_plot(list_of_list, return_dict, args, columns=None):
 def _get_model_cls(model_name: str):
     if model_name == "GAT":
         return SuperGATNet
-    elif model_name == "GATPPI":
-        return ResSuperGATNet
     elif model_name.startswith("Link"):
         return LinkGNN
     elif model_name == "LargeGAT":
         return LargeSuperGATNet
     elif model_name == "CGAT":
         return CGATNet
+    elif model_name == "MLP":
+        return MLPNet
     else:
         raise ValueError
 
@@ -278,10 +278,12 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     dataset_kwargs = {}
     if args.dataset_class == "ENSPlanetoid":
         dataset_kwargs["neg_sample_ratio"] = args.neg_sample_ratio
+    if args.dataset_class == "WikiCS":
+        dataset_kwargs["split"] = args.seed % 20  # num_splits = 20
 
     train_d, val_d, test_d = get_dataset_or_loader(
         args.dataset_class, args.dataset_name, args.data_root,
-        batch_size=args.batch_size, seed=args.seed,
+        batch_size=args.batch_size, seed=args.seed, num_splits=args.data_num_splits,
         **dataset_kwargs,
     )
 
@@ -447,9 +449,9 @@ if __name__ == '__main__':
 
     main_args = get_args(
         model_name="GAT",  # GAT, CGAT, LargeGAT, GCN
-        dataset_class="Planetoid",  # ADPlanetoid, LinkPlanetoid, Planetoid, FullPlanetoid, RandomPartitionGraph
-        dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
-        custom_key="EV13NSO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
+        dataset_class="WikiCS",  # ADPlanetoid, LinkPlanetoid, Planetoid, FullPlanetoid, RandomPartitionGraph
+        dataset_name="WikiCS",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
+        custom_key="NEO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
     pprint_args(main_args)
 

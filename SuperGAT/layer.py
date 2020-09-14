@@ -8,7 +8,7 @@ from torch.nn import Parameter
 import torch.nn.functional as F
 from torch_geometric.nn.conv import MessagePassing
 from torch_geometric.utils import remove_self_loops, add_self_loops, softmax, dropout_adj, \
-    is_undirected, accuracy, negative_sampling, batched_negative_sampling
+    is_undirected, accuracy, negative_sampling, batched_negative_sampling, to_undirected
 import torch_geometric.nn.inits as tgi
 
 from typing import List
@@ -25,7 +25,7 @@ class SuperGAT(MessagePassing):
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
                  is_super_gat=True, attention_type="basic", super_gat_criterion=None,
                  neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False,
-                 scaling_factor=None,
+                 to_undirected_at_neg=False, scaling_factor=None,
                  cache_label=False, cache_attention=False, **kwargs):
         super(SuperGAT, self).__init__(aggr='add', **kwargs)
 
@@ -41,6 +41,7 @@ class SuperGAT(MessagePassing):
         self.neg_sample_ratio = neg_sample_ratio
         self.pretraining_noise_ratio = pretraining_noise_ratio
         self.pretraining = None if not use_pretraining else True
+        self.to_undirected_at_neg = to_undirected_at_neg
         self.cache_label = cache_label
         self.cache_attention = cache_attention
 
@@ -67,9 +68,16 @@ class SuperGAT(MessagePassing):
             elif self.attention_type.endswith("mask_only"):
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
+            elif self.attention_type == "prob_mask_addition" \
+                    or self.attention_type == "prob_mask_scaled_addition":
+                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
+
             elif self.attention_type.endswith("mask_scaling"):
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
                 self.att_scaling = Parameter(torch.Tensor(heads))
+
+            elif self.attention_type == "gated":
+                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
             else:
                 raise ValueError
@@ -146,8 +154,12 @@ class SuperGAT(MessagePassing):
                 neg_edge_index = None
 
             elif batch is None:
+                if self.to_undirected_at_neg:
+                    edge_index_for_ns = to_undirected(edge_index, num_nodes=x.size(0))
+                else:
+                    edge_index_for_ns = edge_index
                 neg_edge_index = negative_sampling(
-                    edge_index=edge_index,
+                    edge_index=edge_index_for_ns,
                     num_nodes=x.size(0),
                     num_neg_samples=num_neg_samples,
                 )
@@ -217,6 +229,21 @@ class SuperGAT(MessagePassing):
             aggr_out = aggr_out + self.bias
         return aggr_out
 
+    def _get_gated_attention(self, edge_index_i, x_i, x_j, size_i, normalize=True, with_negatives=False,
+                             **kwargs) -> torch.Tensor:
+        # [E, heads, F] * [E, heads, F] -> [E, heads]
+        logits = torch.einsum("ehf,ehf->eh", x_i, x_j)
+        if with_negatives:
+            return logits
+
+        # [E, heads, 2F] * [1, heads, 2F] -> [E, heads]
+        alpha = torch.einsum("ehf,xhf->eh", torch.cat([x_i, x_j], dim=-1), self.att_mh_1)
+        alpha = F.leaky_relu(alpha, self.negative_slope)
+        alpha = softmax(alpha, edge_index_i, size_i)
+
+        alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
+        return alpha
+
     def _get_attention(self, edge_index_i, x_i, x_j, size_i, normalize=True, with_negatives=False,
                        **kwargs) -> torch.Tensor:
         """
@@ -228,6 +255,8 @@ class SuperGAT(MessagePassing):
         """
 
         # Compute attention coefficients.
+        if self.attention_type == "gated":
+            return self._get_gated_attention(edge_index_i, x_i, x_j, size_i, normalize, with_negatives, **kwargs)
 
         if self.attention_type == "basic" or self.attention_type.endswith("gat_originated"):
             # [E, heads, 2F] * [1, heads, 2F] -> [E, heads]
@@ -258,7 +287,12 @@ class SuperGAT(MessagePassing):
                                  torch.cat([x_i, x_j], dim=-1),
                                  self.att_mh_1)
 
-            alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
+            if self.attention_type == "prob_mask_scaled_addition":
+                alpha = alpha + (logits / np.sqrt(self.out_channels))
+            elif self.attention_type == "prob_mask_addition":
+                alpha = alpha + logits
+            else:
+                alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
 
         else:
             raise ValueError

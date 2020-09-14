@@ -22,17 +22,22 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--num-gpus-to-use", default=0, type=int)
     parser.add_argument("--black-list", default=None, type=int, nargs="+")
     parser.add_argument("--checkpoint-dir", default="../checkpoints")
-    parser.add_argument('--data-root', default="~/graph-data", metavar='DIR', help='path to dataset')
     parser.add_argument("--model-name", default=model_name)
     parser.add_argument("--task-type", default="", type=str)
     parser.add_argument("--perf-type", default="accuracy", type=str)
-    parser.add_argument("--dataset-class", default=dataset_class)
-    parser.add_argument("--dataset-name", default=dataset_name)
     parser.add_argument("--custom-key", default=custom_key)
     parser.add_argument("--save-model", default=True)
     parser.add_argument("--verbose", default=2)
     parser.add_argument("--save-plot", default=False)
     parser.add_argument("--seed", default=42)
+
+    # Dataset
+    parser.add_argument('--data-root', default="~/graph-data", metavar='DIR', help='path to dataset')
+    parser.add_argument("--dataset-class", default=dataset_class)
+    parser.add_argument("--dataset-name", default=dataset_name)
+    parser.add_argument("--data-sampling-size", default=None, type=int, nargs="+")
+    parser.add_argument("--data-sampling-num-hops", default=None, type=int)
+    parser.add_argument("--data-num-splits", default=1, type=int)
 
     # Training
     parser.add_argument('--lr', '--learning-rate', default=0.0025, type=float,
@@ -50,6 +55,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--l1-lambda", default=0., type=float)
     parser.add_argument("--l2-lambda", default=0., type=float)
     parser.add_argument("--num-layers", default=2, type=int)
+    parser.add_argument("--use-bn", default=False, type=bool)
     parser.add_argument("--perf-task-for-val", default="Node", type=str)  # Node or Link
 
     # Early stop
@@ -72,6 +78,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--super-gat-criterion", default=None, type=str)
     parser.add_argument("--neg-sample-ratio", default=0.0, type=float)
     parser.add_argument("--scaling-factor", default=None, type=float)
+    parser.add_argument("--to-undirected-at-neg", default=False, type=bool)
 
     # Pretraining
     parser.add_argument("--use-pretraining", default=False, type=bool)
@@ -105,6 +112,9 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
 def get_important_args(_args: argparse.Namespace) -> dict:
     important_args = [
         "lr",
+        "num_hidden_features",
+        "num_layers",
+        "use_bn",
         "l1_lambda",
         "l2_lambda",
         "att_lambda",
@@ -121,6 +131,7 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "pretraining_noise_ratio",
         "neg_sample_ratio",
         "use_early_stop",
+        "data_num_splits",
     ]
     ret = {}
     for ia_key in important_args:

@@ -13,11 +13,14 @@ imageio==2.8.0
 isodate==0.6.0
 joblib==0.14.1
 kiwisolver==1.1.0
+littleutils==0.2.2
 llvmlite==0.31.0
 matplotlib==3.2.0
 networkx==2.4
 numba==0.48.0
-numpy==1.15.4
+numpy==1.19.1
+ogb==1.2.2
+outdated==0.2.0
 pandas==1.0.1
 Pillow==7.0.0
 plyfile==0.7.1

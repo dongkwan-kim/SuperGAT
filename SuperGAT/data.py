@@ -1,12 +1,18 @@
+import inspect
+import random
+
 import torch
 import torch_geometric as pyg
 from copy import deepcopy
+
+from sklearn.decomposition import PCA
 from termcolor import cprint
 from torch_geometric.datasets import *
-from torch_geometric.data import DataLoader, InMemoryDataset, Data
-from torch_geometric.nn.models import GAE
+from torch_geometric.data import DataLoader, InMemoryDataset, Data, NeighborSampler
+from torch_geometric.transforms import Compose
 from torch_geometric.utils import is_undirected, to_undirected, degree, sort_edge_index, remove_self_loops, \
     add_self_loops, negative_sampling, train_test_split_edges
+from torch_geometric.io import read_npz
 import numpy as np
 
 import os
@@ -15,10 +21,17 @@ from typing import Tuple, Callable, List
 
 from tqdm import tqdm
 
+import ogb
+from ogb.nodeproppred import PygNodePropPredDataset
 from data_syn import RandomPartitionGraph
-from webkb4univ import WebKB4Univ
+from data_transform_digitize import DigitizeY
+from data_utils import mask_init, mask_getitem, collate_and_pca
+from data_webkb4univ import WebKB4Univ
+from data_bg import GNNBenchmarkDataset
+from data_flickr import Flickr
+from data_wikics import WikiCS
+from data_snap import SNAPDataset, Crocodile, Squirrel, Chameleon
 from utils import negative_sampling_numpy
-
 
 from multiprocessing import Process, Queue
 import os
@@ -26,6 +39,7 @@ import os
 
 class ENSPlanetoid(Planetoid):
     """Efficient Negative Sampling for Planetoid"""
+
     def __init__(self, root, name, neg_sample_ratio, q_trial=110):
         super().__init__(root, name)
 
@@ -99,6 +113,7 @@ def get_agreement_dist(edge_index: torch.Tensor, y: torch.Tensor,
             - a(y_j, y_i) = 1 / L[i].sum() if y_j = y_i,
             - a(y_j, y_i) = 0 otherwise.
     """
+    y = y.squeeze()
     num_nodes = y.size(0)
 
     # Add self-loops and sort by index
@@ -151,6 +166,73 @@ class FullPlanetoid(Planetoid):
         self.data.train_mask[:] = True
         self.data.train_mask[self.data.test_mask] = False
         self.data.train_mask[self.data.test_mask] = False
+
+
+class MyCitationFull(CitationFull):
+
+    def __init__(self, root, name, transform=None, pre_transform=None, seed=0):
+        self.pca_dim = 500
+        self.name = name
+        super().__init__(root, name, transform, pre_transform)
+        mask_init(self, seed=12345 + seed)
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        return mask_getitem(self, datum)
+
+    def download(self):
+        return super().download()
+
+    def process(self):
+        if self.name.lower() == "cora":
+            data = read_npz(self.raw_paths[0])
+            data = data if self.pre_transform is None else self.pre_transform(data)
+            data, slices = collate_and_pca(self, [data], pca_dim=self.pca_dim)
+            torch.save((data, slices), self.processed_paths[0])
+        else:
+            return super().process()
+
+
+class MyCoauthor(Coauthor):
+
+    def __init__(self, root, name, transform=None, pre_transform=None, seed=0):
+        self.pca_dim = 500
+        super().__init__(root, name, transform, pre_transform)
+        mask_init(self, seed=12345 + seed)
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        return mask_getitem(self, datum)
+
+    def download(self):
+        return super().download()
+
+    @property
+    def processed_dir(self):
+        return os.path.join(self.root, 'processed_{}'.format(self.pca_dim))
+
+    def process(self):
+        data = read_npz(self.raw_paths[0])
+        data = data if self.pre_transform is None else self.pre_transform(data)
+        data, slices = collate_and_pca(self, [data], pca_dim=self.pca_dim)
+        torch.save((data, slices), self.processed_paths[0])
+
+
+class MyAmazon(Amazon):
+
+    def __init__(self, root, name, transform=None, pre_transform=None, seed=0):
+        super().__init__(root, name, transform, pre_transform)
+        mask_init(self, seed=12345 + seed)
+
+    def __getitem__(self, item) -> torch.Tensor:
+        datum = super().__getitem__(item)
+        return mask_getitem(self, datum)
+
+    def download(self):
+        return super().download()
+
+    def process(self):
+        return super().process()
 
 
 class ADPlanetoid(Planetoid):
@@ -244,7 +326,7 @@ class LinkPPI(PPI):
         data.__delattr__("train_neg_adj_mask")
 
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
-                                    to_undirected(data.test_neg_edge_index)], dim=1)
+                                     to_undirected(data.test_neg_edge_index)], dim=1)
 
         return data.train_pos_edge_index, test_edge_index
 
@@ -308,7 +390,7 @@ class LinkPlanetoid(Planetoid):
         data.__delattr__("train_neg_adj_mask")
 
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
-                                    to_undirected(data.test_neg_edge_index)], dim=1)
+                                     to_undirected(data.test_neg_edge_index)], dim=1)
 
         if data.val_pos_edge_index.size(1) > 0:
             val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
@@ -409,7 +491,7 @@ class LinkRandomPartitionGraph(RandomPartitionGraph):
         data.__delattr__("train_neg_adj_mask")
 
         test_edge_index = torch.cat([to_undirected(data.test_pos_edge_index),
-                                    to_undirected(data.test_neg_edge_index)], dim=1)
+                                     to_undirected(data.test_neg_edge_index)], dim=1)
 
         if data.val_pos_edge_index.size(1) > 0:
             val_edge_index = torch.cat([to_undirected(data.val_pos_edge_index),
@@ -475,19 +557,22 @@ def get_dataset_class_name(dataset_name: str) -> str:
 
 def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
     assert dataset_class in (pyg.datasets.__all__ +
-                             ["ENSPlanetoid"] +
-                             ["LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic"] +
-                             ["LinkPPI", "ADPPI"] +
-                             ["RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"] +
-                             ["WebKB4Univ"]), f"{dataset_class} is not good."
+                             [
+                                 "ENSPlanetoid", "LinkPlanetoid", "ADPlanetoid", "FullPlanetoid", "HomophilySynthetic",
+                                 "LinkPPI", "ADPPI",
+                                 "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph",
+                                 "WebKB4Univ", "PygNodePropPredDataset", "WikiCS", "GNNBenchmarkDataset", "Flickr",
+                                 "MyAmazon", "MyCoauthor", "MyCitationFull",
+                                 "Crocodile", "Squirrel", "Chameleon",
+                             ]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
 
 def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: str,
-                          batch_size: int = 128,
+                          batch_size: int = 1024,
                           train_val_test: Tuple[float, float, float] = (0.9 * 0.9, 0.9 * 0.1, 0.1),
-                          seed: int = 42, **kwargs) \
-        -> Tuple[InMemoryDataset or DataLoader, DataLoader or None, DataLoader or None]:
+                          seed: int = 42, num_splits: int = 1,
+                          **kwargs):
     """
     Note that datasets structure in torch_geometric varies.
     :param dataset_class: ['KarateClub', 'TUDataset', 'Planetoid', 'CoraFull', 'Coauthor', 'Amazon', 'PPI', 'Reddit',
@@ -510,10 +595,14 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     :param batch_size:
     :param train_val_test:
     :param seed: 42
+    :param num_splits: 1
     :param kwargs:
     :return:
     """
-    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI"]:
+
+    root = os.path.expanduser(root)
+
+    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI", "Reddit", "WikiCS"]:
         kwargs["name"] = dataset_name
 
     torch.manual_seed(seed)
@@ -539,11 +628,6 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset = dataset_cls(root=root, **kwargs)
         return dataset, None, None
 
-    elif dataset_class == "CitationFull":
-        kwargs["name"] = kwargs["name"].lower()
-        dataset = dataset_cls(root=root, **kwargs)
-        raise NotImplementedError  # todo train-val-test split
-
     elif dataset_class in ["HomophilySynthetic",
                            "RandomPartitionGraph", "LinkRandomPartitionGraph", "ADRandomPartitionGraph"]:
         dataset = dataset_cls(root=root, **kwargs)
@@ -568,6 +652,91 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
         return train_loader, val_loader, test_loader
 
+    elif dataset_class in ["Reddit"]:
+        root = os.path.join(root, "reddit")
+        dataset = dataset_cls(root=root, **kwargs)
+        from sampler import RandomNodeSampler
+        train_loader = RandomNodeSampler(dataset[0], num_parts=40, shuffle=True)
+        setattr(train_loader, "num_node_features", dataset[0].x.size(1))
+        setattr(train_loader, "num_classes", torch.unique(dataset[0].y).size(0))
+        return train_loader, None, None
+
+    elif dataset_class in ["WikiCS"]:
+        root = os.path.join(root, "WikiCS")
+        _split = kwargs["split"]
+        dataset = dataset_cls(root=root)
+        dataset.data.stopping_mask = None
+        dataset.data.train_mask = dataset.data.train_mask[:, _split]
+        dataset.data.val_mask = dataset.data.val_mask[:, _split]
+        return dataset, None, None
+
+    elif dataset_class in ["MyCoauthor"]:
+        _name = kwargs["name"]
+        root = os.path.join(root, f"{dataset_class}{_name}")
+        dataset = dataset_cls(root=root, name=_name.lower(), seed=seed % num_splits)
+        return dataset, None, None
+
+    elif dataset_class in ["MyAmazon", "MyCitationFull"]:
+        _name = kwargs["name"]
+        if _name.lower() == "corafull":
+            _name = "Cora"
+        root = os.path.join(root, f"{dataset_class}{_name.capitalize()}")
+        dataset = dataset_cls(root=root, name=_name.lower(), seed=seed % num_splits)
+        return dataset, None, None
+
+    elif dataset_class in ["Crocodile", "Squirrel", "Chameleon"]:
+        dataset = dataset_cls(root=root, seed=seed % num_splits)
+        return dataset, None, None
+
+    elif dataset_class in ["GNNBenchmarkDataset"]:
+        train_dataset = dataset_cls(root=root, split="train", **kwargs)
+        val_dataset = dataset_cls(root=root, split="val", **kwargs)
+        test_dataset = dataset_cls(root=root, split="test", **kwargs)
+        train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+        return train_loader, val_loader, test_loader
+
+    elif dataset_class in ["Flickr"]:
+        root = os.path.join(root, "flickr")
+        dataset = dataset_cls(root=root)
+        return dataset, None, None
+
+    elif dataset_class == "PygNodePropPredDataset":
+
+        if dataset_name == "ogbn-arxiv":
+            dataset_kwargs, loader_kwargs = kwargs, {}
+        elif dataset_name == "ogbn-products":
+            loader_kwargs = {}
+            dataset_kwargs = {}
+            loader_argument_names = inspect.signature(NeighborSampler.__init__).parameters
+            for kw, v in kwargs.items():
+                if kw in loader_argument_names:
+                    #  data, size, num_hops, batch_size=1, shuffle=False,
+                    #  drop_last=False, bipartite=True, add_self_loops=False,
+                    #  flow='source_to_target'
+                    loader_kwargs[kw] = v
+                else:
+                    dataset_kwargs[kw] = v
+        else:
+            raise ValueError
+
+        dataset = PygNodePropPredDataset(root=root, **dataset_kwargs)
+        split_idx = dataset.get_idx_split()
+        dataset.train_mask = split_idx["train"]
+        dataset.val_mask = split_idx["valid"]
+        dataset.test_mask = split_idx["test"]
+
+        if dataset_name == "ogbn-arxiv":
+            return dataset, None, None
+        elif dataset_name == "ogbn-products":
+            train_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
+                                           bipartite=False, **loader_kwargs)
+            test_batch_size = batch_size * 4
+            eval_loader = NeighborSampler(data=dataset[0], batch_size=test_batch_size,
+                                          bipartite=False, **loader_kwargs)
+            return dataset, train_loader, eval_loader
+
     else:
         raise ValueError
 
@@ -580,7 +749,6 @@ def getattr_d(dataset_or_loader, name):
 
 
 def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, **kwargs):
-
     def print_d(dataset_or_loader, prefix: str):
         if dataset_or_loader is None:
             return
@@ -607,18 +775,51 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
             ))
 
     try:
-        train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, root, *args, **kwargs)
-        print_d(train_d, "[Train]")
-        print_d(val_d, "[Val]")
-        print_d(test_d, "[Test]")
+        _dl = get_dataset_or_loader(dataset_class, dataset_name, root, *args, **kwargs)
+        if len(_dl) == 3:
+            train_d, val_d, test_d = _dl
+            print_d(train_d, "[Train]")
+            print_d(val_d, "[Val]")
+            print_d(test_d, "[Test]")
+        elif len(_dl) == 2:
+            full_dataset, loader = _dl
+            _l = loader(full_dataset.train_mask)
+            cprint("[Loader] {} of {} (path={})".format(dataset_name, dataset_class, root), "yellow")
+            for i, b in enumerate(_l):
+                print("batch {}: ".format(i), b)
+                if i == 2:
+                    break
+            print_d(full_dataset, "[Dataset]")
+
     except NotImplementedError:
         cprint("NotImplementedError for {}, {}, {}".format(dataset_class, dataset_name, root), "red")
 
 
 if __name__ == '__main__':
 
-    _test_data("ADPPI", "ADPPI", '~/graph-data')
+    _test_data("MyCitationFull", "CoraFull", '~/graph-data')
+    _test_data("MyCoauthor", "CS", '~/graph-data')
+    _test_data("Chameleon", "Chameleon", '~/graph-data')
     exit()
+
+    _test_data("MyCoauthor", "Physics", '~/graph-data')
+    _test_data("Squirrel", "Squirrel", '~/graph-data')
+    _test_data("Crocodile", "Crocodile", '~/graph-data')
+    _test_data("MyCitationFull", "Cora_ML", '~/graph-data')
+    _test_data("MyAmazon", "Computers", '~/graph-data')
+    _test_data("MyAmazon", "Photo", '~/graph-data')
+    _test_data("Flickr", "Flickr", '~/graph-data')
+    _test_data("WebKB4Univ", "WebKB4Univ", '~/graph-data')
+    _test_data("WikiCS", "WikiCS", '~/graph-data', split=0)
+    # _test_data("MyCitationFull", "Cora", '~/graph-data')
+    # _test_data("MyCitationFull", "DBLP", '~/graph-data')
+
+    _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
+               size=[10, 5], num_hops=2)
+    _test_data("PygNodePropPredDataset", "ogbn-arxiv", '~/graph-data')
+
+    _test_data("Reddit", "Reddit", '~/graph-data')
+    _test_data("ADPPI", "ADPPI", '~/graph-data')
 
     _test_data("LinkPlanetoid", "Cora", "~/graph-data")
     _test_data("LinkPPI", "LinkPPI", '~/graph-data')
@@ -663,6 +864,9 @@ if __name__ == '__main__':
     _test_data("Planetoid", "CiteSeer", '~/graph-data')
     _test_data("Planetoid", "PubMed", '~/graph-data')
     _test_data("PPI", "PPI", '~/graph-data')
+
+    # Deprecated
+    _test_data("GNNBenchmarkDataset", "CLUSTER", '~/graph-data')
 
     # Graph Classification
     _test_data("TUDataset", "MUTAG", '~/graph-data')

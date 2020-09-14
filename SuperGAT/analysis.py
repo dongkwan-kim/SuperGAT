@@ -10,7 +10,7 @@ import re
 import pickle
 
 from torch_geometric.data import Data
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 from arguments import get_args, pprint_args, pdebug_args
 from data import get_dataset_or_loader, get_agreement_dist
@@ -37,7 +37,6 @@ except ImportError:
 
 def print_rpg_analysis(deg, hp, legend, custom_key, model="GAT",
                        num_nodes_per_class=500, num_classes=10, print_all=False, print_tsv=True):
-
     regex = re.compile(r"ms_result_(\d+\.\d+|1e\-\d+)-(\d+\.\d+|1e\-\d+).pkl")
 
     base_key = "analysis_rpg"
@@ -311,27 +310,44 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
         )
 
 
-def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarray:
+def get_homophily(edge_index, y):
+    num_nodes = y.size(0)
+    try:
+        num_labels = y.size(1)  # multi-labels
+    except IndexError:
+        num_labels = 1
+    e_j, e_i = edge_index
+    h_list = []
+    for node_id in trange(num_nodes):
+        neighbors = edge_index[1, e_j == node_id]
+        num_neighbors = neighbors.size(0)
+        if num_neighbors > 0:
+            if num_labels == 1:
+                y_i = y[node_id]
+                y_of_neighbors = y[neighbors]
+                num_neighbors_same_label = (y_of_neighbors == y_i).nonzero().size(0)
+                _h = num_neighbors_same_label / num_neighbors
+            else:  # multi-label
+                y_i = y[node_id]
+                y_of_neighbors = y[neighbors]
+                num_shared_label_ratio = (((y_i + y_of_neighbors) == 2).sum(dim=1).float() / num_labels).sum()
+                _h = num_shared_label_ratio / num_neighbors
+        else:
+            _h = np.nan
+        h_list.append(_h)
+    return torch.as_tensor(h_list)
+
+
+def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -> np.ndarray:
     """
     :param dataset_class: str
     :param dataset_name: str
     :param data_root: str
     :return: np.ndarray the shape of which is [N, 2] (degree, homophily) for Ns
     """
-
-    def get_h(agr_dist, agr_sum, n_labels=1):
-        num_neighbors = len(agr_dist)
-        if np.max(agr_sum) > 0:
-            return agr_sum / (num_neighbors * n_labels)
-        else:
-            return 0
-
-    train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42)
-    if dataset_name != "PPI":
-        data = train_d[0]
-        x, y, edge_index = data.x, data.y, data.edge_index
-        num_labels = 1
-    else:
+    print(f"{dataset_class} / {dataset_name} / {data_root}")
+    train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42, **kwargs)
+    if dataset_name in ["PPI", "WebKB4Univ", "CLUSTER"]:
         cum_sum = 0
         x_list, y_list, edge_index_list = [], [], []
         for _data in chain(train_d, val_d, test_d):
@@ -342,37 +358,103 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root) -> np.ndarr
         x = torch.cat(x_list, dim=0)
         y = torch.cat(y_list, dim=0)
         edge_index = torch.cat(edge_index_list, dim=1)
-        num_labels = y.size(1)
+        try:
+            num_labels = y.size(1)  # multi-labels
+        except IndexError:
+            num_labels = 1
+    else:
+        data = train_d[0]
+        x, y, edge_index = data.x, data.y, data.edge_index
+        num_labels = 1
 
-    deg = degree(edge_index[1], num_nodes=x.size(0))
-    agr_list, agr_sum_list = get_agreement_dist(edge_index, y,
-                                                with_self_loops=False, epsilon=0, return_agree_dist_sum=True)
+    deg = degree(edge_index[0], num_nodes=x.size(0))
+    homophily = get_homophily(edge_index, y)
     degree_and_homophily = []
-    for i, (d, _a, _as) in enumerate(zip(deg, agr_list, agr_sum_list)):
-        if len(_a) == 0:
-            assert d == 0
-            degree_and_homophily.append([d, 1])
-        else:
-            _h = get_h(_a, _as, n_labels=num_labels)
-            degree_and_homophily.append([d, _h])
+    for _deg, _hom in zip(deg, homophily):
+        _deg, _hom = int(_deg), float(_hom)
+        if _deg != 0:
+            degree_and_homophily.append([_deg, _hom])
     return np.asarray(degree_and_homophily)
 
 
-def analyze_degree_and_homophily(extension="png", **data_kwargs):
+def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
+    targets = targets or [
+        "Crocodile", "Squirrel", "Chameleon",
+        "MyCitationFull", "MyCoauthor", "MyAmazon",
+        "Flickr", "CLUSTER", "WikiCS", "OGB",
+        "PPI", "Planetoid", "RPG",
+    ]
 
-    degree_and_homophily = get_degree_and_homophily("PPI", "PPI", data_root="~/graph-data")
-    dn_to_dg_and_h["PPI"] = degree_and_homophily
+    if "Squirrel" in targets:
+        degree_and_homophily = get_degree_and_homophily("Squirrel", "Squirrel", data_root="~/graph-data")
+        dn_to_dg_and_h["Squirrel"] = degree_and_homophily
 
-    for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
-        degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
-        dn_to_dg_and_h[dataset_name] = degree_and_homophily
+    if "Chameleon" in targets:
+        degree_and_homophily = get_degree_and_homophily("Chameleon", "Chameleon", data_root="~/graph-data")
+        dn_to_dg_and_h["Chameleon"] = degree_and_homophily
 
-    for adr in [0.025, 0.04, 0.01]:
-        for dataset_name in tqdm(["rpg-10-500-{}-{}".format(r, adr) for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
-            degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name,
-                                                            data_root="~/graph-data")
+    if "Crocodile" in targets:
+        degree_and_homophily = get_degree_and_homophily("Crocodile", "Crocodile", data_root="~/graph-data")
+        dn_to_dg_and_h["Crocodile"] = degree_and_homophily
+
+    if "MyCitationFull" in targets:
+        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora", data_root="~/graph-data")
+        dn_to_dg_and_h["CoraFull"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora_ML", data_root="~/graph-data")
+        dn_to_dg_and_h["Cora_ML"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "DBLP", data_root="~/graph-data")
+        dn_to_dg_and_h["DBLP"] = degree_and_homophily
+
+    if "MyCoauthor" in targets:
+        degree_and_homophily = get_degree_and_homophily("MyCoauthor", "CS", data_root="~/graph-data")
+        dn_to_dg_and_h["CS"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyCoauthor", "Physics", data_root="~/graph-data")
+        dn_to_dg_and_h["Physics"] = degree_and_homophily
+
+    if "MyAmazon" in targets:
+        degree_and_homophily = get_degree_and_homophily("MyAmazon", "Photo", data_root="~/graph-data")
+        dn_to_dg_and_h["Photo"] = degree_and_homophily
+        degree_and_homophily = get_degree_and_homophily("MyAmazon", "Computers", data_root="~/graph-data")
+        dn_to_dg_and_h["Computers"] = degree_and_homophily
+
+    if "Flickr" in targets:
+        degree_and_homophily = get_degree_and_homophily("Flickr", "Flickr", data_root="~/graph-data")
+        dn_to_dg_and_h["Flickr"] = degree_and_homophily
+
+    if "CLUSTER" in targets:
+        degree_and_homophily = get_degree_and_homophily("GNNBenchmarkDataset", "CLUSTER", data_root="~/graph-data")
+        dn_to_dg_and_h["CLUSTER"] = degree_and_homophily
+
+    if "WebKB4Univ" in targets:
+        degree_and_homophily = get_degree_and_homophily("WebKB4Univ", "WebKB4Univ", data_root="~/graph-data")
+        dn_to_dg_and_h["WebKB4Univ"] = degree_and_homophily
+
+    if "WikiCS" in targets:
+        degree_and_homophily = get_degree_and_homophily("WikiCS", "WikICS", data_root="~/graph-data", split=0)
+        dn_to_dg_and_h["WikiCS"] = degree_and_homophily
+
+    if "OGB" in targets:
+        degree_and_homophily = get_degree_and_homophily("PygNodePropPredDataset", "ogbn-arxiv",
+                                                        data_root="~/graph-data")
+        dn_to_dg_and_h["ogbn-arxiv"] = degree_and_homophily
+
+    if "PPI" in targets:
+        degree_and_homophily = get_degree_and_homophily("PPI", "PPI", data_root="~/graph-data")
+        dn_to_dg_and_h["PPI"] = degree_and_homophily
+
+    if "Planetoid" in targets:
+        for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
+            degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
             dn_to_dg_and_h[dataset_name] = degree_and_homophily
+
+    if "RPG" in targets:
+        for adr in [0.025, 0.04, 0.01]:
+            dataset_name: object
+            for dataset_name in tqdm(["rpg-10-500-{}-{}".format(r, adr) for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
+                degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name,
+                                                                data_root="~/graph-data")
+                dn_to_dg_and_h[dataset_name] = degree_and_homophily
 
     for dataset_name, degree_and_homophily in dn_to_dg_and_h.items():
         df = pd.DataFrame({
@@ -380,7 +462,8 @@ def analyze_degree_and_homophily(extension="png", **data_kwargs):
             "homophily": degree_and_homophily[:, 1],
         })
         plot = sns.scatterplot(x="homophily", y="degree", data=df,
-                               legend=False, palette="Set1")
+                               legend=False, palette="Set1",
+                               s=15)
         sns.despine(left=False, right=False, bottom=False, top=False)
 
         _key, _path = _get_key_and_makedirs(args=None, no_args_key="degree_homophily", base_path="../figs")
@@ -1003,7 +1086,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "attention_metric_for_multiple_models"
+    MODE = "degree_and_homophily"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":
@@ -1150,7 +1233,7 @@ if __name__ == '__main__':
         visualize_glayout_with_training_and_attention(**main_kwargs)
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily()
+        analyze_degree_and_homophily(["Crocodile", "Squirrel", "Chameleon"])
 
     elif MODE == "get_and_print_rpg_analysis":
 

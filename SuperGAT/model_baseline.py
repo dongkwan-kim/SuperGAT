@@ -13,7 +13,8 @@ import torch_geometric.nn.inits as tgi
 
 from layer import is_pretraining
 from layer_cgat import CGATConv
-from data import getattr_d
+from layer_gaan import GaANConv
+from data import getattr_d, get_dataset_or_loader
 
 
 def _get_gn_cls(cls_name: str):
@@ -23,6 +24,8 @@ def _get_gn_cls(cls_name: str):
         return GCNConv
     elif cls_name == "LinkSAGE":
         return SAGEConv
+    elif cls_name == "LinkGAAN":
+        return GaANConv
     else:
         raise ValueError
 
@@ -34,6 +37,11 @@ def _get_gn_kwargs(cls_name: str, args, **kwargs):
         return {}
     elif cls_name == "LinkSAGE":
         return {}
+    elif cls_name == "LinkGAAN":
+        return {"key_and_query_channels": args.key_and_query_channels,
+                "value_channels": args.value_channels,
+                "projected_channels": args.projected_channels,
+                "heads": args.heads}
     else:
         raise ValueError
 
@@ -45,8 +53,32 @@ def _get_last_features(cls_name: str, args):
         return args.num_hidden_features
     elif cls_name == "LinkSAGE":
         return args.num_hidden_features
+    elif cls_name == "LinkGAAN":
+        return args.num_hidden_features
     else:
         raise ValueError
+
+
+class MLPNet(nn.Module):
+
+    def __init__(self, args, dataset_or_loader):
+        super(MLPNet, self).__init__()
+        self.args = args
+
+        num_input_features = getattr_d(dataset_or_loader, "num_node_features")
+        num_classes = getattr_d(dataset_or_loader, "num_classes")
+
+        self.fc = nn.Sequential(
+            nn.Dropout(p=args.dropout),
+            nn.Linear(num_input_features, args.num_hidden_features),
+            nn.ELU(),
+            nn.Dropout(p=args.dropout),
+            nn.Linear(args.num_hidden_features, num_classes),
+        )
+        pprint(next(self.modules()))
+
+    def forward(self, x, *args, **kwargs):
+        return self.fc(x)
 
 
 class CGATNet(nn.Module):
@@ -138,7 +170,7 @@ class LinkGNN(nn.Module):
     def forward(self, x, edge_index, batch=None, **kwargs):
 
         # Labels
-        if self.training and self.cache["label"] is None:
+        if self.training and self.cache["label"] is None and self.args.is_link_gnn:
             device = next(self.parameters()).device
             num_pos, num_neg = edge_index.size(1), int(self.neg_sample_ratio * edge_index.size(1))
             label = torch.zeros(num_pos + num_neg).float().to(device)
@@ -250,3 +282,25 @@ class LinkGNN(nn.Module):
             criterion=criterion,
         )
         return loss
+
+
+if __name__ == '__main__':
+    from arguments import get_args
+
+    main_args = get_args(
+        model_name="GAAN",
+        dataset_class="PPI",
+        dataset_name="PPI",
+        custom_key="NE",
+    )
+
+    train_d, val_d, test_d = get_dataset_or_loader(
+        main_args.dataset_class, main_args.dataset_name, main_args.data_root,
+        batch_size=main_args.batch_size, seed=main_args.seed,
+    )
+
+    _m = LinkGNN(main_args, train_d)
+
+    for b in train_d:
+        ob = _m(b.x, b.edge_index)
+        print(b.x.size(), b.edge_index.size(), ob.size())
