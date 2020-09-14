@@ -1,6 +1,9 @@
+import inspect
+
 import torch
 import random
 from sklearn.decomposition import PCA
+from torch_geometric.data import NeighborSampler
 
 
 def mask_init(self, num_train_per_class=20, num_val_per_class=30, seed=12345):
@@ -32,6 +35,21 @@ def collate_and_pca(self, data_list, pca_dim):
     pca = PCA(n_components=pca_dim)
     collated[0].x = torch.from_numpy(pca.fit_transform(collated[0].x)).float()
     return collated
+
+
+def get_loader_and_dataset_kwargs_for_neighbor_sampler(**kwargs):
+    loader_kwargs = {}
+    dataset_kwargs = {}
+    loader_argument_names = inspect.signature(NeighborSampler.__init__).parameters
+    for kw, v in kwargs.items():
+        if kw in loader_argument_names:
+            #  data, size, num_hops, batch_size=1, shuffle=False,
+            #  drop_last=False, bipartite=True, add_self_loops=False,
+            #  flow='source_to_target'
+            loader_kwargs[kw] = v
+        else:
+            dataset_kwargs[kw] = v
+    return loader_kwargs, dataset_kwargs
 
 
 class StandardizeFeatures(object):
