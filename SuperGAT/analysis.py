@@ -6,6 +6,7 @@ from datetime import datetime
 from itertools import chain
 import os
 import re
+import multiprocessing as mp
 
 import pickle
 
@@ -39,35 +40,45 @@ def get_homophily(edge_index, y):
     num_nodes = y.size(0)
     try:
         num_labels = y.size(1)  # multi-labels
+        use_numpy = False
     except IndexError:
         num_labels = 1
-    e_j, e_i = edge_index
-    h_list = []
-    for node_id in trange(num_nodes):
-        neighbors = edge_index[1, e_j == node_id]
-        num_neighbors = neighbors.size(0)
-        if num_neighbors > 0:
-            if num_labels == 1:
-                y_i = y[node_id]
-                y_of_neighbors = y[neighbors]
-                num_neighbors_same_label = (y_of_neighbors == y_i).nonzero().size(0)
-                _h = num_neighbors_same_label / num_neighbors
-            else:  # multi-label
-                y_i = y[node_id]
-                y_of_neighbors = y[neighbors]
-                num_shared_label_ratio = (((y_i + y_of_neighbors) == 2).sum(dim=1).float() / num_labels).sum()
-                _h = num_shared_label_ratio / num_neighbors
-        else:
-            _h = np.nan
-        h_list.append(_h)
+        use_numpy = True
+
+    cprint(f"use_numpy: {use_numpy} / use_mp: {use_multiprocessing}", "green")
+
+    if use_numpy and not use_multiprocessing:
+        edge_index, y = edge_index.numpy(), y.numpy()
+        e_j, e_i = edge_index
+        h_list = []
+        for node_id in trange(y.shape[0]):
+            h_list.append(_get_h_of_one_node_numpy(node_id, edge_index, e_j, y, num_labels))
+    elif not use_numpy and not use_multiprocessing:
+        e_j, e_i = edge_index
+        h_list = []
+        for node_id in trange(y.size(0)):
+            h_list.append(_get_h_of_one_node_torch(node_id, edge_index, e_j, y, num_labels))
+    else:
+        edge_index, y = edge_index.numpy(), y.numpy()
+
+        global EDGE_INDEX, Y
+        EDGE_INDEX, Y = edge_index, y
+
+        pool = mp.Pool(mp.cpu_count())
+        h_list = pool.starmap(
+            _get_h_of_one_node_numpy_global,
+            [(node_id, num_labels) for node_id in range(y.shape[0])],
+        )
     return torch.as_tensor(h_list)
 
 
-def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -> np.ndarray:
+def get_degree_and_homophily(dataset_class, dataset_name, data_root,
+                             use_multiprocessing=False, **kwargs) -> np.ndarray:
     """
     :param dataset_class: str
     :param dataset_name: str
     :param data_root: str
+    :param use_multiprocessing:
     :return: np.ndarray the shape of which is [N, 2] (degree, homophily) for Ns
     """
     print(f"{dataset_class} / {dataset_name} / {data_root}")
@@ -93,7 +104,7 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
         num_labels = 1
 
     deg = degree(edge_index[0], num_nodes=x.size(0))
-    homophily = get_homophily(edge_index, y)
+    homophily = get_homophily(edge_index, y, use_multiprocessing=use_multiprocessing)
     degree_and_homophily = []
     for _deg, _hom in zip(deg, homophily):
         _deg, _hom = int(_deg), float(_hom)
@@ -105,11 +116,19 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root, **kwargs) -
 def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
     dn_to_dg_and_h = OrderedDict()
     targets = targets or [
+        "Reddit",
         "Crocodile", "Squirrel", "Chameleon",
         "MyCitationFull", "MyCoauthor", "MyAmazon",
-        "Flickr", "CLUSTER", "WikiCS", "OGB",
+        "Flickr", "CLUSTER", "WikiCS", "ogbn-arxiv", "ogbn-products",
         "PPI", "Planetoid", "RPG",
     ]
+
+    if "Reddit" in targets:
+        degree_and_homophily = get_degree_and_homophily(
+            "Reddit", "Reddit",
+            data_root="~/graph-data", use_multiprocessing=True, size=[10, 5], num_hops=2,
+        )
+        dn_to_dg_and_h["Reddit"] = degree_and_homophily
 
     if "Squirrel" in targets:
         degree_and_homophily = get_degree_and_homophily("Squirrel", "Squirrel", data_root="~/graph-data")
@@ -159,9 +178,18 @@ def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
         degree_and_homophily = get_degree_and_homophily("WikiCS", "WikICS", data_root="~/graph-data", split=0)
         dn_to_dg_and_h["WikiCS"] = degree_and_homophily
 
-    if "OGB" in targets:
-        degree_and_homophily = get_degree_and_homophily("PygNodePropPredDataset", "ogbn-arxiv",
-                                                        data_root="~/graph-data")
+    if "ogbn-products" in targets:
+        degree_and_homophily = get_degree_and_homophily(
+            "PygNodePropPredDataset", "ogbn-products",
+            data_root="~/graph-data", use_multiprocessing=True, size=[10, 5], num_hops=2,
+        )
+        dn_to_dg_and_h["ogbn-products"] = degree_and_homophily
+
+    if "ogbn-arxiv" in targets:
+        degree_and_homophily = get_degree_and_homophily(
+            "PygNodePropPredDataset", "ogbn-arxiv",
+            data_root="~/graph-data", use_multiprocessing=True,
+        )
         dn_to_dg_and_h["ogbn-arxiv"] = degree_and_homophily
 
     if "PPI" in targets:
@@ -394,178 +422,6 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
                      flierprops={"marker": "x", "markersize": 12})
 
 
-def get_attention_heatmap_for_single_model(model, data, device):
-    cache_list = [m.cache for m in model.modules() if m.__class__.__name__ == SuperGAT.__name__]
-    att_list = [cache["att"] for cache in cache_list]  # List of [E, heads]
-    for att in att_list:
-        print(att.mean(), att.std(), att.max(), att.min())
-
-    edge_index, _ = remove_self_loops(data.edge_index)
-    edge_index, _ = add_self_loops(edge_index, num_nodes=data.x.size(0))  # [2, E]
-
-    dense_att_list = []
-    for i, att in enumerate(att_list):
-        dense_att = to_dense_adj(edge_index.to(device), batch=None, edge_attr=att).squeeze()  # [N, N, heads]
-        dense_att_list.append(dense_att)
-    return dense_att_list
-
-
-def visualize_attention_heatmap_for_multiple_models(name_prefix_and_kwargs: List[Tuple[str, Dict]],
-                                                    unit_width_per_name=3,
-                                                    extension="png"):
-    heatmaps_list = []
-    total_args, num_layers, custom_key_list, name_prefix_list = None, None, [], []
-    for name_prefix, kwargs in name_prefix_and_kwargs:
-        args = get_args(**kwargs)
-        custom_key_list.append(args.custom_key)
-        num_layers = args.num_layers
-
-        train_d, _, _ = get_dataset_or_loader(
-            args.dataset_class, args.dataset_name, args.data_root,
-            batch_size=args.batch_size, seed=args.seed,
-        )
-        data = train_d[0]
-
-        args.task_type = "Attention_Dist"  # set cache_attention True after load dataset
-
-        gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total) if g not in args.black_list], 1))][0]
-
-        if args.verbose >= 1:
-            pprint_args(args)
-            cprint("Use GPU the ID of which is {}".format(gpu_id), "yellow")
-
-        device = "cpu" if gpu_id is None \
-            else torch.device('cuda:{}'.format(gpu_id) if torch.cuda.is_available() else 'cpu')
-
-        model, ret = run(args, gpu_id=gpu_id, return_model=True)
-
-        heatmaps_nxn = [ah.cpu().numpy() for ah  # [N, N, heads]
-                        in get_attention_heatmap_for_single_model(model, data, device)]
-        heatmaps_list.append(heatmaps_nxn)
-        name_prefix_list.append(name_prefix)
-        total_args = args
-
-    total_args.custom_key = "-".join(sorted(custom_key_list))
-    for name_prefix, heatmaps in zip(name_prefix_list, heatmaps_list):
-        for i, hmp in enumerate(heatmaps):  # [N, N, heads]
-            for head in range(hmp.shape[-1]):
-                name = "../figs/att_heatmap_{}_layer{}_head{}.{}".format(name_prefix, i + 1, head, extension)
-                print(name)
-                ax = sns.heatmap(hmp[:, :, head],
-                                 vmin=0, vmax=1,
-                                 cmap="YlGnBu", xticklabels=False, yticklabels=False)
-                ax.set_title("WOW")
-                ax.get_figure().savefig(name, bbox_inches='tight')
-                plt.clf()
-
-
-def edge_to_sorted_tuple(e):
-    return tuple(sorted([int(e[0]), int(e[1])]))
-
-
-def get_layer_repr_and_e2att(model, data, _args) -> List[Tuple[torch.Tensor, Dict]]:
-    model.set_layer_attrs("cache_attention", True)
-    model = model.to("cpu")
-    model.eval()
-    layer_repr_and_e2att = []
-
-    # edge_index for [2, E + N]
-    edge_index, _ = remove_self_loops(data.edge_index)
-    edge_index, _ = add_self_loops(edge_index, num_nodes=data.x.size(0))
-
-    with torch.no_grad():
-        for i, x in enumerate(model.forward_for_all_layers(data.x, data.edge_index)):
-            edge_to_attention = defaultdict(list)
-            conv = getattr(model, "conv{}".format(i + 1))
-            att = conv.cache["att"]  # [E + N, heads]
-            mean_att = att.mean(dim=-1)  # [E + N]
-            for ma, e in zip(mean_att, edge_index.t()):
-                if e[0] != e[1]:
-                    edge_to_attention[edge_to_sorted_tuple(e)].append(float(ma))
-            layer_repr_and_e2att.append((x, edge_to_attention))
-    return layer_repr_and_e2att
-
-
-def get_first_layer_and_e2att(model, data, _args, with_normalized=False, with_negatives=False, with_fnn=False):
-    model = model.to("cpu")
-    model.eval()
-    with torch.no_grad():
-
-        xs_after_conv1 = model.conv1(data.x, data.edge_index)
-
-        x = torch.matmul(data.x, model.conv1.weight)
-        size_i = x.size(0)
-
-        if not with_negatives:
-            edge_index_j, edge_index_i = data.edge_index
-            x_i = torch.index_select(x, 0, edge_index_i)
-            x_j = torch.index_select(x, 0, edge_index_j)
-
-            x_j = x_j.view(-1, model.conv1.heads, model.conv1.out_channels)
-            x_i = x_i.view(-1, model.conv1.heads, model.conv1.out_channels)
-            alpha = model.conv1._get_attention(edge_index_i, x_i, x_j, size_i, normalize=True, with_negatives=False)
-
-            if with_fnn:
-                fnn_alpha = model.conv1.att_scaling * F.elu(alpha) + model.conv1.att_bias
-                fnn_alpha = model.conv1.att_scaling_2 * F.elu(fnn_alpha) + model.conv1.att_bias_2
-                mean_fnn_alpha = fnn_alpha.mean(dim=-1)
-
-            if with_normalized:
-                alpha = softmax(alpha, data.edge_index[1], size_i)
-
-            mean_alpha = alpha.mean(dim=-1)  # [E]
-
-            edge_to_attention = defaultdict(list)
-            edge_to_fnn_attention = defaultdict(list)
-            for i, e in enumerate(data.edge_index.t()):
-                edge_to_attention[edge_to_sorted_tuple(e)].append(float(mean_alpha[i]))
-
-                if with_fnn:
-                    edge_to_fnn_attention[edge_to_sorted_tuple(e)].append(float(mean_fnn_alpha[i]))
-
-            if not with_fnn:
-                return xs_after_conv1, edge_to_attention
-            else:
-                return xs_after_conv1, edge_to_attention, edge_to_fnn_attention
-
-        else:
-            neg_edge_index = negative_sampling(
-                edge_index=data.edge_index,
-                num_nodes=x.size(0))
-            total_edge_index = torch.cat([data.edge_index, neg_edge_index], dim=-1)
-            alpha = model.conv1._get_attention_with_negatives(
-                edge_index=data.edge_index,
-                neg_edge_index=neg_edge_index,
-                x=x,
-            )
-
-            if with_fnn:
-                fnn_alpha = model.conv1.att_scaling * alpha + model.conv1.att_bias
-                fnn_alpha = F.elu(fnn_alpha)
-                fnn_alpha = model.conv1.att_scaling_2 * fnn_alpha + model.conv1.att_bias_2
-                mean_fnn_alpha = fnn_alpha.mean(dim=-1)
-
-            if with_normalized:
-                alpha = softmax(alpha, total_edge_index[1], size_i)
-
-            mean_alpha = alpha.mean(dim=-1)  # [E + neg_E]
-
-            edge_to_attention = defaultdict(list)
-            edge_to_fnn_attention = defaultdict(list)
-            edge_to_is_negative = dict()
-            for i, e in enumerate(total_edge_index.t()):
-                edge_to_attention[edge_to_sorted_tuple(e)].append(float(mean_alpha[i]))
-                edge_to_is_negative[edge_to_sorted_tuple(e)] = i > total_edge_index.size(1) // 2
-
-                if with_fnn:
-                    edge_to_fnn_attention[edge_to_sorted_tuple(e)].append(float(mean_fnn_alpha[i]))
-
-            if not with_fnn:
-                return xs_after_conv1, edge_to_attention, edge_to_is_negative
-            else:
-                return xs_after_conv1, edge_to_attention, edge_to_is_negative, edge_to_fnn_attention
-
-
 def visualize_glayout_without_training(layout="tsne", **kwargs):
     _args = get_args(**kwargs)
     pprint_args(_args)
@@ -576,35 +432,6 @@ def visualize_glayout_without_training(layout="tsne", **kwargs):
     data = train_d[0]
     plot_graph_layout(data.x.numpy(), data.y.numpy(), data.edge_index.numpy(),
                       args=_args, edge_to_attention=None, key="raw", layout=layout)
-
-
-def visualize_glayout_with_training_and_attention(**kwargs):
-    _args = get_args(**kwargs)
-    _args.verbose = 2
-    _args.save_model = False
-    if not _args.use_early_stop:
-        _args.epochs = 300
-    pprint_args(_args)
-
-    alloc_gpu = blind_other_gpus(num_gpus_total=_args.num_gpus_total,
-                                 num_gpus_to_use=_args.num_gpus_to_use,
-                                 black_list=_args.black_list)
-    if not alloc_gpu:
-        alloc_gpu = [int(np.random.choice([g for g in range(_args.num_gpus_total)
-                                           if g not in _args.black_list], 1))]
-    cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
-
-    model, ret = run(_args, gpu_id=alloc_gpu[0], return_model=True)
-    train_d, val_d, test_d = get_dataset_or_loader(
-        _args.dataset_class, _args.dataset_name, _args.data_root,
-        batch_size=_args.batch_size, seed=_args.seed,
-    )
-    data = train_d[0]
-
-    for i, (xs_after_conv, edge_to_attention) in enumerate(tqdm(get_layer_repr_and_e2att(model, data, _args))):
-        plot_graph_layout(xs_after_conv.numpy(), data.y.numpy(), data.edge_index.numpy(),
-                          edge_to_attention=edge_to_attention, args=_args, key="layer-{}".format(i + 1))
-        print("plot_graph_layout: layer-{}".format(i + 1))
 
 
 def get_model_and_preds(data, **kwargs):
@@ -629,168 +456,6 @@ def get_model_and_preds(data, **kwargs):
         output = model(data.x, data.edge_index)[data.test_mask].cpu().numpy()
         pred_labels = np.argmax(output, axis=1)
     return model, pred_labels
-
-
-# noinspection PyTypeChecker
-def visualize_attention_dist_by_sample_type(with_normalized=True, with_negatives=True, extension="png", **kwargs):
-    _args = get_args(**kwargs)
-    _args.verbose = 2
-    _args.save_model = False
-    if _args.dataset_name == "CiteSeer":
-        _args.epochs = 100
-    elif _args.dataset_name == "Cora":
-        _args.epochs = 100
-    elif _args.dataset_name == "PubMed":
-        _args.epochs = 200
-    else:
-        raise ValueError
-    pprint_args(_args)
-
-    _alloc_gpu = blind_other_gpus(num_gpus_total=_args.num_gpus_total,
-                                  num_gpus_to_use=_args.num_gpus_to_use,
-                                  black_list=_args.black_list)
-    if _alloc_gpu:
-        cprint("Use GPU the ID of which is {}".format(_alloc_gpu), "yellow")
-    _alloc_gpu_id = _alloc_gpu[0] if _alloc_gpu else 1
-
-    model, ret = run(_args, gpu_id=_alloc_gpu_id, return_model=True)
-
-    train_d, val_d, test_d = get_dataset_or_loader(
-        "Planetoid", _args.dataset_name, _args.data_root,
-        batch_size=_args.batch_size, seed=_args.seed,
-    )
-    data = train_d[0]
-
-    if with_negatives:
-        xs_after_conv1, edge_to_attention, edge_to_is_negative = get_first_layer_and_e2att(
-            model, data, _args, with_negatives=with_negatives, with_normalized=with_normalized)
-    else:
-        edge_to_is_negative = None
-        xs_after_conv1, edge_to_attention = get_first_layer_and_e2att(
-            model, data, _args, with_negatives=with_negatives, with_normalized=with_normalized)
-
-    _data_list = []
-    for edge, att in edge_to_attention.items():
-        if edge_to_is_negative is not None and edge_to_is_negative[edge]:
-            _data_list.append([edge[0], edge[1], float(np.mean(att)), "negative"])
-        else:
-            _data_list.append([edge[0], edge[1], float(np.mean(att)), "positive"])
-
-    key = _get_key(_args)
-    df = pd.DataFrame(_data_list, columns=["i", "j", "un-normalized attention", "sample type"])
-
-    sns.set_context("poster")
-
-    plt.figure(figsize=(6, 8))
-    plot = sns.boxplot(x="sample type", y="un-normalized attention", data=df,
-                       order=["positive", "negative"], width=0.35,
-                       flierprops=dict(marker='x', alpha=.5))
-
-    if _args.dataset_name == "Cora":
-        plot.set_ylim(-0.2, 1.5)
-    elif _args.dataset_name == "CiteSeer":
-        plot.set_ylim(-0.01, 0.09)
-    elif _args.dataset_name == "PubMed":
-        plot.set_ylim(-0.01, 0.5)
-    else:
-        raise ValueError
-
-    plot.set_title("{}/{}".format("GAT" if _args.custom_key == "NE" else "Super-GAT",
-                                  _args.dataset_name))
-    plot.get_figure().savefig("../figs/fig_attention_dist_by_sample_type_{}_{}.{}".format(
-        key, "norm" if with_normalized else "unnorm", extension), bbox_inches='tight')
-    plt.clf()
-    return df
-
-
-def visualize_edge_fnn(extension="pdf", **kwargs):
-    _args = get_args(**kwargs)
-    _args.verbose = 2
-    _args.save_model = False
-    if _args.dataset_name == "CiteSeer":
-        _args.epochs = 100
-    elif _args.dataset_name == "Cora":
-        _args.epochs = 100
-    elif _args.dataset_name == "PubMed":
-        _args.epochs = 200
-    else:
-        raise ValueError
-    pprint_args(_args)
-
-    _alloc_gpu = blind_other_gpus(num_gpus_total=_args.num_gpus_total,
-                                  num_gpus_to_use=_args.num_gpus_to_use,
-                                  black_list=_args.black_list)
-    if _alloc_gpu:
-        cprint("Use GPU the ID of which is {}".format(_alloc_gpu), "yellow")
-    _alloc_gpu_id = _alloc_gpu[0] if _alloc_gpu else 1
-
-    model, ret = run(_args, gpu_id=_alloc_gpu_id, return_model=True)
-
-    train_d, val_d, test_d = get_dataset_or_loader(
-        "Planetoid", _args.dataset_name, _args.data_root,
-        batch_size=_args.batch_size, seed=_args.seed,
-    )
-    data = train_d[0]
-
-    xs_after_conv1, edge_to_attention, edge_to_is_negative, edge_to_fnn_attention = get_first_layer_and_e2att(
-        model, data, _args, with_negatives=True, with_normalized=False, with_fnn=True)
-
-    _data_list = []
-    for edge, att in edge_to_attention.items():
-        fnn_att = edge_to_fnn_attention[edge]
-        if edge_to_is_negative[edge]:
-            _data_list.append([edge[0], edge[1], float(np.mean(att)),
-                               float(np.mean(fnn_att)), sigmoid(np.mean(fnn_att)), "negative"])
-        else:
-            _data_list.append([edge[0], edge[1], float(np.mean(att)),
-                               float(np.mean(fnn_att)), sigmoid(np.mean(fnn_att)), "positive"])
-
-    # noinspection PyTypeChecker
-    key = _get_key(_args)
-    pd.set_option('display.expand_frame_repr', False)
-    df = pd.DataFrame(_data_list,
-                      columns=["i", "j", "un-normalized attention",
-                               "f(un-normalized attention)", "phi", "sample type"])
-
-    # sns.set_context("poster")
-    sns.set(rc={'text.usetex': True}, style="whitegrid")
-
-    # scatter plot
-    plot = sns.scatterplot(x="un-normalized attention", y="f(un-normalized attention)", data=df,
-                           hue="sample type", hue_order=["positive", "negative"], s=10, alpha=0.5)
-    plot.set_xlabel("$e_{ij}$")
-    plot.set_ylabel("$f(e_{ij})$")
-    plot.get_figure().savefig("../figs/fig_fnn_scatter_{}.{}".format(key, extension), bbox_inches='tight')
-    plt.clf()
-
-    # prob plot
-    plot = sns.scatterplot(x="un-normalized attention", y="phi", data=df,
-                           hue="sample type", hue_order=["positive", "negative"], s=10, alpha=0.5)
-    plot.set_xlabel("$e_{ij}$")
-    plot.set_ylabel("$\phi_{ij}$")
-    plot.get_figure().savefig("../figs/fig_fnn_prob_{}.{}".format(key, extension), bbox_inches='tight')
-    plt.clf()
-
-    # line plot
-    min_att_val, max_att_val = np.min(df["un-normalized attention"]), np.max(df["f(un-normalized attention)"])
-    att_domain = np.linspace(min_att_val, max_att_val, num=1000)
-    att_domain = np.vstack([att_domain] * 8).transpose()  # [1000, heads]
-
-    att_domain_tensor = torch.as_tensor(att_domain).float()
-    att_range = model.conv1.att_scaling * att_domain_tensor + model.conv1.att_bias
-    att_range = F.elu(att_range)
-    att_range = model.conv1.att_scaling_2 * att_range + model.conv1.att_bias_2
-    att_range = att_range.detach().numpy()  # [1000, heads]
-
-    _data_list = []
-    for d, r_heads in zip(att_domain[:, 0], att_range):
-        for i, r in enumerate(r_heads):
-            _data_list.append([d, r, i + 1])
-    df = pd.DataFrame(_data_list, columns=(["un-normalized attention", "f(un-normalized attention)", "head"]))
-    plot = sns.lineplot(x="un-normalized attention", y="f(un-normalized attention)", data=df,
-                        hue="head", palette="Set1", legend="full")
-    plot.get_figure().savefig("../figs/fig_fnn_line_{}.{}".format(key, extension), bbox_inches='tight')
-    plt.clf()
 
 
 if __name__ == '__main__':
@@ -893,23 +558,6 @@ if __name__ == '__main__':
         visualize_attention_metric_for_multiple_models(main_npx_and_kwargs,
                                                        unit_width_per_name=unit_width, extension="pdf")
 
-    elif MODE == "visualize_attention_heatmap_for_multiple_models":
-
-        # sns.set_context("poster", font_scale=1.25)
-
-        is_super_gat = False  # False
-        main_kwargs["model_name"] = "GAT"  # GAT, LargeGAT
-        main_kwargs["dataset_name"] = "Cora"  # Cora, CiteSeer, PubMed
-
-        unit_width = 3
-        main_name_prefix_list = ["SDP", "GO", "DP"]
-        main_custom_key_list = ["NESDPO8", "NEO8", "NEDPO8"]
-        main_npx_and_kwargs = [(npx, {**main_kwargs, "custom_key": ck}) for npx, ck in zip(main_name_prefix_list,
-                                                                                           main_custom_key_list)]
-
-        visualize_attention_heatmap_for_multiple_models(main_npx_and_kwargs,
-                                                        unit_width_per_name=unit_width, extension="png")
-
     elif MODE == "link_pred_perfs_for_multiple_models_synthetic":
         k = "EV12NSO8"
         ck = "{}-ES-Link".format(k)
@@ -954,51 +602,9 @@ if __name__ == '__main__':
                 visualize_glayout_without_training(layout=layout_shape, **main_kwargs)
                 print("Done: {}".format(main_kwargs["dataset_name"]))
 
-    elif MODE == "glayout_with_training_and_attention":
-        visualize_glayout_with_training_and_attention(**main_kwargs)
-
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["Crocodile", "Squirrel", "Chameleon"])
-
-    elif MODE == "attention_dist_by_sample_type":  # deprecated
-        data_frame_list = []
-        for dn in ["Cora", "CiteSeer", "PubMed"]:
-            for ck in ["NE", "EV1"]:
-                for with_norm in [True, False]:
-                    main_kwargs = dict(
-                        model_name="GAT",  # GAT, BaselineGAT
-                        dataset_class="Planetoid",
-                        dataset_name=dn,  # Cora, CiteSeer, PubMed
-                        custom_key=ck,  # NE, EV1, EV2, NR, RV1
-                    )
-                    with_neg = not with_norm
-                    data_frame_list.append(visualize_attention_dist_by_sample_type(
-                        **main_kwargs,
-                        with_negatives=with_neg,
-                        with_normalized=with_norm,
-                    ))
-        idx = 0
-        for dn in ["Cora", "CiteSeer"]:
-            for ck in ["NE", "EV1"]:
-                for nn in [False]:
-                    df_idx = data_frame_list[idx]
-                    cprint("{}/{}/{}".format(ck, dn, nn), "yellow")
-                    print("MEAN")
-                    print(df_idx[df_idx["sample type"] == "positive"].mean())
-                    print("STD")
-                    print(df_idx[df_idx["sample type"] == "positive"].std())
-                    cprint("-------", "yellow")
-                    idx += 1
-
-    elif MODE == "edge_fnn":  # deprecated
-        for dn in ["Cora", "CiteSeer", "PubMed"]:
-            main_kwargs = dict(
-                model_name="GAT",  # GAT, BaselineGAT
-                dataset_class="Planetoid",
-                dataset_name=dn,  # Cora, CiteSeer, PubMed
-                custom_key="EV1",  # NE, EV1, EV2, NR, RV1
-            )
-            visualize_edge_fnn(extension="pdf", **main_kwargs)
+        analyze_degree_and_homophily(["Reddit"])
+        # analyze_degree_and_homophily(["ogbn-arxiv"])
 
     else:
         raise ValueError

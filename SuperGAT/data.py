@@ -25,7 +25,7 @@ import ogb
 from ogb.nodeproppred import PygNodePropPredDataset
 from data_syn import RandomPartitionGraph
 from data_transform_digitize import DigitizeY
-from data_utils import mask_init, mask_getitem, collate_and_pca
+from data_utils import mask_init, mask_getitem, collate_and_pca, get_loader_and_dataset_kwargs_for_neighbor_sampler
 from data_webkb4univ import WebKB4Univ
 from data_bg import GNNBenchmarkDataset
 from data_flickr import Flickr
@@ -653,13 +653,15 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         return train_loader, val_loader, test_loader
 
     elif dataset_class in ["Reddit"]:
+        loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs_for_neighbor_sampler(**kwargs)
         root = os.path.join(root, "reddit")
-        dataset = dataset_cls(root=root, **kwargs)
-        from sampler import RandomNodeSampler
-        train_loader = RandomNodeSampler(dataset[0], num_parts=40, shuffle=True)
-        setattr(train_loader, "num_node_features", dataset[0].x.size(1))
-        setattr(train_loader, "num_classes", torch.unique(dataset[0].y).size(0))
-        return train_loader, None, None
+        dataset = dataset_cls(root=root, **dataset_kwargs)
+        train_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
+                                       bipartite=False, **loader_kwargs)
+        test_batch_size = batch_size * 4
+        eval_loader = NeighborSampler(data=dataset[0], batch_size=test_batch_size,
+                                      bipartite=False, **loader_kwargs)
+        return dataset, train_loader, eval_loader
 
     elif dataset_class in ["WikiCS"]:
         root = os.path.join(root, "WikiCS")
@@ -707,17 +709,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         if dataset_name == "ogbn-arxiv":
             dataset_kwargs, loader_kwargs = kwargs, {}
         elif dataset_name == "ogbn-products":
-            loader_kwargs = {}
-            dataset_kwargs = {}
-            loader_argument_names = inspect.signature(NeighborSampler.__init__).parameters
-            for kw, v in kwargs.items():
-                if kw in loader_argument_names:
-                    #  data, size, num_hops, batch_size=1, shuffle=False,
-                    #  drop_last=False, bipartite=True, add_self_loops=False,
-                    #  flow='source_to_target'
-                    loader_kwargs[kw] = v
-                else:
-                    dataset_kwargs[kw] = v
+            loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs_for_neighbor_sampler(**kwargs)
         else:
             raise ValueError
 
@@ -773,29 +765,48 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
                 int(dataset[0].val_mask.sum()),
                 int(dataset[0].test_mask.sum()),
             ))
+        elif "train_mask" in dataset.__dict__:
+            print("\t- #train: {} / #val: {} / #test: {}".format(
+                int(dataset.train_mask.size(0)),
+                int(dataset.val_mask.size(0)),
+                int(dataset.test_mask.size(0)),
+            ))
+
+    def print_l(loader, prefix):
+        cprint("[{}] {} of {} (path={})".format(prefix, dataset_name, dataset_class, root), "yellow")
+        for i, b in enumerate(loader):
+            print("batch {}: ".format(i), b)
+            if i == 2:
+                break
 
     try:
         _dl = get_dataset_or_loader(dataset_class, dataset_name, root, *args, **kwargs)
-        if len(_dl) == 3:
+        if isinstance(_dl[0], PygNodePropPredDataset) and _dl[1] is not None:
+            full_dataset, train_loader, eval_loader = _dl
+            print_d(full_dataset, "[Dataset]")
+            print_l(train_loader(full_dataset.train_mask), "[Train Loader]")
+            print_l(train_loader(full_dataset.val_mask), "[Eval Loader] ")
+        elif _dl[1] is not None and isinstance(_dl[1], NeighborSampler):
+            full_dataset, train_loader, eval_loader = _dl
+            print_d(full_dataset, "[Dataset]")
+            print_l(train_loader(full_dataset[0].train_mask), "[Train Loader]")
+            print_l(train_loader(full_dataset[0].val_mask), "[Eval Loader] ")
+        else:
             train_d, val_d, test_d = _dl
             print_d(train_d, "[Train]")
             print_d(val_d, "[Val]")
             print_d(test_d, "[Test]")
-        elif len(_dl) == 2:
-            full_dataset, loader = _dl
-            _l = loader(full_dataset.train_mask)
-            cprint("[Loader] {} of {} (path={})".format(dataset_name, dataset_class, root), "yellow")
-            for i, b in enumerate(_l):
-                print("batch {}: ".format(i), b)
-                if i == 2:
-                    break
-            print_d(full_dataset, "[Dataset]")
 
     except NotImplementedError:
         cprint("NotImplementedError for {}, {}, {}".format(dataset_class, dataset_name, root), "red")
 
 
 if __name__ == '__main__':
+    _test_data("Reddit", "Reddit", '~/graph-data',
+               size=[10, 5], num_hops=2)
+    _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
+               size=[10, 5], num_hops=2)
+    exit()
 
     _test_data("MyCitationFull", "CoraFull", '~/graph-data')
     _test_data("MyCoauthor", "CS", '~/graph-data')
@@ -814,8 +825,6 @@ if __name__ == '__main__':
     # _test_data("MyCitationFull", "Cora", '~/graph-data')
     # _test_data("MyCitationFull", "DBLP", '~/graph-data')
 
-    _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
-               size=[10, 5], num_hops=2)
     _test_data("PygNodePropPredDataset", "ogbn-arxiv", '~/graph-data')
 
     _test_data("Reddit", "Reddit", '~/graph-data')
