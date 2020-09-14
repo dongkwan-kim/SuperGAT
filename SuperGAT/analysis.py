@@ -36,8 +36,49 @@ except ImportError:
     pass
 
 
-def get_homophily(edge_index, y):
-    num_nodes = y.size(0)
+def _get_h_of_one_node_torch(node_id, edge_index, e_j, y, num_labels):
+    neighbors = edge_index[1, e_j == node_id]
+    num_neighbors = neighbors.size(0)
+    if num_neighbors > 0:
+        if num_labels == 1:
+            y_i = y[node_id]
+            y_of_neighbors = y[neighbors]
+            num_neighbors_same_label = (y_of_neighbors == y_i).nonzero().size(0)
+            _h = num_neighbors_same_label / num_neighbors
+        else:  # multi-label
+            y_i = y[node_id]
+            y_of_neighbors = y[neighbors]
+            num_shared_label_ratio = (((y_i + y_of_neighbors) == 2).sum(dim=1).float() / num_labels).sum()
+            _h = num_shared_label_ratio / num_neighbors
+    else:
+        _h = np.nan
+    return _h
+
+
+def _get_h_of_one_node_numpy(node_id, edge_index, e_j, y, num_labels):
+    neighbors = edge_index[1, e_j == node_id]
+    num_neighbors = neighbors.shape[0]
+    if num_neighbors > 0:
+        if num_labels == 1:
+            y_i = y[node_id]
+            y_of_neighbors = y[neighbors]
+            num_neighbors_same_label = np.sum(y_of_neighbors == y_i)
+            _h = num_neighbors_same_label / num_neighbors
+        else:  # multi-label
+            raise NotImplementedError
+    else:
+        _h = np.nan
+    return _h
+
+
+def _get_h_of_one_node_numpy_global(node_id, num_labels):
+    global EDGE_INDEX, Y
+    e_j, _ = EDGE_INDEX
+    return _get_h_of_one_node_numpy(node_id, EDGE_INDEX, e_j, Y, num_labels)
+
+
+def get_homophily(edge_index, y, use_multiprocessing=False):
+    y = y.squeeze()
     try:
         num_labels = y.size(1)  # multi-labels
         use_numpy = False
@@ -603,7 +644,7 @@ if __name__ == '__main__':
                 print("Done: {}".format(main_kwargs["dataset_name"]))
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["Reddit"])
+        analyze_degree_and_homophily(["MyCoauthor"])
         # analyze_degree_and_homophily(["ogbn-arxiv"])
 
     else:
