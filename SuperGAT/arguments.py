@@ -112,6 +112,10 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
 def get_important_args(_args: argparse.Namespace) -> dict:
     important_args = [
         "lr",
+        "batch_size",
+        "data_sampling_num_hops",
+        "data_sampling_size",
+        "to_undirected_at_neg",
         "num_hidden_features",
         "num_layers",
         "use_bn",
@@ -130,6 +134,7 @@ def get_important_args(_args: argparse.Namespace) -> dict:
         "total_pretraining_epoch",
         "pretraining_noise_ratio",
         "neg_sample_ratio",
+        "edge_sampling_ratio",
         "use_early_stop",
         "data_num_splits",
     ]
