@@ -600,6 +600,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     :return:
     """
 
+    cprint("Now loading dataset: {} / {}".format(dataset_class, dataset_name), "green")
     root = os.path.expanduser(root)
 
     if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI", "Reddit", "WikiCS"]:
@@ -658,8 +659,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         dataset = dataset_cls(root=root, **dataset_kwargs)
         train_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
                                        bipartite=False, **loader_kwargs)
-        test_batch_size = batch_size * 4
-        eval_loader = NeighborSampler(data=dataset[0], batch_size=test_batch_size,
+        eval_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
                                       bipartite=False, **loader_kwargs)
         return dataset, train_loader, eval_loader
 
@@ -724,8 +724,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         elif dataset_name == "ogbn-products":
             train_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
                                            bipartite=False, **loader_kwargs)
-            test_batch_size = batch_size * 4
-            eval_loader = NeighborSampler(data=dataset[0], batch_size=test_batch_size,
+            eval_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
                                           bipartite=False, **loader_kwargs)
             return dataset, train_loader, eval_loader
 
