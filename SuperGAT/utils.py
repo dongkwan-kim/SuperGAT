@@ -2,12 +2,20 @@ from typing import Tuple, List
 import hashlib
 import random
 import os
+import gc
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from termcolor import cprint
+
+
+def garbage_collection_cuda():
+    """Garbage collection Torch (CUDA) memory."""
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 def negative_sampling_numpy(edge_index_numpy: np.ndarray, num_nodes=None, num_neg_samples=None):
