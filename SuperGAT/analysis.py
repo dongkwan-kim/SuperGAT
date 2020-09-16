@@ -206,7 +206,9 @@ def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
         dn_to_dg_and_h["Reddit"] = degree_and_homophily
 
     if "Reddit-Loader" in targets:
-        size_list = [[5, 5], [10, 5], [10, 10], [15, 10], [15, 15], [20, 5], [20, 10], [20, 15], [20, 20]]
+        size_list = [[5, 5], [10, 5], [10, 10]]
+        # size_list = [[15, 5], [15, 10], [15, 15]]
+        # size_list = [[20, 5], [20, 10], [20, 15], [20, 20]]
         # size_list = [[25, 5], [25, 10], [25, 15], [25, 20], [25, 25]]
         batch_size_list = [128, 256, 512]
         for _batch_size, _size in product(batch_size_list, size_list):
@@ -216,7 +218,7 @@ def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
                 use_multiprocessing=True, use_loader=True,
                 batch_size=_batch_size, size=_size, num_hops=2,
             )
-            dn_to_dg_and_h[f"Reddit_{s_join('_', _size)}"] = degree_and_homophily
+            dn_to_dg_and_h[f"Reddit_{_batch_size}_{s_join('_', _size)}"] = degree_and_homophily
 
     if "Squirrel" in targets:
         degree_and_homophily = get_degree_and_homophily("Squirrel", "Squirrel", data_root="~/graph-data")
