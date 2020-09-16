@@ -119,12 +119,14 @@ class SuperGAT(MessagePassing):
             elif name.startswith("att_mh"):
                 tgi.glorot(param)
 
-    def forward(self, x, edge_index, size=None, batch=None, attention_edge_index=None):
+    def forward(self, x, edge_index, size=None, batch=None,
+                neg_edge_index=None, attention_edge_index=None):
         """
         :param x: [N, F]
         :param edge_index: [2, E]
         :param size:
         :param batch: None or [B]
+        :param neg_edge_index: When using explicitly given negative edges.
         :param attention_edge_index: [2, E'], Use for link prediction
         :return:
         """
@@ -146,12 +148,15 @@ class SuperGAT(MessagePassing):
 
         propagated = self.propagate(edge_index, size=size, x=x)
 
-        if (self.is_super_gat and self.training) or (attention_edge_index is not None):
+        if (self.is_super_gat and self.training) or (attention_edge_index is not None) or (neg_edge_index is not None):
 
             num_neg_samples = int(self.neg_sample_ratio * edge_index.size(1))
 
             if attention_edge_index is not None:
                 neg_edge_index = None
+
+            elif neg_edge_index is not None:
+                pass
 
             elif batch is None:
                 if self.to_undirected_at_neg:
