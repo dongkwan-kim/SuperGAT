@@ -1,3 +1,4 @@
+import itertools
 from typing import Tuple, List
 import hashlib
 import random
@@ -9,6 +10,34 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from termcolor import cprint
+
+from itertools import islice
+
+
+def grouper(iterable, n):
+    """https://stackoverflow.com/a/8991553"""
+    it = iter(iterable)
+    while True:
+        chunk = tuple(itertools.islice(it, n))
+        if not chunk:
+            return
+        yield chunk
+
+
+def iter_window(seq, window_size=2, drop_last=False):
+    """Returns a sliding window (of width n) over data from the iterable
+        s -> (s0,s1,...s[n-1]), (s1,s2,...,sn), ...
+        https://stackoverflow.com/a/6822773"""
+    it = iter(seq)
+    result = tuple(islice(it, window_size))
+    if len(result) == window_size:
+        yield result
+    for elem in it:
+        result = result[1:] + (elem,)
+        yield result
+    if not drop_last:
+        for i in range(1, len(result)):
+            yield result[i:] + (None,) * i
 
 
 def garbage_collection_cuda():
