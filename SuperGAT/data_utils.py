@@ -37,10 +37,11 @@ def collate_and_pca(self, data_list, pca_dim):
     return collated
 
 
-def get_loader_and_dataset_kwargs_for_neighbor_sampler(**kwargs):
+def get_loader_and_dataset_kwargs(cls=None, **kwargs):
+    cls = cls if cls is not None else NeighborSampler
     loader_kwargs = {}
     dataset_kwargs = {}
-    loader_argument_names = inspect.signature(NeighborSampler.__init__).parameters
+    loader_argument_names = inspect.signature(cls.__init__).parameters
     for kw, v in kwargs.items():
         if kw in loader_argument_names:
             #  data, size, num_hops, batch_size=1, shuffle=False,

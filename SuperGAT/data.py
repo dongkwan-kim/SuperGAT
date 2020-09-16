@@ -23,9 +23,11 @@ from tqdm import tqdm
 
 import ogb
 from ogb.nodeproppred import PygNodePropPredDataset
+
+from data_sampler import MyNeighborSampler
 from data_syn import RandomPartitionGraph
 from data_transform_digitize import DigitizeY
-from data_utils import mask_init, mask_getitem, collate_and_pca, get_loader_and_dataset_kwargs_for_neighbor_sampler
+from data_utils import mask_init, mask_getitem, collate_and_pca, get_loader_and_dataset_kwargs
 from data_webkb4univ import WebKB4Univ
 from data_bg import GNNBenchmarkDataset
 from data_flickr import Flickr
@@ -571,7 +573,7 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
 def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: str,
                           batch_size: int = 1024,
                           train_val_test: Tuple[float, float, float] = (0.9 * 0.9, 0.9 * 0.1, 0.1),
-                          seed: int = 42, num_splits: int = 1,
+                          seed: int = 42, num_splits: int = 1, sampler="NeighborSampler",
                           **kwargs):
     """
     Note that datasets structure in torch_geometric varies.
@@ -596,6 +598,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     :param train_val_test:
     :param seed: 42
     :param num_splits: 1
+    :param sampler: currently only supports MyNeighborSampler and NeighborSampler
     :param kwargs:
     :return:
     """
@@ -654,13 +657,24 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         return train_loader, val_loader, test_loader
 
     elif dataset_class in ["Reddit"]:
-        loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs_for_neighbor_sampler(**kwargs)
         root = os.path.join(root, "reddit")
-        dataset = dataset_cls(root=root, **dataset_kwargs)
-        train_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
-                                       bipartite=False, **loader_kwargs)
-        eval_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
-                                      bipartite=False, **loader_kwargs)
+
+        if "NeighborSampler" in sampler:  # MyNeighborSampler, NeighborSampler
+            use_negative_sampling = (sampler == "MyNeighborSampler")
+            loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs(cls=MyNeighborSampler, **kwargs)
+            dataset = dataset_cls(root=root, **dataset_kwargs)
+            train_loader = MyNeighborSampler(
+                data=dataset[0], batch_size=batch_size, bipartite=False, shuffle=True,
+                use_negative_sampling=use_negative_sampling, **loader_kwargs,
+            )
+            eval_loader = MyNeighborSampler(
+                data=dataset[0], batch_size=batch_size, bipartite=False, shuffle=False,
+                use_negative_sampling=False, **loader_kwargs,
+            )
+
+        else:
+            raise ValueError
+
         return dataset, train_loader, eval_loader
 
     elif dataset_class in ["WikiCS"]:
@@ -709,7 +723,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         if dataset_name == "ogbn-arxiv":
             dataset_kwargs, loader_kwargs = kwargs, {}
         elif dataset_name == "ogbn-products":
-            loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs_for_neighbor_sampler(**kwargs)
+            loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs(**kwargs)
         else:
             raise ValueError
 
@@ -722,11 +736,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         if dataset_name == "ogbn-arxiv":
             return dataset, None, None
         elif dataset_name == "ogbn-products":
-            train_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
-                                           bipartite=False, **loader_kwargs)
-            eval_loader = NeighborSampler(data=dataset[0], batch_size=batch_size,
-                                          bipartite=False, **loader_kwargs)
-            return dataset, train_loader, eval_loader
+            raise NotImplementedError
 
     else:
         raise ValueError
@@ -789,7 +799,7 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
             full_dataset, train_loader, eval_loader = _dl
             print_d(full_dataset, "[Dataset]")
             print_l(train_loader(full_dataset[0].train_mask), "[Train Loader]")
-            print_l(train_loader(full_dataset[0].val_mask), "[Eval Loader] ")
+            print_l(eval_loader(full_dataset[0].val_mask), "[Eval Loader] ")
         else:
             train_d, val_d, test_d = _dl
             print_d(train_d, "[Train]")
@@ -801,8 +811,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
-    _test_data("Reddit", "Reddit", '~/graph-data',
-               size=[10, 5], num_hops=2)
+    _test_data("Reddit", "Reddit", '~/graph-data', batch_size=512,
+               sampler="MyNeighborSampler", size=[15, 10], num_hops=2, neg_sample_ratio=0.5)
+    exit()
     _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
                size=[10, 5], num_hops=2)
     exit()
