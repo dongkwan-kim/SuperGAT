@@ -46,9 +46,9 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
         optimizer.zero_grad()
 
         if isinstance(dataset_or_loader, tuple):
-            # n_id: 전체 노드의 원래 ID
-            # b_id: 샘플된 노드의 원래 ID
-            # sub_b_id: 샘플된 노드의 샘플 ID
+            # n_id: original ID of nodes in the whole sub-graph.
+            # b_id: original ID of nodes in the training graph.
+            # sub_b_id: sampled ID of nodes in the training graph.
             # Forward
             outputs = model(data.x[batch.n_id].to(device), batch.edge_index.to(device))  # [#(n_id), #class]
 
