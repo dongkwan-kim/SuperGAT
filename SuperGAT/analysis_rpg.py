@@ -14,7 +14,7 @@ from tqdm import tqdm, trange
 from arguments import get_args, pprint_args, pdebug_args
 from data import get_dataset_or_loader, get_agreement_dist
 from main import run, run_with_many_seeds, summary_results, run_with_many_seeds_with_gpu
-from utils import blind_other_gpus, sigmoid, get_entropy_tensor_by_iter, get_kld_tensor_by_iter, s_join
+from utils import s_join, garbage_collection_cuda
 from visualize import plot_graph_layout, _get_key, plot_multiple_dist, _get_key_and_makedirs, plot_line_with_std, \
     plot_scatter
 
@@ -150,6 +150,8 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
                             with open(result_path, "wb") as f:
                                 pickle.dump(many_seeds_result, f)
                                 cprint("Dump: {}".format(result_path), "green")
+                                garbage_collection_cuda()
+                                cprint("Garbage collected", "green")
 
                         cur_mean_perf = float(np.mean(many_seeds_result["test_perf_at_best_val"]))
                         cur_std_perf = float(np.std(many_seeds_result["test_perf_at_best_val"]))
@@ -321,13 +323,13 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "sandbox_analyze_rpg_by_degree_and_homophily"
+    MODE = "get_and_print_rpg_analysis"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "get_and_print_rpg_analysis":
 
-        degree_list = [2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0]
-        homophily_list = [0.1, 0.3, 0.5, 0.7, 0.9]
+        degree_list = [1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 12.5, 15.0, 25.0, 40.0, 50.0, 75.0, 100.0]
+        homophily_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
         model_list = ["GCN", "GAT", "GAT", "GAT"]
         legend_list = ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"]
@@ -359,8 +361,8 @@ if __name__ == '__main__':
 
     elif MODE == "analyze_rpg_by_degree_and_homophily":
         analyze_rpg_by_degree_and_homophily(
-            degree_list=[2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0],
-            homophily_list=[0.1, 0.3, 0.5, 0.7, 0.9],
+            degree_list=[1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 12.5, 15.0, 25.0, 40.0, 50.0, 75.0, 100.0],
+            homophily_list=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
             legend_list=["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"],
             model_list=["GCN", "GAT", "GAT", "GAT"],
             custom_key_list=["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"],
@@ -375,8 +377,8 @@ if __name__ == '__main__':
             return list(reversed(lst))
 
         analyze_rpg_by_degree_and_homophily(
-            degree_list=rev([2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0]),
-            homophily_list=[0.8],
+            degree_list=[1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 12.5, 15.0, 25.0, 40.0, 50.0, 75.0, 100.0],
+            homophily_list=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
             legend_list=rev(["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"]),
             model_list=rev(["GCN", "GAT", "GAT", "GAT"]),
             custom_key_list=rev(["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"]),
