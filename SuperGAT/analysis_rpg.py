@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict, OrderedDict
 from pprint import pprint
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 from datetime import datetime
 from itertools import chain
 import os
@@ -16,9 +16,10 @@ from data import get_dataset_or_loader, get_agreement_dist
 from main import run, run_with_many_seeds, summary_results, run_with_many_seeds_with_gpu
 from utils import s_join, garbage_collection_cuda
 from visualize import plot_graph_layout, _get_key, plot_multiple_dist, _get_key_and_makedirs, plot_line_with_std, \
-    plot_scatter
+    plot_scatter, plot_scatter_with_varying_options
 
 import numpy as np
+from scipy import stats
 import pandas as pd
 from termcolor import cprint
 import coloredlogs
@@ -30,8 +31,8 @@ except ImportError:
     pass
 
 
-def print_rpg_analysis(deg, hp, legend, custom_key, model="GAT",
-                       num_nodes_per_class=500, num_classes=10, print_all=False, print_tsv=True):
+def get_rpg_best(deg, hp, legend, custom_key,
+                 model="GAT", num_nodes_per_class=500, num_classes=10, verbose=False) -> Dict[str, Any]:
     regex = re.compile(r"ms_result_(\d+\.\d+|1e\-\d+)-(\d+\.\d+|1e\-\d+).pkl")
 
     base_key = "analysis_rpg"
@@ -63,8 +64,9 @@ def print_rpg_analysis(deg, hp, legend, custom_key, model="GAT",
         cur_mean_perf = float(np.mean(many_seeds_result["test_perf_at_best_val"]))
         cur_std_perf = float(np.std(many_seeds_result["test_perf_at_best_val"]))
 
-        if print_all:
+        if verbose:
             print(f"att_lambda: {att_lambda}\tl2_lambda: {l2_lambda}\tperf: {cur_mean_perf} +- {cur_std_perf}")
+
         if cur_mean_perf > max_mean_perf:
             max_mean_perf = cur_mean_perf
             bmt["mean_perf"] = cur_mean_perf
@@ -72,7 +74,157 @@ def print_rpg_analysis(deg, hp, legend, custom_key, model="GAT",
             bmt["att_lambda"] = att_lambda
             bmt["l2_lambda"] = l2_lambda
             bmt["many_seeds_result"] = many_seeds_result
+    return bmt
 
+
+def load_or_get_best_rpg_all(degree_list, homophily_list, legend_list, custom_key_list, model_list,
+                             path="../figs/analysis_rpg/cache"):
+    os.makedirs(path, exist_ok=True)
+    file_path = os.path.join(path, "best_rpg_all_d{}_h{}_l{}.pkl".format(
+        len(degree_list), len(homophily_list), len(legend_list),
+    ))
+
+    try:
+        with open(file_path, "rb") as f:
+            best_rpg_all_dict = pickle.load(f)
+            cprint("Load: {}".format(file_path), "green")
+    except FileNotFoundError:
+        best_rpg_all_dict = {}
+        for degree in tqdm(degree_list):
+            for hp in homophily_list:
+                for legend, custom_key, model in zip(legend_list, custom_key_list, model_list):
+                    rpg_best = get_rpg_best(degree, hp, legend, custom_key, model=model)
+                    best_rpg_all_dict[(degree, hp, legend)] = rpg_best
+        with open(file_path, "wb") as f:
+            pickle.dump(best_rpg_all_dict, f)
+            cprint("Dump: {}".format(file_path), "blue")
+
+    return best_rpg_all_dict
+
+
+def load_or_get_best_rpg_meta(degree_list, homophily_list, legend_list, custom_key_list, model_list,
+                              path="../figs/analysis_rpg/cache"):
+    file_path = os.path.join(path, "best_rpg_meta_d{}_h{}_l{}.pkl".format(
+        len(degree_list), len(homophily_list), len(legend_list),
+    ))
+
+    try:
+        with open(file_path, "rb") as f:
+            best_rpg_meta = pickle.load(f)
+            cprint("Load: {}".format(file_path), "green")
+    except FileNotFoundError:
+        best_rpg_all_dict = load_or_get_best_rpg_all(
+            degree_list, homophily_list, legend_list, custom_key_list, model_list, path,
+        )
+        # Add first_supergat, gat, abs_gain, rel_gain, p-value
+        best_rpg_meta = defaultdict(dict)
+        for degree in tqdm(degree_list):
+            for hp in homophily_list:
+                legend_and_mean_perf_and_tpbv_list = [
+                    (
+                        legend,
+                        best_rpg_all_dict[(degree, hp, legend)]["mean_perf"],
+                        best_rpg_all_dict[(degree, hp, legend)]["many_seeds_result"]["test_perf_at_best_val"]
+                    ) for legend in legend_list
+                ]
+                legend_and_mean_perf_and_tpbv_list = sorted(
+                    legend_and_mean_perf_and_tpbv_list,
+                    key=lambda t: -t[1],
+                )
+                first_supergat, second_supergat, gat = None, None, None
+                for lmt in legend_and_mean_perf_and_tpbv_list:
+                    if first_supergat is None and "SuperGAT" in lmt[0]:
+                        first_supergat = lmt
+                    elif second_supergat is None and "SuperGAT" in lmt[0]:
+                        second_supergat = lmt
+                    if gat is None and lmt[0] == "GAT-GO":
+                        gat = lmt
+
+                abs_diff = first_supergat[1] - gat[1]
+                abs_gain = 100 * abs_diff
+                rel_gain = 100 * (abs_diff / gat[1])
+
+                p_value_btw_sg = stats.ttest_ind(first_supergat[2], second_supergat[2])[1]
+                p_value_vs_gat = stats.ttest_ind(first_supergat[2], gat[2])[1]
+
+                best_rpg_meta[(degree, hp)]["first_supergat"] = first_supergat[0]
+                best_rpg_meta[(degree, hp)]["second_supergat"] = second_supergat[0]
+                best_rpg_meta[(degree, hp)]["abs_gain"] = abs_gain
+                best_rpg_meta[(degree, hp)]["rel_gain"] = rel_gain
+                best_rpg_meta[(degree, hp)]["p-value (MX/SD)"] = p_value_btw_sg
+                best_rpg_meta[(degree, hp)]["p-value (SuperGAT/GAT)"] = p_value_vs_gat
+
+        with open(file_path, "wb") as f:
+            pickle.dump(best_rpg_meta, f)
+            cprint("Dump: {}".format(file_path), "blue")
+
+    return best_rpg_meta
+
+
+def visualize_best_rpg_meta(degree_list, homophily_list, legend_list, custom_key_list, model_list,
+                            p_value_thres=0.05):
+    def nan_to_v(_iters, fill_value=1.0):
+        _new_iters = []
+        for _it in _iters:
+            if isinstance(_it, np.float64) and np.isnan(_it):
+                _new_iters.append(fill_value)
+            elif isinstance(_it, np.float64) and not np.isnan(_it):
+                _new_iters.append(float(_it))
+            else:
+                _new_iters.append(_it)
+        return _new_iters
+
+    best_rpg_meta = load_or_get_best_rpg_meta(
+        degree_list, homophily_list, legend_list, custom_key_list, model_list,
+    )
+    table = [[d, h, *nan_to_v(meta.values())] for (d, h), meta in best_rpg_meta.items()]
+    columns = ["Degree", "Homophily", "Model", "Second", "Abs. Gain (%p)", "Rel. Gain (%)",
+               "p-value (MX/SD)", "p-value (SuperGAT/GAT)"]
+    df = pd.DataFrame(table, columns=columns)
+
+    # Change Model with non-significance to Any.
+    df.loc[df["p-value (MX/SD)"] >= p_value_thres, "Model"] = "Any-SuperGAT"
+    df.loc[df["p-value (SuperGAT/GAT)"] >= p_value_thres, "Model"] = "Any-GAT"
+
+    real_world_df = pd.DataFrame([
+        [1.83, 0.16, "Real-World", "", 10, 10, 10, 10],
+    ], columns=columns)
+
+    df = df.append(real_world_df)
+
+    df["Degree (Log10)"] = np.log10(df["Degree"])
+
+    kwargs = dict(
+        hue_order=["SuperGAT-MX", "SuperGAT-SD", "Any-SuperGAT", "Any-GAT", "Real-World"],
+        markers=["o", "o", "o", "o", "X"],
+        custom_key="best_rpg_meta", extension="png",
+    )
+
+    plot_scatter_with_varying_options(
+        df, x="Degree (Log10)", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
+        **kwargs
+    )
+    plot_scatter_with_varying_options(
+        df, x="Degree (Log10)", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
+        **kwargs
+    )
+    plot_scatter_with_varying_options(
+        df, x="Degree", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
+        **kwargs
+    )
+    plot_scatter_with_varying_options(
+        df, x="Degree", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
+        **kwargs
+    )
+
+
+def print_rpg_analysis(deg, hp, legend, custom_key, model="GAT",
+                       num_nodes_per_class=500, num_classes=10, print_all=False, print_tsv=True):
+    bmt = get_rpg_best(
+        deg, hp, legend, custom_key,
+        model=model, num_nodes_per_class=num_nodes_per_class, num_classes=num_classes,
+        verbose=print_all,
+    )
     if print_tsv:
         cprint(s_join("\t", [deg, hp, legend, custom_key,
                              bmt["att_lambda"], bmt["l2_lambda"], bmt["mean_perf"], bmt["std_perf"], ]), "green")
@@ -98,6 +250,9 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
                                         plot_part_by_part=False,
                                         draw_plot=True,
                                         extension="pdf"):
+    def to_log10(v, eps=1e-5):
+        return float(np.log10(v + eps))
+
     base_key = "analysis_rpg" + ("" if not is_test else "_test")
     base_path = os.path.join("../figs", base_key)
 
@@ -228,16 +383,16 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
     plot_line_with_std(
         tuple_to_mean_list=hp_and_legend_to_mean_over_deg_list,
         tuple_to_std_list=hp_and_legend_to_std_over_deg_list,
-        x_label="Avg. Degree",
+        x_label="Avg. Degree (Log10)",  # Log
         y_label="Test Accuracy",
         name_label_list=["Homophily", "Model"],
-        x_list=degree_list,
+        x_list=[to_log10(d) for d in degree_list],  # Log
         hue="Model",
         style="Model",
         col="Homophily",
         aspect=0.75,
         hue_order=legend_list,
-        x_lim=(0, None),
+        x_lim=(None, None),
         custom_key=base_key,
         extension=extension,
     )
@@ -323,23 +478,21 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "get_and_print_rpg_analysis"
+    degree_list = [1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 12.5, 15.0, 25.0, 40.0, 50.0, 75.0, 100.0]
+    homophily_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+    model_list = ["GCN", "GAT", "GAT", "GAT"]
+    legend_list = ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"]
+    custom_key_list = ["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"]
+
+    MODE = "visualize_best_rpg_meta"
     cprint("MODE: {}".format(MODE), "red")
 
-    if MODE == "get_and_print_rpg_analysis":
+    if MODE == "visualize_best_rpg_meta":
+        visualize_best_rpg_meta(degree_list, homophily_list, legend_list, custom_key_list, model_list)
 
-        degree_list = [1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 12.5, 15.0, 25.0, 40.0, 50.0, 75.0, 100.0]
-        homophily_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-
-        model_list = ["GCN", "GAT", "GAT", "GAT"]
-        legend_list = ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"]
-        custom_key_list = ["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"]
-
-        # model_list = ["GAT", "GAT", "GAT", "GAT"]
-        # legend_list = ["GAT-GO", "SuperGAT-SD", "SuperGAT-MX", "SuperGAT-MT"]
-        # custom_key_list = ["NE-ES", "EV3-ES", "EV13-ES", "EV20-ES"]
-
-        print(s_join("\t", ["degree", "homophily", "model", "att_lambda", "l2_lambda", "mean_perf", "std_perf"]))
+    elif MODE == "get_and_print_rpg_analysis":
+        print(s_join("\t", ["degree", "homophily", "model", "key", "att_lambda", "l2_lambda", "mean_perf", "std_perf"]))
         for _degree in degree_list:
             for _hp in homophily_list:
                 for _legend, _custom_key, _model in zip(legend_list, custom_key_list, model_list):
@@ -361,11 +514,11 @@ if __name__ == '__main__':
 
     elif MODE == "analyze_rpg_by_degree_and_homophily":
         analyze_rpg_by_degree_and_homophily(
-            degree_list=[1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 12.5, 15.0, 25.0, 40.0, 50.0, 75.0, 100.0],
-            homophily_list=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
-            legend_list=["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"],
-            model_list=["GCN", "GAT", "GAT", "GAT"],
-            custom_key_list=["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"],
+            degree_list=degree_list,
+            homophily_list=homophily_list,
+            legend_list=legend_list,
+            model_list=model_list,
+            custom_key_list=custom_key_list,
             att_lambda_list=[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e-3, 1e-4, 1e-5],
             l2_lambda_list=[1e-7, 1e-5, 1e-3],
             num_total_runs=5,
@@ -375,6 +528,7 @@ if __name__ == '__main__':
     elif MODE == "sandbox_analyze_rpg_by_degree_and_homophily":
         def rev(lst):
             return list(reversed(lst))
+
 
         analyze_rpg_by_degree_and_homophily(
             degree_list=[1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 12.5, 15.0, 25.0, 40.0, 50.0, 75.0, 100.0],

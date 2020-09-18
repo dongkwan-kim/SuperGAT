@@ -7,6 +7,7 @@ import networkx as nx
 import torch
 import numpy as np
 import pandas as pd
+
 try:
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -135,6 +136,29 @@ def plot_scatter(xs, ys, hues, xlabel, ylabel, hue_name, custom_key, extension="
     path_and_name = "{}/fig_scatter_{}_{}.{}".format(path, key, plot_info, extension)
 
     plot.get_figure().savefig(path_and_name, bbox_inches='tight')
+    plt.clf()
+
+
+def plot_scatter_with_varying_options(
+        df, x, y, hue_and_style, size, custom_key,
+        markers=None,
+        hue_order=None,
+        alpha=0.6, extension="png",
+        **kwargs,
+):
+    """
+    filled_markers = ('o', 'v', '^', '<', '>', '8', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X')
+    Source of markers: matplotlib.org/2.0.2/api/markers_api.html
+    """
+    plot = sns.relplot(x=x, y=y, style=hue_and_style, hue=hue_and_style, size=size,
+                       sizes=(25, 250), alpha=alpha, palette="Set1",
+                       style_order=hue_order,
+                       markers=markers,
+                       height=6, data=df, **kwargs)
+    key, path = _get_key_and_makedirs(no_args_key=custom_key, base_path="../figs")
+
+    path_and_name = "{}/fig_scatter_{}_{}_{}_{}_{}.{}".format(path, key, x, y, hue_and_style, size, extension)
+    plt.savefig(path_and_name, bbox_inches='tight')
     plt.clf()
 
 
