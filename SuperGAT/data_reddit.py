@@ -12,7 +12,13 @@ from torch_geometric.data import (InMemoryDataset, Data, download_url,
 from tqdm import trange
 
 from data_sampler import MyNeighborSampler
-from utils import s_join
+from utils import s_join, create_hash
+
+
+def del_e_id(data_with_e_id):
+    if hasattr(data_with_e_id, "e_id"):
+        del data_with_e_id.e_id
+    return data_with_e_id
 
 
 class MyReddit(InMemoryDataset):
@@ -39,14 +45,16 @@ class MyReddit(InMemoryDataset):
     url = 'https://s3.us-east-2.amazonaws.com/dgl.ai/dataset/reddit.zip'
 
     def __init__(self, root,
-                 sampling_size: List[int], batch_size: int, neg_sample_ratio: float, num_version: int,
-                 shuffle=True,
-                 transform=None, pre_transform=None, pre_filter=None):
+                 size: List[int], batch_size: int, neg_sample_ratio: float,
+                 num_version: int = 5, shuffle=True,
+                 transform=None, pre_transform=None, pre_filter=None,
+                 use_test=False, **kwargs):
         self.batch_size = batch_size
-        self.sampling_size = sampling_size
+        self.sampling_size = size
         self.neg_sample_ratio = neg_sample_ratio
         self.num_version = num_version
         self.shuffle = shuffle
+        self.use_test = use_test
 
         super(MyReddit, self).__init__(root, transform, pre_transform, pre_filter)
 
@@ -61,11 +69,27 @@ class MyReddit(InMemoryDataset):
 
     @property
     def processed_dir(self):
-        return osp.join(self.root, 'my_processed_{}'.format(s_join("_", self.sampling_size)))
+        return osp.join(self.root, "my_processed")
+
+    @property
+    def important_args(self):
+        return [self.sampling_size, self.batch_size, self.neg_sample_ratio, self.num_version]
+
+    def get_key(self):
+        key = s_join("_", self.important_args)
+        if self.use_test:
+            key = "test_" + key
+        return key
+
+    def get_hash(self, n=4):
+        return create_hash({"hash": self.get_key()})[:n]
 
     @property
     def processed_file_names(self):
-        return ['data.pt', 'batch.pt', 'num_batches_per_epoch.pt']
+        hash_key, key = self.get_hash(), self.get_key()
+        return ['data.pt',
+                '{}_batch_{}.pt'.format(hash_key, key),
+                '{}_nbpe_{}.pt'.format(hash_key, key)]
 
     def download(self):
         path = download_url(self.url, self.raw_dir)
@@ -73,6 +97,9 @@ class MyReddit(InMemoryDataset):
         os.unlink(path)
 
     def process(self):
+        print("... from here: {}".format(self.processed_dir))
+        print("... and key is: {}".format(self.get_key()))
+        print("... and hash is: {}".format(self.get_hash()))
         data = np.load(osp.join(self.raw_dir, 'reddit_data.npz'))
         x = torch.from_numpy(data['feature']).to(torch.float)
         y = torch.from_numpy(data['label']).to(torch.long)
@@ -89,6 +116,7 @@ class MyReddit(InMemoryDataset):
         data.val_mask = split == 2
         data.test_mask = split == 3
 
+        print("Now batch sampling...")
         _loader = MyNeighborSampler(
             data=data, batch_size=self.batch_size, bipartite=False, shuffle=True,
             size=self.sampling_size, num_hops=len(self.sampling_size),
@@ -97,18 +125,21 @@ class MyReddit(InMemoryDataset):
         )
         # Data(b_id=[512], e_id=[52765], edge_index=[2, 52765], n_id=[40040],
         #      neg_edge_index=[2, 26382], sub_b_id=[512])
-        print("Now batch sampling...")
         _batch_list = []
         for _i in trange(self.num_version):
 
-            _batch_list += [_b for _b in _loader(data.train_mask)]
+            if not self.use_test:
+                _batch_list += [del_e_id(_b) for _b in _loader(data.train_mask)]
+            else:
+                _batch_list += [del_e_id(_b) for (_, _b) in zip(range(4), _loader(data.train_mask))]  # len = 4
 
             if _i == 0:
                 torch.save(len(_batch_list), self.processed_paths[2])
+                print("... #batches is {}".format(len(_batch_list)))
 
         torch.save(self.collate(_batch_list), self.processed_paths[1])
 
-        del data.edge_index
+        del data.train_mask
         torch.save(data, self.processed_paths[0])
 
     def __iter__(self):
@@ -132,15 +163,61 @@ class MyReddit(InMemoryDataset):
         self.index += 1
         return o
 
+    @property
+    def num_node_features(self):
+        return self.data_xy.x.size(1)
+
+    @property
+    def num_classes(self):
+        y = self.data_xy.y
+        return y.max().item() + 1 if y.dim() == 1 else y.size(1)
+
     def __repr__(self):
-        return '{}()'.format(self.__class__.__name__)
+        return '{}(ss={}, bs={}, nsr={}, nv={})'.format(self.__class__.__name__, *self.important_args)
 
 
 if __name__ == '__main__':
-    mr = MyReddit("~/graph-data/reddit",
-                  sampling_size=[10, 10], batch_size=512,
-                  neg_sample_ratio=0.5, num_version=5)
+
+    MODE = "20_512"
+
+    kw = dict(
+        neg_sample_ratio=0.5,
+        num_version=5,
+    )
+
+    if MODE == "TEST":
+        mr = MyReddit(
+            "~/graph-data/reddit",
+            size=[2, 2],
+            batch_size=16,
+            use_test=True,
+            **kw,
+        )
+    elif MODE == "5_512":
+        mr = MyReddit(
+            "~/graph-data/reddit",
+            size=[5, 5],
+            batch_size=512,
+            **kw,
+        )
+    elif MODE == "10_512":
+        mr = MyReddit(
+            "~/graph-data/reddit",
+            size=[10, 10],
+            batch_size=512,
+            **kw,
+        )
+    elif MODE == "20_512":
+        mr = MyReddit(
+            "~/graph-data/reddit",
+            size=[20, 20],
+            batch_size=512,
+            **kw,
+        )
+    else:
+        raise ValueError
+
     print(mr.data_xy)
-    for b in mr:
-        print(b)
+    for i, b in enumerate(mr):
+        print(i, "/", b)
         break
