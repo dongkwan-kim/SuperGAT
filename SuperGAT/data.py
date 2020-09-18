@@ -792,14 +792,14 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
         _dl = get_dataset_or_loader(dataset_class, dataset_name, root, *args, **kwargs)
         if isinstance(_dl[0], PygNodePropPredDataset) and _dl[1] is not None:
             full_dataset, train_loader, eval_loader = _dl
-            print_d(full_dataset, "[Dataset]")
             print_l(train_loader(full_dataset.train_mask), "[Train Loader]")
             print_l(train_loader(full_dataset.val_mask), "[Eval Loader] ")
+            print_d(full_dataset, "[Dataset]")
         elif _dl[1] is not None and isinstance(_dl[1], NeighborSampler):
             full_dataset, train_loader, eval_loader = _dl
-            print_d(full_dataset, "[Dataset]")
             print_l(train_loader(full_dataset[0].train_mask), "[Train Loader]")
             print_l(eval_loader(full_dataset[0].val_mask), "[Eval Loader] ")
+            print_d(full_dataset, "[Dataset]")
         else:
             train_d, val_d, test_d = _dl
             print_d(train_d, "[Train]")
