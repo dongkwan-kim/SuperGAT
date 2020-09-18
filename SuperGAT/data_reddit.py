@@ -108,7 +108,6 @@ class MyReddit(InMemoryDataset):
 
         torch.save(self.collate(_batch_list), self.processed_paths[1])
 
-        del data.train_mask
         del data.edge_index
         torch.save(data, self.processed_paths[0])
 
