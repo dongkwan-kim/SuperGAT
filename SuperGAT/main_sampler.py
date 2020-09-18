@@ -29,10 +29,13 @@ from utils import create_hash, cprint_multi_lines, blind_other_gpus, to_one_hot,
 def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _args):
     model.train()
 
-    if isinstance(dataset_or_loader, tuple):
+    if _args.dataset_name == "Reddit":
         dataset, _loader = dataset_or_loader
         data = dataset[0]
         loader = _loader(data.train_mask)
+    elif _args.dataset_name == "MyReddit":
+        dataset, loader = dataset_or_loader
+        data = dataset.data_xy
     else:
         raise TypeError
 
@@ -42,9 +45,10 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
 
         optimizer.zero_grad()
 
-        neg_edge_index = getattr(batch, "neg_edge_index", None)
-        if neg_edge_index is not None:
-            neg_edge_index = neg_edge_index.to(device)
+        if _args.is_super_gat and _args.att_lambda > 0:
+            neg_edge_index = batch.neg_edge_index.to(device)
+        else:
+            neg_edge_index = None
 
         # n_id: original ID of nodes in the whole sub-graph.
         # b_id: original ID of nodes in the training graph.
@@ -116,16 +120,20 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
 def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="val", verbose=0, **kwargs):
     model.eval()
 
-    if isinstance(dataset_or_loader, tuple):
+    if _args.dataset_name == "Reddit":
         dataset, _loader = dataset_or_loader
         data = dataset[0]
 
-        if val_or_test == "val":
-            loader = _loader(data.val_mask)
-        else:
-            loader = _loader(data.test_mask)
+    elif _args.dataset_name == "MyReddit":
+        dataset, _loader = dataset_or_loader
+        data = dataset.data_xy
     else:
         raise TypeError
+
+    if val_or_test == "val":
+        loader = _loader(data.val_mask)
+    else:
+        loader = _loader(data.test_mask)
 
     num_classes = getattr_d(dataset, "num_classes")
 
@@ -324,9 +332,9 @@ if __name__ == '__main__':
 
     main_args = get_args(
         model_name="GAT",
-        dataset_class="Reddit",
-        dataset_name="Reddit",
-        custom_key="NE",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
+        dataset_class="MyReddit",
+        dataset_name="MyReddit",
+        custom_key="EV13TEST",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
         # custom_key="EV13NSO8+NSR05-ESR08",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
     )
     pprint_args(main_args)
