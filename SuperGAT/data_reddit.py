@@ -195,7 +195,7 @@ class MyReddit(InMemoryDataset):
 
 if __name__ == '__main__':
 
-    MODE = "5_2048"
+    MODE = "15_2048"
 
     kw = dict(
         neg_sample_ratio=0.5,
@@ -221,6 +221,13 @@ if __name__ == '__main__':
         mr = MyReddit(
             "~/graph-data/reddit",
             size=[10, 10],
+            batch_size=2048,
+            **kw,
+        )
+    elif MODE == "15_2048":
+        mr = MyReddit(
+            "~/graph-data/reddit",
+            size=[15, 15],
             batch_size=2048,
             **kw,
         )
