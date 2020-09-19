@@ -33,6 +33,7 @@ from data_bg import GNNBenchmarkDataset
 from data_flickr import Flickr
 from data_wikics import WikiCS
 from data_snap import SNAPDataset, Crocodile, Squirrel, Chameleon
+from data_reddit import MyReddit
 from utils import negative_sampling_numpy
 
 from multiprocessing import Process, Queue
@@ -566,6 +567,7 @@ def get_dataset_class(dataset_class: str) -> Callable[..., InMemoryDataset]:
                                  "WebKB4Univ", "PygNodePropPredDataset", "WikiCS", "GNNBenchmarkDataset", "Flickr",
                                  "MyAmazon", "MyCoauthor", "MyCitationFull",
                                  "Crocodile", "Squirrel", "Chameleon",
+                                 "MyReddit",
                              ]), f"{dataset_class} is not good."
     return eval(dataset_class)
 
@@ -606,7 +608,7 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
     cprint("Now loading dataset: {} / {}".format(dataset_class, dataset_name), "green")
     root = os.path.expanduser(root)
 
-    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI", "Reddit", "WikiCS"]:
+    if dataset_class not in ["PPI", "WebKB4Univ", "LinkPPI", "ADPPI", "Reddit", "WikiCS", "MyReddit"]:
         kwargs["name"] = dataset_name
 
     torch.manual_seed(seed)
@@ -676,6 +678,16 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
             raise ValueError
 
         return dataset, train_loader, eval_loader
+
+    elif dataset_class in ["MyReddit"]:
+        root = os.path.join(root, "reddit")
+        loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs(cls=MyNeighborSampler, **kwargs)
+        dataset = dataset_cls(root=root, batch_size=batch_size, **kwargs)
+        eval_loader = MyNeighborSampler(
+            data=dataset.data_xy, batch_size=batch_size, bipartite=False, shuffle=False,
+            use_negative_sampling=False, **loader_kwargs,
+        )
+        return dataset, dataset, eval_loader
 
     elif dataset_class in ["WikiCS"]:
         root = os.path.join(root, "WikiCS")
@@ -792,14 +804,19 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
         _dl = get_dataset_or_loader(dataset_class, dataset_name, root, *args, **kwargs)
         if isinstance(_dl[0], PygNodePropPredDataset) and _dl[1] is not None:
             full_dataset, train_loader, eval_loader = _dl
-            print_d(full_dataset, "[Dataset]")
             print_l(train_loader(full_dataset.train_mask), "[Train Loader]")
             print_l(train_loader(full_dataset.val_mask), "[Eval Loader] ")
+            print_d(full_dataset, "[Dataset]")
         elif _dl[1] is not None and isinstance(_dl[1], NeighborSampler):
             full_dataset, train_loader, eval_loader = _dl
-            print_d(full_dataset, "[Dataset]")
             print_l(train_loader(full_dataset[0].train_mask), "[Train Loader]")
             print_l(eval_loader(full_dataset[0].val_mask), "[Eval Loader] ")
+            print_d(full_dataset, "[Dataset]")
+        elif isinstance(_dl[0], MyReddit):
+            full_dataset, train_loader, eval_loader = _dl
+            print_l(train_loader, "[Train Loader]")
+            print_l(eval_loader(full_dataset.val_mask), "[Eval Loader] ")
+            print_d(full_dataset, "[Dataset]")
         else:
             train_d, val_d, test_d = _dl
             print_d(train_d, "[Train]")
@@ -811,6 +828,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+    _test_data("MyReddit", "MyReddit", '~/graph-data', batch_size=512,
+               size=[2, 2], num_hops=2, neg_sample_ratio=0.5, num_version=5)
+    exit()
     _test_data("Reddit", "Reddit", '~/graph-data', batch_size=512,
                sampler="MyNeighborSampler", size=[15, 10], num_hops=2, neg_sample_ratio=0.5)
     exit()
