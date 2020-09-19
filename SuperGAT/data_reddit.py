@@ -15,12 +15,6 @@ from data_sampler import MyNeighborSampler
 from utils import s_join, create_hash
 
 
-def del_e_id(data_with_e_id):
-    if hasattr(data_with_e_id, "e_id"):
-        del data_with_e_id.e_id
-    return data_with_e_id
-
-
 class MyReddit(InMemoryDataset):
     r"""The Reddit dataset from the `"Inductive Representation Learning on
     Large Graphs" <https://arxiv.org/abs/1706.02216>`_ paper, containing
@@ -45,13 +39,15 @@ class MyReddit(InMemoryDataset):
     url = 'https://s3.us-east-2.amazonaws.com/dgl.ai/dataset/reddit.zip'
 
     def __init__(self, root,
-                 size: List[int], batch_size: int, neg_sample_ratio: float,
-                 num_version: int = 5, shuffle=True,
+                 size: List[int], batch_size: int,
+                 neg_sample_ratio: float, num_neg_batches=3,
+                 num_version: int = 2, shuffle=True,
                  transform=None, pre_transform=None, pre_filter=None,
                  use_test=False, **kwargs):
         self.batch_size = batch_size
         self.sampling_size = size
         self.neg_sample_ratio = neg_sample_ratio
+        self.num_neg_batches = num_neg_batches
         self.num_version = num_version
         self.shuffle = shuffle
         self.use_test = use_test
@@ -73,7 +69,12 @@ class MyReddit(InMemoryDataset):
 
     @property
     def important_args(self):
-        return [self.sampling_size, self.batch_size, self.neg_sample_ratio, self.num_version]
+        return [self.sampling_size, self.batch_size,
+                self.neg_sample_ratio, self.num_neg_batches, self.num_version]
+
+    @property
+    def total_neg_sample_ratio(self):
+        return self.neg_sample_ratio * self.num_neg_batches
 
     def get_key(self):
         key = s_join("_", self.important_args)
@@ -120,18 +121,17 @@ class MyReddit(InMemoryDataset):
         _loader = MyNeighborSampler(
             data=data, batch_size=self.batch_size, bipartite=False, shuffle=True,
             size=self.sampling_size, num_hops=len(self.sampling_size),
-            use_negative_sampling=True, neg_sample_ratio=self.neg_sample_ratio,
+            use_negative_sampling=True, neg_sample_ratio=self.total_neg_sample_ratio,
             drop_last=True,
         )
-        # Data(b_id=[512], e_id=[52765], edge_index=[2, 52765], n_id=[40040],
-        #      neg_edge_index=[2, 26382], sub_b_id=[512])
         _batch_list = []
+        # batch: Data(b_id=[2048], edge_index=[2, 197955], n_id=[99638], neg_idx=[296932], sub_b_id=[2048])
         for _i in trange(self.num_version):
 
             if not self.use_test:
-                _batch_list += [del_e_id(_b) for _b in _loader(data.train_mask)]
+                _batch_list += [self.compress(_b) for _b in _loader(data.train_mask)]
             else:
-                _batch_list += [del_e_id(_b) for (_, _b) in zip(range(4), _loader(data.train_mask))]  # len = 4
+                _batch_list += [self.compress(_b) for (_, _b) in zip(range(4), _loader(data.train_mask))]  # len = 4
 
             if _i == 0:
                 torch.save(len(_batch_list), self.processed_paths[2])
@@ -141,6 +141,23 @@ class MyReddit(InMemoryDataset):
 
         del data.train_mask
         torch.save(data, self.processed_paths[0])
+
+    @staticmethod
+    def compress(data):
+        num_nodes = data.n_id.size(0)
+        data.neg_idx = data.neg_edge_index[0] * num_nodes + data.neg_edge_index[1]
+        del data.neg_edge_index
+        del data.e_id
+        return data
+
+    def get_neg_edge_index(self, data):
+        num_nodes = data.n_id.size(0)
+        num_neg_edges = int(data.edge_index.size(1) * self.neg_sample_ratio)
+        perm = torch.randperm(data.neg_idx.size(0))
+        idx = data.neg_idx[perm]
+        idx = idx[:num_neg_edges]
+        neg_edge_index = torch.stack([idx / num_nodes, idx % num_nodes], dim=0)
+        return neg_edge_index
 
     def __iter__(self):
         self.index = 0
@@ -178,11 +195,11 @@ class MyReddit(InMemoryDataset):
 
 if __name__ == '__main__':
 
-    MODE = "20_512"
+    MODE = "5_2048"
 
     kw = dict(
         neg_sample_ratio=0.5,
-        num_version=5,
+        num_version=2,
     )
 
     if MODE == "TEST":
@@ -193,25 +210,25 @@ if __name__ == '__main__':
             use_test=True,
             **kw,
         )
-    elif MODE == "5_512":
+    elif MODE == "5_2048":
         mr = MyReddit(
             "~/graph-data/reddit",
             size=[5, 5],
-            batch_size=512,
+            batch_size=2048,
             **kw,
         )
-    elif MODE == "10_512":
+    elif MODE == "10_2048":
         mr = MyReddit(
             "~/graph-data/reddit",
             size=[10, 10],
-            batch_size=512,
+            batch_size=2048,
             **kw,
         )
-    elif MODE == "20_512":
+    elif MODE == "20_2048":
         mr = MyReddit(
             "~/graph-data/reddit",
             size=[20, 20],
-            batch_size=512,
+            batch_size=2048,
             **kw,
         )
     else:
@@ -220,4 +237,8 @@ if __name__ == '__main__':
     print(mr.data_xy)
     for i, b in enumerate(mr):
         print(i, "/", b)
+        ei = b.edge_index
+        nei = mr.get_neg_edge_index(b)
+        print(ei.min(), ei.max())
+        print(nei.min(), nei.max())
         break
