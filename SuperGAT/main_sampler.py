@@ -46,7 +46,12 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
         optimizer.zero_grad()
 
         if _args.is_super_gat and _args.att_lambda > 0:
-            neg_edge_index = batch.neg_edge_index.to(device)
+            try:
+                neg_edge_index = dataset.get_neg_edge_index(batch)
+            except AttributeError:
+                neg_edge_index = batch.neg_edge_index
+
+            neg_edge_index = neg_edge_index.to(device)
         else:
             neg_edge_index = None
 
@@ -334,8 +339,8 @@ if __name__ == '__main__':
         model_name="GAT",
         dataset_class="MyReddit",
         dataset_name="MyReddit",
-        custom_key="EV13TEST",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
-        # custom_key="EV13NSO8+NSR05-ESR08",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
+        # custom_key="NE-1010",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
+        custom_key="EV13NSO8-1010+NSR05-ESR08",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
     )
     pprint_args(main_args)
 
