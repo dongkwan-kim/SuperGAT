@@ -2297,3 +2297,750 @@ GAT-Computers-EV13NSO8-ES: &GAT-Computers-EV13NSO8-ES
   early_stop_threshold_loss: 0.00935296273087794
   early_stop_threshold_perf: 0.0006471070123918942
   epochs: 470
+
+
+LargeGAT-ogbn-arxiv: &LargeGAT-ogbn-arxiv
+  <<: *LargeGAT
+  task_type: Node_Transductive
+  num_layers: 2
+  val_interval: 1
+  lr: 0.05
+  dropout: 0.2
+  epochs: 800
+  num_hidden_features: 16
+  heads: 8
+  out_heads: 1
+  to_undirected_at_neg: True
+
+SAGE-ogbn-arxiv-NE: &SAGE-ogbn-arxiv-NE
+  <<: *LargeGAT-ogbn-arxiv
+  model_name: LinkSAGE
+  num_hidden_features: 128
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 1.3564923851522799e-05
+
+GCN-ogbn-arxiv-NE: &GCN-ogbn-arxiv-NE
+  <<: *LargeGAT-ogbn-arxiv
+  model_name: LinkGCN
+  num_hidden_features: 128
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 3.9514262920393945e-09
+
+SAGE-ogbn-arxiv-NE-ES: &SAGE-ogbn-arxiv-NE-ES
+  <<: *SAGE-ogbn-arxiv-NE
+  use_early_stop: True
+  early_stop_patience: 770
+  early_stop_queue_length: 189
+  early_stop_threshold_loss: 0.0023418432107887503
+  early_stop_threshold_perf: 0.03151459214543223
+  epochs: 772
+
+GCN-ogbn-arxiv-NE-ES: &GCN-ogbn-arxiv-NE-ES
+  <<: *GCN-ogbn-arxiv-NE
+  use_early_stop: True
+  early_stop_patience: 318
+  early_stop_queue_length: 674
+  early_stop_threshold_loss: 0.001147923421037667
+  early_stop_threshold_perf: 5.164698428236512e-05
+  epochs: 785
+
+LargeGAT-ogbn-arxiv-NE:  &LargeGAT-ogbn-arxiv-NE
+  <<: *LargeGAT-ogbn-arxiv
+  is_super_gat: False
+  l2_lambda: 9.965354570485831e-05
+
+LargeGAT-ogbn-arxiv-NE-ES: &LargeGAT-ogbn-arxiv-NE-ES
+  <<: *LargeGAT-ogbn-arxiv-NE
+  use_early_stop: True
+  early_stop_patience: 517
+  early_stop_queue_length: 380
+  early_stop_threshold_loss: 2.1221155191334835e-05
+  early_stop_threshold_perf: 4.3204756920275984e-05
+  epochs: 518
+
+LargeGAT-ogbn-arxiv-NEDP: &LargeGAT-ogbn-arxiv-NEDP
+  <<: *LargeGAT-ogbn-arxiv-NE
+  attention_type: "dot_product"
+  l2_lambda: 1.1421029359775407e-05
+
+LargeGAT-ogbn-arxiv-NEDP-ES: &LargeGAT-ogbn-arxiv-NEDP-ES
+  <<: *LargeGAT-ogbn-arxiv-NEDP
+  use_early_stop: True
+  early_stop_patience: 598
+  early_stop_queue_length: 138
+  early_stop_threshold_loss: 0.0004252351357684686
+  early_stop_threshold_perf: 0.051289011185508444
+  epochs: 699
+
+LargeGAT-ogbn-arxiv-E: &LargeGAT-ogbn-arxiv-E
+  <<: *LargeGAT-ogbn-arxiv
+  epochs: 700
+  is_super_gat: True
+
+LargeGAT-ogbn-arxiv-EV3: &LargeGAT-ogbn-arxiv-EV3
+  <<: *LargeGAT-ogbn-arxiv-E
+  attention_type: "scaled_dot_product"
+  to_undirected_at_neg: True
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.5
+  l2_lambda: 3.826731737808351e-08
+  att_lambda: 0.0001522862025300892
+
+LargeGAT-ogbn-arxiv-EV3-ES: &LargeGAT-ogbn-arxiv-EV3-ES
+  <<: *LargeGAT-ogbn-arxiv-EV3
+  use_early_stop: True
+  early_stop_patience: 596
+  early_stop_queue_length: 95
+  early_stop_threshold_loss: 7.465272618555764e-05
+  early_stop_threshold_perf: 0.0006417087606827856
+  epochs: 597
+
+LargeGAT-ogbn-arxiv-EV13: &LargeGAT-ogbn-arxiv-EV13
+  <<: *LargeGAT-ogbn-arxiv-E
+  attention_type: "prob_mask_only"
+
+LargeGAT-ogbn-arxiv-EV13NS: &LargeGAT-ogbn-arxiv-EV13NS
+  <<: *LargeGAT-ogbn-arxiv-EV13
+  to_undirected_at_neg: True
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.5
+  l2_lambda: 1.5638316305288333e-06
+  att_lambda: 0.015388211403041896
+
+LargeGAT-ogbn-arxiv-EV13NS-ES: &LargeGAT-ogbn-arxiv-EV13NS-ES
+  <<: *LargeGAT-ogbn-arxiv-EV13NS
+  use_early_stop: True
+  early_stop_patience: 184
+  early_stop_queue_length: 693
+  early_stop_threshold_loss: 0.0017329377430598668
+  early_stop_threshold_perf: 0.0004020011182912322
+  epochs: 692
+
+
+GAT-CS: &GAT-CS
+  <<: *GAT
+  lr: 0.01
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+  epochs: 200
+  to_undirected_at_neg: True
+
+GCN-CS-NE: &GCN-CS-NE
+  <<: *GAT-CS
+  model_name: LinkGCN
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.010480125200256868
+
+SAGE-CS-NE: &SAGE-CS-NE
+  <<: *GAT-CS
+  model_name: LinkSAGE
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.004565857503411069
+
+GCN-CS-NE-ES: &GCN-CS-NE-ES
+  <<: *GCN-CS-NE
+  use_early_stop: True
+  early_stop_patience: 23
+  early_stop_queue_length: 72
+  early_stop_threshold_loss: 0.04364385706911771
+  early_stop_threshold_perf: 0.0579532043659431
+  epochs: 103
+
+SAGE-CS-NE-ES: &SAGE-CS-NE-ES
+  <<: *SAGE-CS-NE
+  use_early_stop: True
+  early_stop_patience: 119
+  early_stop_queue_length: 46
+  early_stop_threshold_loss: 7.480301713387348e-05
+  early_stop_threshold_perf: 0.0005800596945568866
+  epochs: 174
+
+GAT-CS-NE:  &GAT-CS-NE
+  <<: *GAT-CS
+  is_super_gat: False
+
+GAT-CS-NEO8: &GAT-CS-NEO8
+  <<: *GAT-CS-NE
+  out_heads: 8
+  l2_lambda: 0.001420522850030996
+
+GAT-CS-NEDP:
+  <<: *GAT-CS-NE
+  attention_type: "dot_product"
+
+GAT-CS-NEDPO8: &GAT-CS-NEDPO8
+  <<: *GAT-CS-NE
+  out_heads: 8
+  l2_lambda: 0.02274188074159905
+  attention_type: "dot_product"
+
+GAT-CS-NEO8-ES: &GAT-CS-NEO8-ES
+  <<: *GAT-CS-NEO8
+  use_early_stop: True
+  early_stop_patience: 91
+  early_stop_queue_length: 143
+  early_stop_threshold_loss: 0.054598437699577035
+  early_stop_threshold_perf: 0.002269179653986163
+  epochs: 160
+
+GAT-CS-NEDPO8-ES: &GAT-CS-NEDPO8-ES
+  <<: *GAT-CS-NEDPO8
+  use_early_stop: True
+  early_stop_patience: 54
+  early_stop_queue_length: 52
+  early_stop_threshold_loss: 6.85620184171104e-05
+  early_stop_threshold_perf: 2.3311444648620615e-05
+  epochs: 195
+
+GAT-CS-E: &GAT-CS-E
+  <<: *GAT-CS
+  is_super_gat: True
+
+GAT-CS-EV3O8: &GAT-CS-EV3O8
+  <<: *GAT-CS-E
+  attention_type: "scaled_dot_product"
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.7
+  att_lambda: 10.755522284072981
+  l2_lambda: 0.011411951171745392
+
+GAT-CS-EV3O8-ES: &GAT-CS-EV3O8-ES
+  <<: *GAT-CS-EV3O8
+  use_early_stop: True
+  early_stop_patience: 163
+  early_stop_queue_length: 19
+  early_stop_threshold_loss: 0.0008370197634949866
+  early_stop_threshold_perf: 2.5905706514078907e-05
+  epochs: 181
+
+GAT-CS-EV13: &GAT-CS-EV13
+  <<: *GAT-CS-E
+  attention_type: "prob_mask_only"
+
+GAT-CS-EV13NSO8: &GAT-CS-EV13NSO8
+  <<: *GAT-CS-EV13
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.5
+  att_lambda: 7.731647590772792
+  l2_lambda: 0.007087047209691167
+
+GAT-CS-EV13NSO8-ES: &GAT-CS-EV13NSO8-ES
+  <<: *GAT-CS-EV13NSO8
+  use_early_stop: True
+  early_stop_patience: 161
+  early_stop_queue_length: 105
+  early_stop_threshold_loss: 6.753302365755324e-05
+  early_stop_threshold_perf: 2.7736953149892394e-05
+  epochs: 199
+
+
+GAT-Cora_ML: &GAT-Cora_ML
+  <<: *GAT
+  lr: 0.005
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+  epochs: 500
+  to_undirected_at_neg: True
+
+GCN-Cora_ML-NE: &GCN-Cora_ML-NE
+  <<: *GAT-Cora_ML
+  model_name: LinkGCN
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.03251354984770564
+
+SAGE-Cora_ML-NE: &SAGE-Cora_ML-NE
+  <<: *GAT-Cora_ML
+  model_name: LinkSAGE
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.030263104301913802
+
+GCN-Cora_ML-NE-ES: &GCN-Cora_ML-NE-ES
+  <<: *GCN-Cora_ML-NE
+  use_early_stop: True
+  early_stop_patience: 13
+  early_stop_queue_length: 460
+  early_stop_threshold_loss: 0.08467962501862818
+  early_stop_threshold_perf: 0.0006633810191827478
+  epochs: 269
+
+SAGE-Cora_ML-NE-ES: &SAGE-Cora_ML-NE-ES
+  <<: *SAGE-Cora_ML-NE
+  use_early_stop: True
+  early_stop_patience: 32
+  early_stop_queue_length: 236
+  early_stop_threshold_loss: 0.00012311424881373103
+  early_stop_threshold_perf: 0.06605007285650229
+  epochs: 309
+
+GAT-Cora_ML-NE:  &GAT-Cora_ML-NE
+  <<: *GAT-Cora_ML
+  epochs: 500
+  is_super_gat: False
+
+GAT-Cora_ML-NEO8: &GAT-Cora_ML-NEO8
+  <<: *GAT-Cora_ML-NE
+  out_heads: 8
+  l2_lambda: 0.013285953929159176
+
+GAT-Cora_ML-NEDP:
+  <<: *GAT-Cora_ML-NE
+  attention_type: "dot_product"
+
+GAT-Cora_ML-NEDPO8: &GAT-Cora_ML-NEDPO8
+  <<: *GAT-Cora_ML-NE
+  attention_type: "dot_product"
+  out_heads: 8
+  l2_lambda: 0.009399709502273618
+
+GAT-Cora_ML-NEO8-ES: &GAT-Cora_ML-NEO8-ES
+  <<: *GAT-Cora_ML-NEO8
+  use_early_stop: True
+  early_stop_patience: 39
+  early_stop_queue_length: 400
+  early_stop_threshold_loss: 0.0026979132395624408
+  early_stop_threshold_perf: 0.020664193981616584
+  epochs: 300
+
+GAT-Cora_ML-NEDPO8-ES: &GAT-Cora_ML-NEDPO8-ES
+  <<: *GAT-Cora_ML-NEDPO8
+  use_early_stop: True
+  early_stop_patience: 290
+  early_stop_queue_length: 423
+  early_stop_threshold_loss: 0.007557862765168121
+  early_stop_threshold_perf: 0.0011195394529583736
+  epochs: 321
+
+GAT-Cora_ML-E: &GAT-Cora_ML-E
+  <<: *GAT-Cora_ML
+  epochs: 500
+  is_super_gat: True
+
+GAT-Cora_ML-EV3O8: &GAT-Cora_ML-EV3O8
+  <<: *GAT-Cora_ML-E
+  attention_type: "scaled_dot_product"
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.5
+  att_lambda: 18.118533444275325
+  l2_lambda: 0.00842724787795324
+
+GAT-Cora_ML-EV3O8-ES: &GAT-Cora_ML-EV3O8-ES
+  <<: *GAT-Cora_ML-EV3O8
+  use_early_stop: True
+  early_stop_patience: 483
+  early_stop_queue_length: 95
+  early_stop_threshold_loss: 0.00011768505881380156
+  early_stop_threshold_perf: 0.00016610067546564113
+  epochs: 484
+
+GAT-Cora_ML-EV13: &GAT-Cora_ML-EV13
+  <<: *GAT-Cora_ML-E
+  attention_type: "prob_mask_only"
+
+GAT-Cora_ML-EV13NSO8: &GAT-Cora_ML-EV13NSO8
+  <<: *GAT-Cora_ML-EV13
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.5
+  att_lambda: 8.063802875847173
+  l2_lambda: 0.01036022244698202
+
+GAT-Cora_ML-EV13NSO8-ES: &GAT-Cora_ML-EV13NSO8-ES
+  <<: *GAT-Cora_ML-EV13NSO8
+  use_early_stop: True
+  early_stop_patience: 459
+  early_stop_queue_length: 178
+  early_stop_threshold_loss: 0.07582658004675714
+  early_stop_threshold_perf: 0.004907542816171177
+  epochs: 476
+
+
+GAT-Physics: &GAT-Physics
+  <<: *GAT
+  lr: 0.01
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+  epochs: 200
+  to_undirected_at_neg: True
+
+GCN-Physics-NE: &GCN-Physics-NE
+  <<: *GAT-Physics
+  model_name: LinkGCN
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.0315295620184054
+
+SAGE-Physics-NE: &SAGE-Physics-NE
+  <<: *GAT-Physics
+  model_name: LinkSAGE
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.04035816752752087
+
+GCN-Physics-NE-ES: &GCN-Physics-NE-ES
+  <<: *GCN-Physics-NE
+  use_early_stop: True
+  early_stop_patience: 18
+  early_stop_queue_length: 26
+  early_stop_threshold_loss: 3.450158922524197e-05
+  early_stop_threshold_perf: 0.09350358129899679
+  epochs: 108
+
+SAGE-Physics-NE-ES: &SAGE-Physics-NE-ES
+  <<: *SAGE-Physics-NE
+  use_early_stop: True
+  early_stop_patience: 15
+  early_stop_queue_length: 189
+  early_stop_threshold_loss: 4.2834951658079865e-05
+  early_stop_threshold_perf: 0.06759125075281132
+  epochs: 182
+
+GAT-Physics-NE:  &GAT-Physics-NE
+  <<: *GAT-Physics
+  is_super_gat: False
+
+GAT-Physics-NEO8: &GAT-Physics-NEO8
+  <<: *GAT-Physics-NE
+  out_heads: 8
+  l2_lambda: 0.029765629158202064
+
+GAT-Physics-NEDP:
+  <<: *GAT-Physics-NE
+  attention_type: "dot_product"
+
+GAT-Physics-NEDPO8: &GAT-Physics-NEDPO8
+  <<: *GAT-Physics-NE
+  out_heads: 8
+  l2_lambda: 0.0999371693653237
+  attention_type: "dot_product"
+
+GAT-Physics-NEO8-ES: &GAT-Physics-NEO8-ES
+  <<: *GAT-Physics-NEO8
+  use_early_stop: True
+  early_stop_patience: 11
+  early_stop_queue_length: 49
+  early_stop_threshold_loss: 0.000812792374354547
+  early_stop_threshold_perf: 0.08197282639755958
+  epochs: 117
+
+GAT-Physics-NEDPO8-ES: &GAT-Physics-NEDPO8-ES
+  <<: *GAT-Physics-NEDPO8
+  use_early_stop: True
+  early_stop_patience: 11
+  early_stop_queue_length: 11
+  early_stop_threshold_loss: 0.0005112992137394861
+  early_stop_threshold_perf: 0.08345936882697434
+  epochs: 134
+
+GAT-Physics-E: &GAT-Physics-E
+  <<: *GAT-Physics
+  is_super_gat: True
+
+GAT-Physics-EV3O8: &GAT-Physics-EV3O8
+  <<: *GAT-Physics-E
+  attention_type: "scaled_dot_product"
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.5
+  att_lambda: 96.10379267783925
+  l2_lambda: 0.05119862653635244
+
+GAT-Physics-EV3O8-ES: &GAT-Physics-EV3O8-ES
+  <<: *GAT-Physics-EV3O8
+  use_early_stop: True
+  early_stop_patience: 21
+  early_stop_queue_length: 198
+  early_stop_threshold_loss: 2.8027265940789214e-05
+  early_stop_threshold_perf: 0.011636064806045515
+  epochs: 115
+
+GAT-Physics-EV13: &GAT-Physics-EV13
+  <<: *GAT-Physics-E
+  attention_type: "prob_mask_only"
+
+GAT-Physics-EV13NSO8: &GAT-Physics-EV13NSO8
+  <<: *GAT-Physics-EV13
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.3
+  att_lambda: 10.11788751569541
+  l2_lambda: 0.008492473777538388
+
+GAT-Physics-EV13NSO8-ES: &GAT-Physics-EV13NSO8-ES
+  <<: *GAT-Physics-EV13NSO8
+  use_early_stop: True
+  early_stop_patience: 161
+  early_stop_queue_length: 43
+  early_stop_threshold_loss: 0.000209173631134971
+  early_stop_threshold_perf: 2.6182944358641824e-05
+  epochs: 193
+
+
+GAT-Crocodile: &GAT-Crocodile
+  <<: *GAT
+  lr: 0.01
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+  epochs: 200
+  to_undirected_at_neg: True
+
+GCN-Crocodile-NE: &GCN-Crocodile-NE
+  <<: *GAT-Crocodile
+  model_name: LinkGCN
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.0011362690997867248
+
+SAGE-Crocodile-NE: &SAGE-Crocodile-NE
+  <<: *GAT-Crocodile
+  model_name: LinkSAGE
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.0999453377968521
+
+GCN-Crocodile-NE-ES: &GCN-Crocodile-NE-ES
+  <<: *GCN-Crocodile-NE
+  use_early_stop: True
+  early_stop_patience: 118
+  early_stop_queue_length: 101
+  early_stop_threshold_loss: 0.07116134361914002
+  early_stop_threshold_perf: 0.00023456411832721978
+  epochs: 199
+
+SAGE-Crocodile-NE-ES: &SAGE-Crocodile-NE-ES
+  <<: *SAGE-Crocodile-NE
+  use_early_stop: True
+  early_stop_patience: 13
+  early_stop_queue_length: 60
+  early_stop_threshold_loss: 0.08753180709218632
+  early_stop_threshold_perf: 0.06779564501621627
+  epochs: 177
+
+GAT-Crocodile-NE:  &GAT-Crocodile-NE
+  <<: *GAT-Crocodile
+  is_super_gat: False
+
+GAT-Crocodile-NEO8: &GAT-Crocodile-NEO8
+  <<: *GAT-Crocodile-NE
+  out_heads: 8
+  l2_lambda: 0.0417345171066258
+
+GAT-Crocodile-NEDP:
+  <<: *GAT-Crocodile-NE
+  attention_type: "dot_product"
+
+GAT-Crocodile-NEDPO8: &GAT-Crocodile-NEDPO8
+  <<: *GAT-Crocodile-NE
+  attention_type: "dot_product"
+  out_heads: 8
+  l2_lambda: 0.09961173442059988
+
+GAT-Crocodile-NEO8-ES: &GAT-Crocodile-NEO8-ES
+  <<: *GAT-Crocodile-NEO8
+  use_early_stop: True
+  early_stop_patience: 44
+  early_stop_queue_length: 61
+  early_stop_threshold_loss: 0.0018346974516173767
+  early_stop_threshold_perf: 0.048213889990288
+  epochs: 149
+
+GAT-Crocodile-NEDPO8-ES: &GAT-Crocodile-NEDPO8-ES
+  <<: *GAT-Crocodile-NEDPO8
+  use_early_stop: True
+  early_stop_patience: 19
+  early_stop_queue_length: 156
+  early_stop_threshold_loss: 0.004937356570091318
+  early_stop_threshold_perf: 0.03078634859348836
+  epochs: 178
+
+GAT-Crocodile-E: &GAT-Crocodile-E
+  <<: *GAT-Crocodile
+  is_super_gat: True
+
+GAT-Crocodile-EV3O8: &GAT-Crocodile-EV3O8
+  <<: *GAT-Crocodile-E
+  attention_type: "scaled_dot_product"
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.3
+  att_lambda: 0.08106168565881736
+  l2_lambda: 0.04601475118869809
+
+GAT-Crocodile-EV3O8-ES: &GAT-Crocodile-EV3O8-ES
+  <<: *GAT-Crocodile-EV3O8
+  use_early_stop: True
+  early_stop_patience: 33
+  early_stop_queue_length: 48
+  early_stop_threshold_loss: 0.002599381925907416
+  early_stop_threshold_perf: 0.03987846747674808
+  epochs: 160
+
+GAT-Crocodile-EV13: &GAT-Crocodile-EV13
+  <<: *GAT-Crocodile-E
+  attention_type: "prob_mask_only"
+
+GAT-Crocodile-EV13NSO8: &GAT-Crocodile-EV13NSO8
+  <<: *GAT-Crocodile-EV13
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.7
+  att_lambda: 3.188873533619511e-07
+  l2_lambda: 0.04242315772802439
+
+GAT-Crocodile-EV13NSO8-ES: &GAT-Crocodile-EV13NSO8-ES
+  <<: *GAT-Crocodile-EV13NSO8
+  use_early_stop: True
+  early_stop_patience: 18
+  early_stop_queue_length: 43
+  early_stop_threshold_loss: 0.0027725745083246158
+  early_stop_threshold_perf: 0.010656165046633812
+  epochs: 102
+
+
+GAT-Chameleon: &GAT-Chameleon
+  <<: *GAT
+  lr: 0.005
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+  epochs: 200
+  to_undirected_at_neg: True
+
+GCN-Chameleon-NE: &GCN-Chameleon-NE
+  <<: *GAT-Chameleon
+  model_name: LinkGCN
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.00010565391376932839
+
+SAGE-Chameleon-NE: &SAGE-Chameleon-NE
+  <<: *GAT-Chameleon
+  model_name: LinkSAGE
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.09925512280240852
+
+GCN-Chameleon-NE-ES: &GCN-Chameleon-NE-ES
+  <<: *GCN-Chameleon-NE
+  use_early_stop: True
+  early_stop_patience: 150
+  early_stop_queue_length: 96
+  early_stop_threshold_loss: 2.689369198824058e-05
+  early_stop_threshold_perf: 1.9665455266260006e-05
+  epochs: 199
+
+SAGE-Chameleon-NE-ES: &SAGE-Chameleon-NE-ES
+  <<: *SAGE-Chameleon-NE
+  use_early_stop: True
+  early_stop_patience: 54
+  early_stop_queue_length: 17
+  early_stop_threshold_loss: 0.04955225212699762
+  early_stop_threshold_perf: 0.03043237676098959
+  epochs: 177
+
+GAT-Chameleon-NE:  &GAT-Chameleon-NE
+  <<: *GAT-Chameleon
+  is_super_gat: False
+
+GAT-Chameleon-NEO8: &GAT-Chameleon-NEO8
+  <<: *GAT-Chameleon-NE
+  out_heads: 8
+  l2_lambda: 0.010693563130560305
+
+GAT-Chameleon-NEDP:
+  <<: *GAT-Chameleon-NE
+  attention_type: "dot_product"
+
+GAT-Chameleon-NEDPO8: &GAT-Chameleon-NEDPO8
+  <<: *GAT-Chameleon-NE
+  attention_type: "dot_product"
+  out_heads: 8
+  l2_lambda: 0.02407188411349523
+
+GAT-Chameleon-NEO8-ES: &GAT-Chameleon-NEO8-ES
+  <<: *GAT-Chameleon-NEO8
+  use_early_stop: True
+  early_stop_patience: 55
+  early_stop_queue_length: 35
+  early_stop_threshold_loss: 0.03610770355292423
+  early_stop_threshold_perf: 0.002551276539888651
+  epochs: 180
+
+GAT-Chameleon-NEDPO8-ES: &GAT-Chameleon-NEDPO8-ES
+  <<: *GAT-Chameleon-NEDPO8
+  use_early_stop: True
+  early_stop_patience: 60
+  early_stop_queue_length: 102
+  early_stop_threshold_loss: 0.045672459773569804
+  early_stop_threshold_perf: 0.033110912829380994
+  epochs: 156
+
+GAT-Chameleon-E: &GAT-Chameleon-E
+  <<: *GAT-Chameleon
+  is_super_gat: True
+
+GAT-Chameleon-EV3O8: &GAT-Chameleon-EV3O8
+  <<: *GAT-Chameleon-E
+  attention_type: "scaled_dot_product"
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.7
+  att_lambda: 0.0003994688244201682
+  l2_lambda: 0.027829265521855325
+
+GAT-Chameleon-EV3O8-ES: &GAT-Chameleon-EV3O8-ES
+  <<: *GAT-Chameleon-EV3O8
+  use_early_stop: True
+  early_stop_patience: 81
+  early_stop_queue_length: 31
+  early_stop_threshold_loss: 3.295438780204779e-05
+  early_stop_threshold_perf: 0.020502102981099116
+  epochs: 111
+
+GAT-Chameleon-EV13: &GAT-Chameleon-EV13
+  <<: *GAT-Chameleon-E
+  attention_type: "prob_mask_only"
+
+GAT-Chameleon-EV13NSO8: &GAT-Chameleon-EV13NSO8
+  <<: *GAT-Chameleon-EV13
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.5
+  att_lambda: 7.196197081101768e-08
+  l2_lambda: 0.029103852629254242
+
+GAT-Chameleon-EV13NSO8-ES: &GAT-Chameleon-EV13NSO8-ES
+  <<: *GAT-Chameleon-EV13NSO8
+  use_early_stop: True
+  early_stop_patience: 126
+  early_stop_queue_length: 188
+  early_stop_threshold_loss: 0.0014685735234148327
+  early_stop_threshold_perf: 0.0003657125294471124
+  epochs: 184
