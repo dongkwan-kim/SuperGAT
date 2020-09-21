@@ -238,6 +238,7 @@ GAT: &GAT
   model_name: GAT
   <<: *DEFAULT
 
+
 GAT-PPI: &GAT-PPI
   <<: *GAT
   model_name: GAT
