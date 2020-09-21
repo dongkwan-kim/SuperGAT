@@ -55,13 +55,18 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
         else:
             neg_edge_index = None
 
+        try:
+            edge_index = dataset.get_edge_index(batch)
+        except AttributeError:
+            edge_index = batch.edge_index
+
         # n_id: original ID of nodes in the whole sub-graph.
         # b_id: original ID of nodes in the training graph.
         # sub_b_id: sampled ID of nodes in the training graph.
         # Forward
         outputs = model(
             data.x[batch.n_id].to(device),
-            batch.edge_index.to(device),
+            edge_index.to(device),
             neg_edge_index=neg_edge_index,
         )  # [#(n_id), #class]
 
@@ -86,7 +91,7 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
             loss = LinkGNN.mix_reconstruction_loss_with_pretraining(
                 loss=loss,
                 model=model,
-                edge_index=batch.edge_index,
+                edge_index=edge_index,
                 mixing_weight=_args.link_lambda,
                 edge_sampling_ratio=_args.edge_sampling_ratio,
                 criterion=None,
@@ -146,11 +151,15 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     outputs_list, ys_list = [], []
 
     for batch_id, batch in enumerate(loader):
+        try:
+            edge_index = dataset.get_edge_index(batch)
+        except AttributeError:
+            edge_index = batch.edge_index
         # n_id: original ID of nodes in the whole sub-graph.
         # b_id: original ID of nodes in the training graph.
         # sub_b_id: sampled ID of nodes in the training graph.
         # cprint(f"{val_or_test}: {batch_id}, {batch}", "green")  # todo
-        outputs = model(data.x[batch.n_id].to(device), batch.edge_index.to(device))  # [#(n_id), #class]
+        outputs = model(data.x[batch.n_id].to(device), edge_index.to(device))  # [#(n_id), #class]
 
         batch_node_id, batch_y = batch.sub_b_id, data.y[batch.b_id]
         batch_node_out = outputs[batch_node_id.to(device)]
