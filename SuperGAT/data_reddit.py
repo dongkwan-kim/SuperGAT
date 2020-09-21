@@ -40,7 +40,7 @@ class MyReddit(InMemoryDataset):
 
     def __init__(self, root,
                  size: List[int], batch_size: int,
-                 neg_sample_ratio: float, num_neg_batches=3,
+                 neg_sample_ratio: float, num_neg_batches=4,
                  num_version: int = 2, shuffle=True,
                  transform=None, pre_transform=None, pre_filter=None,
                  use_test=False, **kwargs):
@@ -125,7 +125,7 @@ class MyReddit(InMemoryDataset):
             drop_last=True,
         )
         _batch_list = []
-        # batch: Data(b_id=[2048], edge_index=[2, 197955], n_id=[99638], neg_idx=[296932], sub_b_id=[2048])
+        # batch: Data(b_id=[1024], edge_index=[2, 197955], n_id=[99638], neg_idx=[296932], sub_b_id=[1024])
         for _i in trange(self.num_version):
 
             if not self.use_test:
@@ -136,6 +136,7 @@ class MyReddit(InMemoryDataset):
             if _i == 0:
                 torch.save(len(_batch_list), self.processed_paths[2])
                 print("... #batches is {}".format(len(_batch_list)))
+                print("... example is {}".format(_batch_list[0]))
 
         torch.save(self.collate(_batch_list), self.processed_paths[1])
 
@@ -146,13 +147,21 @@ class MyReddit(InMemoryDataset):
     def compress(data):
         num_nodes = data.n_id.size(0)
         data.neg_idx = data.neg_edge_index[0] * num_nodes + data.neg_edge_index[1]
+        data.idx = data.edge_index[0] * num_nodes + data.edge_index[1]
+        del data.edge_index
         del data.neg_edge_index
         del data.e_id
         return data
 
+    def get_edge_index(self, data):
+        num_nodes = data.n_id.size(0)
+        idx = data.idx
+        edge_index = torch.stack([idx / num_nodes, idx % num_nodes], dim=0)
+        return edge_index
+
     def get_neg_edge_index(self, data):
         num_nodes = data.n_id.size(0)
-        num_neg_edges = int(data.edge_index.size(1) * self.neg_sample_ratio)
+        num_neg_edges = int(data.idx.size(0) * self.neg_sample_ratio)
         perm = torch.randperm(data.neg_idx.size(0))
         idx = data.neg_idx[perm]
         idx = idx[:num_neg_edges]
@@ -195,7 +204,7 @@ class MyReddit(InMemoryDataset):
 
 if __name__ == '__main__':
 
-    MODE = "5_2048"
+    MODE = "35_1024"
 
     kw = dict(
         neg_sample_ratio=0.5,
@@ -210,25 +219,53 @@ if __name__ == '__main__':
             use_test=True,
             **kw,
         )
-    elif MODE == "5_2048":
+    elif MODE == "5_1024":
         mr = MyReddit(
             "~/graph-data/reddit",
             size=[5, 5],
-            batch_size=2048,
+            batch_size=1024,
             **kw,
         )
-    elif MODE == "10_2048":
+    elif MODE == "10_1024":
         mr = MyReddit(
             "~/graph-data/reddit",
             size=[10, 10],
-            batch_size=2048,
+            batch_size=1024,
             **kw,
         )
-    elif MODE == "20_2048":
+    elif MODE == "15_1024":
+        mr = MyReddit(
+            "~/graph-data/reddit",
+            size=[15, 15],
+            batch_size=1024,
+            **kw,
+        )
+    elif MODE == "20_1024":
         mr = MyReddit(
             "~/graph-data/reddit",
             size=[20, 20],
-            batch_size=2048,
+            batch_size=1024,
+            **kw,
+        )
+    elif MODE == "25_1024":
+        mr = MyReddit(
+            "~/graph-data/reddit",
+            size=[25, 25],
+            batch_size=1024,
+            **kw,
+        )
+    elif MODE == "30_1024":
+        mr = MyReddit(
+            "~/graph-data/reddit",
+            size=[30, 30],
+            batch_size=1024,
+            **kw,
+        )
+    elif MODE == "35_1024":
+        mr = MyReddit(
+            "~/graph-data/reddit",
+            size=[35, 35],
+            batch_size=1024,
             **kw,
         )
     else:
@@ -237,8 +274,8 @@ if __name__ == '__main__':
     print(mr.data_xy)
     for i, b in enumerate(mr):
         print(i, "/", b)
-        ei = b.edge_index
+        ei = mr.get_edge_index(b)
         nei = mr.get_neg_edge_index(b)
-        print(ei.min(), ei.max())
-        print(nei.min(), nei.max())
+        print(ei.size(), ei.min(), ei.max())
+        print(nei.size(), nei.min(), nei.max())
         break
