@@ -3,7 +3,7 @@ from collections import defaultdict, OrderedDict
 from pprint import pprint
 from typing import List, Dict, Tuple
 from datetime import datetime
-from itertools import chain
+from itertools import chain, product
 import os
 import re
 import multiprocessing as mp
@@ -77,7 +77,16 @@ def _get_h_of_one_node_numpy_global(node_id, num_labels):
     return _get_h_of_one_node_numpy(node_id, EDGE_INDEX, e_j, Y, num_labels)
 
 
-def get_homophily(edge_index, y, use_multiprocessing=False):
+def get_homophily_from_list(edge_index_list, y_list, use_multiprocessing):
+    h_tensor_list = []
+    for i, (_ei, _y) in enumerate(zip(edge_index_list, y_list)):
+        _ei = _ei - _ei.min()  # zero-based index
+        h_tensor = get_homophily(_ei, _y, use_multiprocessing, verbose=(i == 0))
+        h_tensor_list.append(h_tensor)
+    return torch.cat(h_tensor_list)
+
+
+def get_homophily(edge_index, y, use_multiprocessing=False, verbose=True):
     y = y.squeeze()
     try:
         num_labels = y.size(1)  # multi-labels
@@ -86,7 +95,8 @@ def get_homophily(edge_index, y, use_multiprocessing=False):
         num_labels = 1
         use_numpy = True
 
-    cprint(f"use_numpy: {use_numpy} / use_mp: {use_multiprocessing}", "green")
+    if verbose:
+        cprint(f"use_numpy: {use_numpy} / use_mp: {use_multiprocessing}", "green")
 
     if use_numpy and not use_multiprocessing:
         edge_index, y = edge_index.numpy(), y.numpy()
@@ -110,42 +120,66 @@ def get_homophily(edge_index, y, use_multiprocessing=False):
             _get_h_of_one_node_numpy_global,
             [(node_id, num_labels) for node_id in range(y.shape[0])],
         )
+        pool.close()
     return torch.as_tensor(h_list)
 
 
 def get_degree_and_homophily(dataset_class, dataset_name, data_root,
-                             use_multiprocessing=False, **kwargs) -> np.ndarray:
+                             use_multiprocessing=False, use_loader=False, **kwargs) -> np.ndarray:
     """
     :param dataset_class: str
     :param dataset_name: str
     :param data_root: str
     :param use_multiprocessing:
+    :param use_loader:
     :return: np.ndarray the shape of which is [N, 2] (degree, homophily) for Ns
     """
     print(f"{dataset_class} / {dataset_name} / {data_root}")
-    train_d, val_d, test_d = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42, **kwargs)
+
+    _data_attr = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42, **kwargs)
+    val_d, test_d, train_loader, eval_loader = None, None, None, None
+    if not use_loader:
+        train_d, val_d, test_d = _data_attr
+    else:
+        train_d, train_loader, eval_loader = _data_attr
+
     if dataset_name in ["PPI", "WebKB4Univ", "CLUSTER"]:
         cum_sum = 0
-        x_list, y_list, edge_index_list = [], [], []
+        y_list, edge_index_list = [], []
         for _data in chain(train_d, val_d, test_d):
-            x_list.append(_data.x)
             y_list.append(_data.y)
             edge_index_list.append(_data.edge_index + cum_sum)
-            cum_sum += _data.x.size(0)
-        x = torch.cat(x_list, dim=0)
+            cum_sum += _data.y.size(0)
         y = torch.cat(y_list, dim=0)
         edge_index = torch.cat(edge_index_list, dim=1)
-        try:
-            num_labels = y.size(1)  # multi-labels
-        except IndexError:
-            num_labels = 1
+
+    elif use_loader and dataset_name in ["Reddit"]:
+        cum_sum = 0
+        y_list, edge_index_list = [], []
+        data = train_d[0]
+        for _data in chain(
+                train_loader(data.train_mask),
+                eval_loader(data.val_mask),
+                eval_loader(data.test_mask),
+        ):
+            y_list.append(data.y[_data.n_id])
+            edge_index_list.append(_data.edge_index + cum_sum)
+            cum_sum += _data.n_id.size(0)
+        y = torch.cat(y_list, dim=0)
+        edge_index = torch.cat(edge_index_list, dim=1)
+        cprint(f"Edges: {edge_index.size()}, Y: {y.size()}", "yellow")
+
     else:
         data = train_d[0]
-        x, y, edge_index = data.x, data.y, data.edge_index
-        num_labels = 1
+        y_list, edge_index_list = None, None
+        y, edge_index = data.y, data.edge_index
 
-    deg = degree(edge_index[0], num_nodes=x.size(0))
-    homophily = get_homophily(edge_index, y, use_multiprocessing=use_multiprocessing)
+    deg = degree(edge_index[0], num_nodes=y.size(0))
+    if y_list is None:
+        homophily = get_homophily(edge_index, y, use_multiprocessing=use_multiprocessing)
+    else:
+        homophily = get_homophily_from_list(edge_index_list, y_list, use_multiprocessing)
+
     degree_and_homophily = []
     for _deg, _hom in zip(deg, homophily):
         _deg, _hom = int(_deg), float(_hom)
@@ -170,6 +204,18 @@ def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
             data_root="~/graph-data", use_multiprocessing=True, size=[10, 5], num_hops=2,
         )
         dn_to_dg_and_h["Reddit"] = degree_and_homophily
+
+    if "Reddit-Loader" in targets:
+        size_list = [[25, 25], [20, 20], [15, 15], [10, 10], [5, 5]]
+        batch_size_list = [2048]
+        for _batch_size, _size in product(batch_size_list, size_list):
+            print(f"batch_size: {_batch_size}, size: {_size}")
+            degree_and_homophily = get_degree_and_homophily(
+                "Reddit", "Reddit", data_root="~/graph-data",
+                use_multiprocessing=True, use_loader=True,
+                batch_size=_batch_size, size=_size, num_hops=2,
+            )
+            dn_to_dg_and_h[f"Reddit_{_batch_size}_{s_join('_', _size)}"] = degree_and_homophily
 
     if "Squirrel" in targets:
         degree_and_homophily = get_degree_and_homophily("Squirrel", "Squirrel", data_root="~/graph-data")
@@ -644,7 +690,7 @@ if __name__ == '__main__':
                 print("Done: {}".format(main_kwargs["dataset_name"]))
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["MyCoauthor"])
+        analyze_degree_and_homophily(["Reddit-Loader"])
         # analyze_degree_and_homophily(["ogbn-arxiv"])
 
     else:
