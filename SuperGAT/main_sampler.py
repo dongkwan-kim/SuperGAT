@@ -18,6 +18,7 @@ from sklearn.metrics import f1_score
 
 from arguments import get_important_args, save_args, get_args, pprint_args, get_args_key
 from data import getattr_d, get_dataset_or_loader
+from data_saint import DisjointGraphSAINTRandomWalkSampler
 from main import _get_model_cls, load_model, save_model, save_loss_and_perf_plot, summary_results
 from model import SuperGATNet, LargeSuperGATNet
 from model_baseline import LinkGNN, CGATNet
@@ -56,24 +57,38 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
             neg_edge_index = None
 
         try:
-            edge_index = dataset.get_edge_index(batch)
+            edge_index = dataset.get_edge_index(batch).to(device)
         except AttributeError:
-            edge_index = batch.edge_index
+            edge_index = batch.edge_index.to(device)
+
+        try:
+            x = data.x[batch.n_id].to(device)
+        except AttributeError:
+            x = batch.x.to(device)
+
+        try:
+            out_mask = batch.sub_b_id.to(device)
+        except AttributeError:
+            out_mask = batch.train_mask.to(device)
+
+        try:
+            y_masked = data.y.squeeze()[batch.b_id].to(device)
+        except AttributeError:
+            y_masked = batch.y[batch.train_mask].to(device)
 
         # n_id: original ID of nodes in the whole sub-graph.
         # b_id: original ID of nodes in the training graph.
         # sub_b_id: sampled ID of nodes in the training graph.
         # Forward
         outputs = model(
-            data.x[batch.n_id].to(device),
-            edge_index.to(device),
+            x,
+            edge_index,
             neg_edge_index=neg_edge_index,
         )  # [#(n_id), #class]
 
         # Loss
-        loss = criterion(outputs[batch.sub_b_id.to(device)],
-                         data.y.squeeze()[batch.b_id].to(device))
-        num_samples = batch.b_id.size(0)
+        loss = criterion(outputs[out_mask], y_masked)
+        num_samples = y_masked.size(0)
 
         # Supervision Loss w/ pretraining
         if _args.is_super_gat and _args.att_lambda > 0:
@@ -140,10 +155,17 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     else:
         raise TypeError
 
-    if val_or_test == "val":
-        loader = _loader(data.val_mask)
-    else:
-        loader = _loader(data.test_mask)
+    try:
+        if val_or_test == "val":
+            loader = _loader(data.val_mask)
+        else:
+            loader = _loader(data.test_mask)
+    except TypeError:
+        loader: DisjointGraphSAINTRandomWalkSampler = _loader
+        if val_or_test == "val":
+            loader.set_mask(data.val_mask)
+        else:
+            loader.set_mask(data.test_mask)
 
     num_classes = getattr_d(dataset, "num_classes")
 
@@ -151,24 +173,45 @@ def test_model(device, model, dataset_or_loader, criterion, _args, val_or_test="
     outputs_list, ys_list = [], []
 
     for batch_id, batch in enumerate(loader):
-        try:
-            edge_index = dataset.get_edge_index(batch)
-        except AttributeError:
-            edge_index = batch.edge_index
+        # Neighbor sampling
         # n_id: original ID of nodes in the whole sub-graph.
         # b_id: original ID of nodes in the training graph.
         # sub_b_id: sampled ID of nodes in the training graph.
-        # cprint(f"{val_or_test}: {batch_id}, {batch}", "green")  # todo
-        outputs = model(data.x[batch.n_id].to(device), edge_index.to(device))  # [#(n_id), #class]
 
-        batch_node_id, batch_y = batch.sub_b_id, data.y[batch.b_id]
-        batch_node_out = outputs[batch_node_id.to(device)]
+        # RW sampling
+        # x, y, mask, edge_index
+        try:
+            edge_index = dataset.get_edge_index(batch).to(device)
+        except AttributeError:
+            edge_index = batch.edge_index.to(device)
 
-        loss = criterion(batch_node_out, batch_y.to(device))
-        total_loss += loss.item() / batch.sub_b_id.size(0)
+        try:
+            x = data.x[batch.n_id].to(device)
+        except AttributeError:
+            x = batch.x.to(device)
+
+        try:
+            out_mask = batch.sub_b_id.to(device)
+        except AttributeError:
+            if val_or_test == "val":
+                out_mask = batch.val_mask.to(device)
+            else:
+                out_mask = batch.test_mask.to(device)
+
+        try:
+            y_masked = data.y.squeeze()[batch.b_id].to(device)
+        except AttributeError:
+            y_masked = batch.y[out_mask].to(device)
+
+        outputs = model(x, edge_index)  # [#(n_id), #class]
+
+        batch_node_out = outputs[out_mask]
+
+        loss = criterion(batch_node_out, y_masked)
+        total_loss += loss.item() / y_masked.size(0)
 
         outputs_ndarray = batch_node_out.cpu().numpy()
-        ys_ndarray = to_one_hot(batch_y, num_classes)
+        ys_ndarray = to_one_hot(y_masked, num_classes)
         outputs_list.append(outputs_ndarray)
         ys_list.append(ys_ndarray)
 
