@@ -12,6 +12,7 @@ from torch_geometric.data import (InMemoryDataset, Data, download_url,
 from tqdm import trange
 
 from data_sampler import MyNeighborSampler
+from data_saint import GraphSAINTRandomWalkSampler, MyGraphSAINTRandomWalkSampler
 from utils import s_join, create_hash
 
 
@@ -42,6 +43,7 @@ class MyReddit(InMemoryDataset):
                  size: List[int], batch_size: int,
                  neg_sample_ratio: float, num_neg_batches=4,
                  num_version: int = 2, shuffle=True,
+                 sampler_type="walk",
                  transform=None, pre_transform=None, pre_filter=None,
                  use_test=False, **kwargs):
         self.batch_size = batch_size
@@ -50,6 +52,7 @@ class MyReddit(InMemoryDataset):
         self.num_neg_batches = num_neg_batches
         self.num_version = num_version
         self.shuffle = shuffle
+        self.sampler_type = sampler_type
         self.use_test = use_test
 
         super(MyReddit, self).__init__(root, transform, pre_transform, pre_filter)
@@ -69,7 +72,7 @@ class MyReddit(InMemoryDataset):
 
     @property
     def important_args(self):
-        return [self.sampling_size, self.batch_size,
+        return [self.sampler_type, self.sampling_size, self.batch_size,
                 self.neg_sample_ratio, self.num_neg_batches, self.num_version]
 
     @property
@@ -118,25 +121,50 @@ class MyReddit(InMemoryDataset):
         data.test_mask = split == 3
 
         print("Now batch sampling...")
-        _loader = MyNeighborSampler(
-            data=data, batch_size=self.batch_size, bipartite=False, shuffle=True,
-            size=self.sampling_size, num_hops=len(self.sampling_size),
-            use_negative_sampling=True, neg_sample_ratio=self.total_neg_sample_ratio,
-            drop_last=True,
-        )
         _batch_list = []
-        # batch: Data(b_id=[1024], edge_index=[2, 197955], n_id=[99638], neg_idx=[296932], sub_b_id=[1024])
-        for _i in trange(self.num_version):
+        if self.sampler_type == "walk":
+            num_steps = int(data.train_mask.sum() // self.batch_size)
+            _loader = MyGraphSAINTRandomWalkSampler(
+                data=data, batch_size=self.batch_size,
+                walk_length=len(self.sampling_size),
+                num_steps=num_steps,
+                sample_coverage=100,
+                save_dir=self.processed_dir,
+                use_negative_sampling=True, neg_sample_ratio=self.total_neg_sample_ratio,
+            )
+            # Data(edge_index=[2, 94], neg_edge_index=[2, 188], test_mask=[48], train_mask=[48], val_mask=[48],
+            #      x=[48, 602], y=[48])
+            for _i in trange(self.num_version):
 
-            if not self.use_test:
-                _batch_list += [self.compress(_b) for _b in _loader(data.train_mask)]
-            else:
-                _batch_list += [self.compress(_b) for (_, _b) in zip(range(4), _loader(data.train_mask))]  # len = 4
+                if not self.use_test:
+                    _batch_list += [self.compress(_b) for _b in _loader]
+                else:
+                    _batch_list += [self.compress(_b) for (_, _b) in zip(range(4), _loader)]  # len = 4
 
-            if _i == 0:
-                torch.save(len(_batch_list), self.processed_paths[2])
-                print("... #batches is {}".format(len(_batch_list)))
-                print("... example is {}".format(_batch_list[0]))
+                if _i == 0:
+                    torch.save(len(_batch_list), self.processed_paths[2])
+                    print("... #batches is {}".format(num_steps))
+                    print("... example is {}".format(_batch_list[0]))
+
+        else:
+            _loader = MyNeighborSampler(
+                data=data, batch_size=self.batch_size, bipartite=False, shuffle=True,
+                size=self.sampling_size, num_hops=len(self.sampling_size),
+                use_negative_sampling=True, neg_sample_ratio=self.total_neg_sample_ratio,
+                drop_last=True,
+            )
+            # batch: Data(b_id=[8192], edge_index=[2, 197955], n_id=[99638], neg_idx=[296932], sub_b_id=[8192])
+            for _i in trange(self.num_version):
+
+                if not self.use_test:
+                    _batch_list += [self.compress(_b) for _b in _loader(data.train_mask)]
+                else:
+                    _batch_list += [self.compress(_b) for (_, _b) in zip(range(4), _loader(data.train_mask))]  # len = 4
+
+                if _i == 0:
+                    torch.save(len(_batch_list), self.processed_paths[2])
+                    print("... #batches is {}".format(len(_batch_list)))
+                    print("... example is {}".format(_batch_list[0]))
 
         torch.save(self.collate(_batch_list), self.processed_paths[1])
 
@@ -144,23 +172,39 @@ class MyReddit(InMemoryDataset):
         torch.save(data, self.processed_paths[0])
 
     @staticmethod
+    def get_num_nodes(data):
+        try:
+            num_nodes = data.n_id.size(0)
+        except AttributeError:
+            num_nodes = data.x.size(0)
+        return num_nodes
+
+    @staticmethod
+    def s_del(data, attr):
+        o = getattr(data, attr, None)
+        if o is not None:
+            del o
+
+    @staticmethod
     def compress(data):
-        num_nodes = data.n_id.size(0)
+        num_nodes = MyReddit.get_num_nodes(data)
         data.neg_idx = data.neg_edge_index[0] * num_nodes + data.neg_edge_index[1]
         data.idx = data.edge_index[0] * num_nodes + data.edge_index[1]
         del data.edge_index
         del data.neg_edge_index
-        del data.e_id
+        MyReddit.s_del(data, "e_id")
+        MyReddit.s_del(data, "val_mask")
+        MyReddit.s_del(data, "test_mask")
         return data
 
     def get_edge_index(self, data):
-        num_nodes = data.n_id.size(0)
+        num_nodes = MyReddit.get_num_nodes(data)
         idx = data.idx
         edge_index = torch.stack([idx / num_nodes, idx % num_nodes], dim=0)
         return edge_index
 
     def get_neg_edge_index(self, data):
-        num_nodes = data.n_id.size(0)
+        num_nodes = MyReddit.get_num_nodes(data)
         num_neg_edges = int(data.idx.size(0) * self.neg_sample_ratio)
         perm = torch.randperm(data.neg_idx.size(0))
         idx = data.neg_idx[perm]
@@ -199,12 +243,12 @@ class MyReddit(InMemoryDataset):
         return y.max().item() + 1 if y.dim() == 1 else y.size(1)
 
     def __repr__(self):
-        return '{}(ss={}, bs={}, nsr={}, nv={})'.format(self.__class__.__name__, *self.important_args)
+        return '{}(smp={}, ss={}, bs={}, nsr={}, nv={})'.format(self.__class__.__name__, *self.important_args)
 
 
 if __name__ == '__main__':
 
-    MODE = "35_1024"
+    MODE = "WALK_4096"
 
     kw = dict(
         neg_sample_ratio=0.5,
@@ -219,59 +263,25 @@ if __name__ == '__main__':
             use_test=True,
             **kw,
         )
-    elif MODE == "5_1024":
+    elif MODE == "WALK_4096":
         mr = MyReddit(
             "~/graph-data/reddit",
             size=[5, 5],
-            batch_size=1024,
+            batch_size=4096,
             **kw,
         )
-    elif MODE == "10_1024":
+    elif MODE == "WALK_8192":
         mr = MyReddit(
             "~/graph-data/reddit",
-            size=[10, 10],
-            batch_size=1024,
-            **kw,
-        )
-    elif MODE == "15_1024":
-        mr = MyReddit(
-            "~/graph-data/reddit",
-            size=[15, 15],
-            batch_size=1024,
-            **kw,
-        )
-    elif MODE == "20_1024":
-        mr = MyReddit(
-            "~/graph-data/reddit",
-            size=[20, 20],
-            batch_size=1024,
-            **kw,
-        )
-    elif MODE == "25_1024":
-        mr = MyReddit(
-            "~/graph-data/reddit",
-            size=[25, 25],
-            batch_size=1024,
-            **kw,
-        )
-    elif MODE == "30_1024":
-        mr = MyReddit(
-            "~/graph-data/reddit",
-            size=[30, 30],
-            batch_size=1024,
-            **kw,
-        )
-    elif MODE == "35_1024":
-        mr = MyReddit(
-            "~/graph-data/reddit",
-            size=[35, 35],
-            batch_size=1024,
+            size=[5, 5],
+            batch_size=8192,
             **kw,
         )
     else:
         raise ValueError
 
-    print(mr.data_xy)
+    print("xy", mr.data_xy)
+    print("data", mr.data)
     for i, b in enumerate(mr):
         print(i, "/", b)
         ei = mr.get_edge_index(b)

@@ -24,6 +24,7 @@ from tqdm import tqdm
 import ogb
 from ogb.nodeproppred import PygNodePropPredDataset
 
+from data_saint import MyGraphSAINTRandomWalkSampler, DisjointGraphSAINTRandomWalkSampler
 from data_sampler import MyNeighborSampler
 from data_syn import RandomPartitionGraph
 from data_transform_digitize import DigitizeY
@@ -681,12 +682,28 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
 
     elif dataset_class in ["MyReddit"]:
         root = os.path.join(root, "reddit")
-        loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs(cls=MyNeighborSampler, **kwargs)
-        dataset = dataset_cls(root=root, batch_size=batch_size, **kwargs)
-        eval_loader = MyNeighborSampler(
-            data=dataset.data_xy, batch_size=batch_size, bipartite=False, shuffle=False,
-            use_negative_sampling=False, **loader_kwargs,
-        )
+        if "NeighborSampler" in sampler:  # MyNeighborSampler, NeighborSampler
+            loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs(cls=MyNeighborSampler, **kwargs)
+            dataset = dataset_cls(root=root, batch_size=batch_size, **kwargs)
+            eval_loader = MyNeighborSampler(
+                data=dataset.data_xy, batch_size=batch_size, bipartite=False, shuffle=False,
+                use_negative_sampling=False, **loader_kwargs,
+            )
+
+        elif "SAINT" in sampler:
+            dataset = dataset_cls(
+                root=root, batch_size=batch_size,
+                size=kwargs["size"],
+                neg_sample_ratio=kwargs["neg_sample_ratio"],
+            )
+            eval_loader = NeighborSampler(
+                data=dataset.data_xy, batch_size=batch_size, bipartite=False, shuffle=False,
+                num_hops=len(kwargs["size"]), size=kwargs["size"],
+            )
+
+        else:
+            raise NotImplementedError
+
         return dataset, dataset, eval_loader
 
     elif dataset_class in ["WikiCS"]:
@@ -812,11 +829,14 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
             print_l(train_loader(full_dataset[0].train_mask), "[Train Loader]")
             print_l(eval_loader(full_dataset[0].val_mask), "[Eval Loader] ")
             print_d(full_dataset, "[Dataset]")
-        elif isinstance(_dl[0], MyReddit):
+        elif isinstance(_dl[0], MyReddit) and _dl[0].sampler_type != "walk":
             full_dataset, train_loader, eval_loader = _dl
             print_l(train_loader, "[Train Loader]")
             print_l(eval_loader(full_dataset.val_mask), "[Eval Loader] ")
             print_d(full_dataset, "[Dataset]")
+        elif isinstance(_dl[0], MyReddit) and _dl[0].sampler_type == "walk":
+            full_dataset, train_loader, eval_loader = _dl
+            print_l(train_loader, "[Loader]")
         else:
             train_d, val_d, test_d = _dl
             print_d(train_d, "[Train]")
@@ -828,8 +848,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
-    _test_data("MyReddit", "MyReddit", '~/graph-data', batch_size=512,
-               size=[2, 2], num_hops=2, neg_sample_ratio=0.5, num_version=5)
+    _test_data("MyReddit", "MyReddit", '~/graph-data', batch_size=4096,
+               sampler="GraphSAINTRandomWalkSampler",
+               size=[5, 5], num_hops=2, neg_sample_ratio=0.5, num_version=2)
     exit()
     _test_data("Reddit", "Reddit", '~/graph-data', batch_size=512,
                sampler="MyNeighborSampler", size=[15, 10], num_hops=2, neg_sample_ratio=0.5)
