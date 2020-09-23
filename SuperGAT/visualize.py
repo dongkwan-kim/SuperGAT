@@ -43,7 +43,10 @@ def plot_line_with_std(tuple_to_mean_list, tuple_to_std_list, x_label, y_label, 
                        args=None, custom_key="", extension="png", **kwargs):
     pd_data = {x_label: [], y_label: [], **{name_label: [] for name_label in name_label_list}}
     for name_tuple, mean_list in tuple_to_mean_list.items():
-        std_list = tuple_to_std_list[name_tuple]
+        if tuple_to_std_list is not None:
+            std_list = tuple_to_std_list[name_tuple]
+        else:
+            std_list = [0 for _ in range(len(mean_list))]
         for x, mean, std in zip(x_list, mean_list, std_list):
             for name_label, value_of_name in zip(name_label_list, name_tuple):
                 pd_data[name_label] += [value_of_name for _ in range(n)]
@@ -70,6 +73,7 @@ def plot_line_with_std(tuple_to_mean_list, tuple_to_std_list, x_label, y_label, 
     if not use_ylabel:
         plot.set_axis_labels(y_var="")
     plot.savefig(path_and_name, bbox_inches='tight')
+    print("Saved at: {}".format(path_and_name))
     plt.clf()
 
 
@@ -141,9 +145,10 @@ def plot_scatter(xs, ys, hues, xlabel, ylabel, hue_name, custom_key, extension="
 
 def plot_scatter_with_varying_options(
         df, x, y, hue_and_style, size, custom_key,
+        palette="Set1",
         markers=None,
-        hue_order=None,
-        alpha=0.6, extension="png",
+        hue_and_style_order=None,
+        alpha=0.7, extension="png",
         **kwargs,
 ):
     """
@@ -151,13 +156,16 @@ def plot_scatter_with_varying_options(
     Source of markers: matplotlib.org/2.0.2/api/markers_api.html
     """
     plot = sns.relplot(x=x, y=y, style=hue_and_style, hue=hue_and_style, size=size,
-                       sizes=(25, 250), alpha=alpha, palette="Set1",
-                       style_order=hue_order,
+                       sizes=(40, 400), alpha=alpha, palette=palette,
+                       hue_order=hue_and_style_order,
+                       style_order=hue_and_style_order,
                        markers=markers,
                        height=6, data=df, **kwargs)
     key, path = _get_key_and_makedirs(no_args_key=custom_key, base_path="../figs")
 
     path_and_name = "{}/fig_scatter_{}_{}_{}_{}_{}.{}".format(path, key, x, y, hue_and_style, size, extension)
+    if "%" in path_and_name:
+        path_and_name = path_and_name.replace("%", "percent")
     plt.savefig(path_and_name, bbox_inches='tight')
     plt.clf()
 

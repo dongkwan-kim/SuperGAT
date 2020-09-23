@@ -178,42 +178,67 @@ def visualize_best_rpg_meta(degree_list, homophily_list, legend_list, custom_key
         degree_list, homophily_list, legend_list, custom_key_list, model_list,
     )
     table = [[d, h, *nan_to_v(meta.values())] for (d, h), meta in best_rpg_meta.items()]
-    columns = ["Degree", "Homophily", "Model", "Second", "Abs. Gain (%p)", "Rel. Gain (%)",
+    columns = ["Avg. Degree", "Homophily", "Model", "Second", "Abs. Gain (%p)", "Rel. Gain (%)",
                "p-value (MX/SD)", "p-value (SuperGAT/GAT)"]
     df = pd.DataFrame(table, columns=columns)
 
     # Change Model with non-significance to Any.
-    df.loc[df["p-value (MX/SD)"] >= p_value_thres, "Model"] = "Any-SuperGAT"
-    df.loc[df["p-value (SuperGAT/GAT)"] >= p_value_thres, "Model"] = "Any-GAT"
+    df.loc[df["p-value (MX/SD)"] >= p_value_thres, "Model"] = "SuperGAT-Any"
+    df.loc[df["p-value (SuperGAT/GAT)"] >= p_value_thres, "Model"] = "GAT-Any"
+
+    # Add prefix
+    df["Model"] = "Syn-" + df["Model"]
 
     real_world_df = pd.DataFrame([
-        [1.83, 0.16, "Real-World", "", 10, 10, 10, 10],
+        [15.85, 0.21, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [2.78, 0.72, 'Real-GAT-Any', '', 6, 10, 0, 0],
+        [35.76, 0.81, 'Real-GAT-Any', '', 6, 10, 0, 0],
+        [3.9, 0.83, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [6.41, 0.59, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [5.45, 0.81, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [15.48, 0.26, 'Real-GAT-Any', '', 6, 10, 0, 0],
+        [8.93, 0.83, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [5.97, 0.81, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        # VALUE!
+        [1.83, 0.16, 'Real-SuperGAT-SD', '', 6, 10, 0, 0],
+        [7.68, 0.63, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [31.13, 0.85, 'Real-GAT-Any', '', 6, 10, 0, 0],
+        [14.38, 0.91, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [28, 0.17, 'Real-SuperGAT-SD', '', 6, 10, 0, 0],
+        [4.5, 0.79, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [26.4, 0.68, 'Real-SuperGAT-Any', '', 6, 10, 0, 0],
     ], columns=columns)
 
     df = df.append(real_world_df)
 
-    df["Degree (Log10)"] = np.log10(df["Degree"])
+    df["Avg. Degree (Log10)"] = np.log10(df["Avg. Degree"])
 
+    # https://matplotlib.org/3.1.0/gallery/color/named_colors.html
     kwargs = dict(
-        hue_order=["SuperGAT-MX", "SuperGAT-SD", "Any-SuperGAT", "Any-GAT", "Real-World"],
-        markers=["o", "o", "o", "o", "X"],
-        custom_key="best_rpg_meta", extension="png",
+        hue_and_style_order=["Syn-SuperGAT-MX", "Syn-SuperGAT-SD", "Syn-SuperGAT-Any", "Syn-GAT-Any",
+                             "Real-SuperGAT-MX", "Real-SuperGAT-SD", "Real-SuperGAT-Any", "Real-GAT-Any"],
+        markers=["s", "s", "s", "s",
+                 "^", "v", "X", "P"],
+        palette=["cornflowerblue", "lightpink", "plum", "gray",
+                 "midnightblue", "crimson", "indigo", "black"],
+        custom_key="best_rpg_meta",
+        extension="pdf",
     )
 
     plot_scatter_with_varying_options(
-        df, x="Degree (Log10)", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
+        df, x="Avg. Degree (Log10)", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
         **kwargs
     )
     plot_scatter_with_varying_options(
-        df, x="Degree (Log10)", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
+        df, x="Avg. Degree (Log10)", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
         **kwargs
     )
     plot_scatter_with_varying_options(
-        df, x="Degree", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
+        df, x="Avg. Degree", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
         **kwargs
     )
     plot_scatter_with_varying_options(
-        df, x="Degree", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
+        df, x="Avg. Degree", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
         **kwargs
     )
 
@@ -541,7 +566,7 @@ if __name__ == '__main__':
     legend_list = ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"]
     custom_key_list = ["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"]
 
-    MODE = "analyze_rpg_by_degree_and_homophily_part_by_part_first_diff"
+    MODE = "visualize_best_rpg_meta"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "visualize_best_rpg_meta":
