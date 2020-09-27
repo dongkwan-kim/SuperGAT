@@ -16,9 +16,9 @@ from tqdm import tqdm, trange
 from arguments import get_args, pprint_args, pdebug_args
 from data import get_dataset_or_loader, get_agreement_dist
 from main import run, run_with_many_seeds, summary_results, run_with_many_seeds_with_gpu
-from utils import blind_other_gpus, sigmoid, get_entropy_tensor_by_iter, get_kld_tensor_by_iter, s_join
+from utils import blind_other_gpus, sigmoid, get_entropy_tensor_by_iter, get_kld_tensor_by_iter, s_join, create_hash
 from visualize import plot_graph_layout, _get_key, plot_multiple_dist, _get_key_and_makedirs, plot_line_with_std, \
-    plot_scatter
+    plot_scatter, plot_dist, plot_pair_dist
 from layer import negative_sampling, SuperGAT
 
 import torch
@@ -188,131 +188,261 @@ def get_degree_and_homophily(dataset_class, dataset_name, data_root,
     return np.asarray(degree_and_homophily)
 
 
-def analyze_degree_and_homophily(targets=None, extension="png", **data_kwargs):
-    dn_to_dg_and_h = OrderedDict()
-    targets = targets or [
-        "Reddit",
-        "Crocodile", "Squirrel", "Chameleon",
-        "MyCitationFull", "MyCoauthor", "MyAmazon",
-        "Flickr", "CLUSTER", "WikiCS", "ogbn-arxiv", "ogbn-products",
-        "PPI", "Planetoid", "RPG",
-    ]
+def get_dn_to_dg_and_h(targets):
+    _hash = create_hash(dict(enumerate(sorted(targets))))[:4]
+    _key, _path = _get_key_and_makedirs(args=None, no_args_key="degree_homophily", base_path="../figs")
+    file_path = os.path.join(_path, "dn_to_dg_and_h_len{}_{}.pkl".format(len(targets), _hash))
 
-    if "Reddit" in targets:
-        degree_and_homophily = get_degree_and_homophily(
-            "Reddit", "Reddit",
-            data_root="~/graph-data", use_multiprocessing=True, size=[10, 5], num_hops=2,
-        )
-        dn_to_dg_and_h["Reddit"] = degree_and_homophily
+    try:
+        with open(file_path, "rb") as f:
+            dn_to_dg_and_h = pickle.load(f)
+            cprint("Load: {}".format(file_path), "green")
+    except FileNotFoundError:
 
-    if "Reddit-Loader" in targets:
-        size_list = [[25, 25], [20, 20], [15, 15], [10, 10], [5, 5]]
-        batch_size_list = [2048]
-        for _batch_size, _size in product(batch_size_list, size_list):
-            print(f"batch_size: {_batch_size}, size: {_size}")
+        dn_to_dg_and_h = OrderedDict()
+
+        if "Reddit" in targets:
             degree_and_homophily = get_degree_and_homophily(
-                "Reddit", "Reddit", data_root="~/graph-data",
-                use_multiprocessing=True, use_loader=True,
-                batch_size=_batch_size, size=_size, num_hops=2,
+                "Reddit", "Reddit",
+                data_root="~/graph-data", use_multiprocessing=True, size=[10, 5], num_hops=2,
             )
-            dn_to_dg_and_h[f"Reddit_{_batch_size}_{s_join('_', _size)}"] = degree_and_homophily
+            dn_to_dg_and_h["Reddit"] = degree_and_homophily
 
-    if "Squirrel" in targets:
-        degree_and_homophily = get_degree_and_homophily("Squirrel", "Squirrel", data_root="~/graph-data")
-        dn_to_dg_and_h["Squirrel"] = degree_and_homophily
+        if "Reddit-Loader" in targets:
+            size_list = [[25, 25], [20, 20], [15, 15], [10, 10], [5, 5]]
+            batch_size_list = [2048]
+            for _batch_size, _size in product(batch_size_list, size_list):
+                print(f"batch_size: {_batch_size}, size: {_size}")
+                degree_and_homophily = get_degree_and_homophily(
+                    "Reddit", "Reddit", data_root="~/graph-data",
+                    use_multiprocessing=True, use_loader=True,
+                    batch_size=_batch_size, size=_size, num_hops=2,
+                )
+                dn_to_dg_and_h[f"Reddit_{_batch_size}_{s_join('_', _size)}"] = degree_and_homophily
 
-    if "Chameleon" in targets:
-        degree_and_homophily = get_degree_and_homophily("Chameleon", "Chameleon", data_root="~/graph-data")
-        dn_to_dg_and_h["Chameleon"] = degree_and_homophily
+        if "Squirrel" in targets:
+            degree_and_homophily = get_degree_and_homophily("Squirrel", "Squirrel", data_root="~/graph-data")
+            dn_to_dg_and_h["Squirrel"] = degree_and_homophily
 
-    if "Crocodile" in targets:
-        degree_and_homophily = get_degree_and_homophily("Crocodile", "Crocodile", data_root="~/graph-data")
-        dn_to_dg_and_h["Crocodile"] = degree_and_homophily
+        if "Chameleon" in targets:
+            degree_and_homophily = get_degree_and_homophily("Chameleon", "Chameleon", data_root="~/graph-data")
+            dn_to_dg_and_h["Chameleon"] = degree_and_homophily
 
-    if "MyCitationFull" in targets:
-        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora", data_root="~/graph-data")
-        dn_to_dg_and_h["CoraFull"] = degree_and_homophily
-        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora_ML", data_root="~/graph-data")
-        dn_to_dg_and_h["Cora_ML"] = degree_and_homophily
-        degree_and_homophily = get_degree_and_homophily("MyCitationFull", "DBLP", data_root="~/graph-data")
-        dn_to_dg_and_h["DBLP"] = degree_and_homophily
+        if "Crocodile" in targets:
+            degree_and_homophily = get_degree_and_homophily("Crocodile", "Crocodile", data_root="~/graph-data")
+            dn_to_dg_and_h["Crocodile"] = degree_and_homophily
 
-    if "MyCoauthor" in targets:
-        degree_and_homophily = get_degree_and_homophily("MyCoauthor", "CS", data_root="~/graph-data")
-        dn_to_dg_and_h["CS"] = degree_and_homophily
-        degree_and_homophily = get_degree_and_homophily("MyCoauthor", "Physics", data_root="~/graph-data")
-        dn_to_dg_and_h["Physics"] = degree_and_homophily
+        if "MyCitationFull" in targets:
+            degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora", data_root="~/graph-data")
+            dn_to_dg_and_h["CoraFull"] = degree_and_homophily
+            degree_and_homophily = get_degree_and_homophily("MyCitationFull", "Cora_ML", data_root="~/graph-data")
+            dn_to_dg_and_h["Cora_ML"] = degree_and_homophily
+            degree_and_homophily = get_degree_and_homophily("MyCitationFull", "DBLP", data_root="~/graph-data")
+            dn_to_dg_and_h["DBLP"] = degree_and_homophily
 
-    if "MyAmazon" in targets:
-        degree_and_homophily = get_degree_and_homophily("MyAmazon", "Photo", data_root="~/graph-data")
-        dn_to_dg_and_h["Photo"] = degree_and_homophily
-        degree_and_homophily = get_degree_and_homophily("MyAmazon", "Computers", data_root="~/graph-data")
-        dn_to_dg_and_h["Computers"] = degree_and_homophily
+        if "MyCoauthor" in targets:
+            degree_and_homophily = get_degree_and_homophily("MyCoauthor", "CS", data_root="~/graph-data")
+            dn_to_dg_and_h["CS"] = degree_and_homophily
+            degree_and_homophily = get_degree_and_homophily("MyCoauthor", "Physics", data_root="~/graph-data")
+            dn_to_dg_and_h["Physics"] = degree_and_homophily
 
-    if "Flickr" in targets:
-        degree_and_homophily = get_degree_and_homophily("Flickr", "Flickr", data_root="~/graph-data")
-        dn_to_dg_and_h["Flickr"] = degree_and_homophily
+        if "MyAmazon" in targets:
+            degree_and_homophily = get_degree_and_homophily("MyAmazon", "Photo", data_root="~/graph-data")
+            dn_to_dg_and_h["Photo"] = degree_and_homophily
+            degree_and_homophily = get_degree_and_homophily("MyAmazon", "Computers", data_root="~/graph-data")
+            dn_to_dg_and_h["Computers"] = degree_and_homophily
 
-    if "CLUSTER" in targets:
-        degree_and_homophily = get_degree_and_homophily("GNNBenchmarkDataset", "CLUSTER", data_root="~/graph-data")
-        dn_to_dg_and_h["CLUSTER"] = degree_and_homophily
+        if "Flickr" in targets:
+            degree_and_homophily = get_degree_and_homophily("Flickr", "Flickr", data_root="~/graph-data")
+            dn_to_dg_and_h["Flickr"] = degree_and_homophily
 
-    if "WebKB4Univ" in targets:
-        degree_and_homophily = get_degree_and_homophily("WebKB4Univ", "WebKB4Univ", data_root="~/graph-data")
-        dn_to_dg_and_h["WebKB4Univ"] = degree_and_homophily
+        if "CLUSTER" in targets:
+            degree_and_homophily = get_degree_and_homophily("GNNBenchmarkDataset", "CLUSTER", data_root="~/graph-data")
+            dn_to_dg_and_h["CLUSTER"] = degree_and_homophily
 
-    if "WikiCS" in targets:
-        degree_and_homophily = get_degree_and_homophily("WikiCS", "WikICS", data_root="~/graph-data", split=0)
-        dn_to_dg_and_h["WikiCS"] = degree_and_homophily
+        if "WebKB4Univ" in targets:
+            degree_and_homophily = get_degree_and_homophily("WebKB4Univ", "WebKB4Univ", data_root="~/graph-data")
+            dn_to_dg_and_h["WebKB4Univ"] = degree_and_homophily
 
-    if "ogbn-products" in targets:
-        degree_and_homophily = get_degree_and_homophily(
-            "PygNodePropPredDataset", "ogbn-products",
-            data_root="~/graph-data", use_multiprocessing=True, size=[10, 5], num_hops=2,
-        )
-        dn_to_dg_and_h["ogbn-products"] = degree_and_homophily
+        if "WikiCS" in targets:
+            degree_and_homophily = get_degree_and_homophily("WikiCS", "WikICS", data_root="~/graph-data", split=0)
+            dn_to_dg_and_h["WikiCS"] = degree_and_homophily
 
-    if "ogbn-arxiv" in targets:
-        degree_and_homophily = get_degree_and_homophily(
-            "PygNodePropPredDataset", "ogbn-arxiv",
-            data_root="~/graph-data", use_multiprocessing=True,
-        )
-        dn_to_dg_and_h["ogbn-arxiv"] = degree_and_homophily
+        if "ogbn-products" in targets:
+            degree_and_homophily = get_degree_and_homophily(
+                "PygNodePropPredDataset", "ogbn-products",
+                data_root="~/graph-data", use_multiprocessing=True, size=[10, 5], num_hops=2,
+            )
+            dn_to_dg_and_h["ogbn-products"] = degree_and_homophily
 
-    if "PPI" in targets:
-        degree_and_homophily = get_degree_and_homophily("PPI", "PPI", data_root="~/graph-data")
-        dn_to_dg_and_h["PPI"] = degree_and_homophily
+        if "ogbn-arxiv" in targets:
+            degree_and_homophily = get_degree_and_homophily(
+                "PygNodePropPredDataset", "ogbn-arxiv",
+                data_root="~/graph-data", use_multiprocessing=True,
+            )
+            dn_to_dg_and_h["ogbn-arxiv"] = degree_and_homophily
 
-    if "Planetoid" in targets:
-        for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
-            degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
-            dn_to_dg_and_h[dataset_name] = degree_and_homophily
+        if "PPI" in targets:
+            degree_and_homophily = get_degree_and_homophily("PPI", "PPI", data_root="~/graph-data")
+            dn_to_dg_and_h["PPI"] = degree_and_homophily
 
-    if "RPG" in targets:
-        for adr in [0.025, 0.04, 0.01]:
-            dataset_name: object
-            for dataset_name in tqdm(["rpg-10-500-{}-{}".format(r, adr) for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
-                degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name,
-                                                                data_root="~/graph-data")
+        if "Planetoid" in targets:
+            for dataset_name in tqdm(["Cora", "CiteSeer", "PubMed"]):
+                degree_and_homophily = get_degree_and_homophily("Planetoid", dataset_name, data_root="~/graph-data")
                 dn_to_dg_and_h[dataset_name] = degree_and_homophily
 
-    for dataset_name, degree_and_homophily in dn_to_dg_and_h.items():
-        df = pd.DataFrame({
-            "degree": degree_and_homophily[:, 0],
-            "homophily": degree_and_homophily[:, 1],
-        })
-        plot = sns.scatterplot(x="homophily", y="degree", data=df,
-                               legend=False, palette="Set1",
-                               s=15)
-        sns.despine(left=False, right=False, bottom=False, top=False)
+        if "RPG" in targets:
+            for adr in [0.005, 0.01, 0.02, 0.025, 0.04]:
+                dataset_name: object
+                for dataset_name in tqdm(["rpg-10-500-{}-{}".format(r, adr) for r in [0.2, 0.4, 0.6, 0.8]]):
+                    degree_and_homophily = get_degree_and_homophily("RandomPartitionGraph", dataset_name,
+                                                                    data_root="~/graph-data")
+                    dn_to_dg_and_h[dataset_name] = degree_and_homophily
 
-        _key, _path = _get_key_and_makedirs(args=None, no_args_key="degree_homophily", base_path="../figs")
-        plot.get_figure().savefig("{}/fig_{}_{}.{}".format(_path, _key, dataset_name, extension),
-                                  bbox_inches='tight')
-        plt.clf()
-        print("-- {} --".format(dataset_name))
-        print("Degree: {} +- {}".format(degree_and_homophily[:, 0].mean(), degree_and_homophily[:, 0].std()))
-        print("Homophily: {} +- {}".format(degree_and_homophily[:, 1].mean(), degree_and_homophily[:, 1].std()))
+        with open(file_path, "wb") as f:
+            pickle.dump(dn_to_dg_and_h, f)
+            cprint("Dump: {}".format(file_path), "blue")
+
+    return dn_to_dg_and_h
+
+
+def get_default_targets():
+    return [
+        "WebKB4Univ",
+        "Crocodile", "Squirrel", "Chameleon",
+        "MyCitationFull", "MyCoauthor", "MyAmazon",
+        "Flickr", "WikiCS", "ogbn-arxiv",
+        "PPI", "Planetoid",
+        # "RPG",
+    ]
+
+
+def analyze_degree_and_homophily(analysis_types=None, targets=None, extension="png",
+                                 kind="kde", per_dataset=False,
+                                 **kwargs):
+    analysis_types = analysis_types or [
+        "density_degree", "density_homophily", "density_correct_link", "density_pair",
+        "print", "degree_and_homophily_plot",
+    ]
+    targets = targets or get_default_targets()
+    dn_to_dg_and_h = get_dn_to_dg_and_h(targets)
+
+    kind_kwargs = {}
+    if kind == "kde":
+        kind_kwargs = {
+            "fill": False,
+        }
+
+    if per_dataset:
+
+        for dataset_name, degree_and_homophily in dn_to_dg_and_h.items():
+            df = pd.DataFrame({
+                "Degree": degree_and_homophily[:, 0],
+                "Degree (log10)": np.log10(degree_and_homophily[:, 0]),
+                "Per-node homophily": degree_and_homophily[:, 1],
+                "Correct link": degree_and_homophily[:, 0] * degree_and_homophily[:, 1],
+            })
+
+            if "print" in analysis_types:
+                print("-- {} --".format(dataset_name))
+                print("Degree: {} +- {}".format(degree_and_homophily[:, 0].mean(), degree_and_homophily[:, 0].std()))
+                print("Homophily: {} +- {}".format(degree_and_homophily[:, 1].mean(), degree_and_homophily[:, 1].std()))
+
+            if "density_degree" in analysis_types:
+                plot_dist(
+                    df, x="Degree (log10)", y=None,
+                    kind=kind,
+                    extension=extension,
+                    custom_key="density_degree", postfix=dataset_name,
+                    **kwargs, **kind_kwargs,
+                )
+
+            if "density_homophily" in analysis_types:
+                plot_dist(
+                    df, x="Per-node homophily", y=None,
+                    kind=kind,
+                    extension=extension,
+                    custom_key="density_homophily", postfix=dataset_name,
+                    **kwargs, **kind_kwargs,
+                )
+
+            if "density_correct_link" in analysis_types:
+                plot_dist(
+                    df, x="Correct link", y=None,
+                    kind=kind,
+                    extension=extension,
+                    custom_key="density_correct_link", postfix=dataset_name,
+                    **kwargs, **kind_kwargs,
+                )
+
+            if "density_pair" in analysis_types:
+                try:
+                    plot_pair_dist(
+                        df,
+                        kind=kind,
+                        x_vars=["Per-node homophily", "Degree (log10)", "Correct link"],
+                        y_vars=["Per-node homophily", "Degree (log10)", "Correct link"],
+                        extension=extension,
+                        custom_key="density_pair", postfix=dataset_name,
+                        **kwargs,
+                    )
+                except:
+                    cprint("Error in {}".format(dataset_name), "red")
+
+            if "density_dh" in analysis_types:
+                plot_dist(
+                    df, x="Degree (log10)", y="Per-node homophily",
+                    kind=kind,
+                    extension=extension,
+                    custom_key="density_dh", postfix=dataset_name,
+                    **kwargs, **kind_kwargs,
+                )
+
+            if "degree_and_homophily_plot" in analysis_types:
+                plot = sns.scatterplot(x="Per-node homophily", y="Degree", data=df,
+                                       legend=False, palette="Set1",
+                                       s=15)
+                sns.despine(left=False, right=False, bottom=False, top=False)
+                _key, _path = _get_key_and_makedirs(args=None, no_args_key="degree_homophily", base_path="../figs")
+                plot.get_figure().savefig("{}/fig_{}_{}.{}".format(_path, _key, dataset_name, extension),
+                                          bbox_inches='tight')
+                plt.clf()
+    else:
+        df = None
+        use_rpg = False
+        for dataset_name, degree_and_homophily in dn_to_dg_and_h.items():
+            if "Squ" in dataset_name:  # manual
+                continue
+            if "rpg" in dataset_name:
+                _sd = dataset_name.split("-")
+                dataset_name = "h-{} / d-{}".format(
+                    _sd[-2], float(_sd[-1]) * int(_sd[-3])
+                )
+                use_rpg = True
+            _df = pd.DataFrame({
+                "Degree": degree_and_homophily[:, 0],
+                "Degree (log10)": np.log10(degree_and_homophily[:, 0]),
+                "Per-node homophily": degree_and_homophily[:, 1],
+                "Correct link": degree_and_homophily[:, 0] * degree_and_homophily[:, 1],
+                "Dataset": dataset_name,
+            })
+            df = _df if df is None else df.append(_df)
+            df = df.reset_index(drop=True)
+
+        if "density_dh" in analysis_types:
+            if use_rpg:  # manual setting
+                col_wrap = 4
+            else:
+                col_wrap = 3
+            plot_dist(
+                df, x="Degree (log10)", y="Per-node homophily",
+                col="Dataset", col_wrap=col_wrap,
+                aspect=1.4,
+                kind=kind,
+                extension=extension,
+                custom_key="density_dh", postfix="all_len{}".format(len(targets)),
+                **kwargs, **kind_kwargs,
+            )
 
 
 def analyze_link_pred_perfs_for_multiple_models(name_and_kwargs: List[Tuple[str, Dict]], num_total_runs=10):
@@ -690,8 +820,13 @@ if __name__ == '__main__':
                 print("Done: {}".format(main_kwargs["dataset_name"]))
 
     elif MODE == "degree_and_homophily":
-        analyze_degree_and_homophily(["Reddit-Loader"])
-        # analyze_degree_and_homophily(["ogbn-arxiv"])
+        sns.set_context("poster", font_scale=1.25)
+        analyze_degree_and_homophily(
+            analysis_types=["density_dh"],
+            # targets=None,
+            # targets=["RPG"],
+            extension="pdf",
+        )
 
     else:
         raise ValueError

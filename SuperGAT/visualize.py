@@ -219,3 +219,43 @@ def plot_graph_layout(xs, ys, edge_index, edge_to_attention, args=None, key=None
     ax.set_axis_off()
     plt.savefig("{}/fig_glayout_{}_{}.{}".format(path, key, layout, extension), bbox_inches='tight')
     plt.clf()
+
+
+def plot_dist(populations, x, y, custom_key, extension,
+              col=None, stat=None, postfix=None, **kwargs):
+
+    if stat:
+        kwargs["stat"] = stat
+
+    plot = sns.displot(populations, x=x, y=y, col=col, **kwargs)
+
+    key, path = _get_key_and_makedirs(no_args_key=custom_key, base_path="../figs")
+    os.makedirs(path, exist_ok=True)
+    path_and_name = "{}/fig_dist_{}_{}_{}_{}_{}.{}".format(
+        path, key, x,
+        y if y else "",
+        col if col else "",
+        postfix if postfix else "",
+        extension,
+    )
+    plt.savefig(path_and_name, bbox_inches='tight')
+    print("Saved at: {}".format(path_and_name))
+    plt.clf()
+    plt.close()
+
+
+def plot_pair_dist(df, custom_key, extension, postfix=None, **kwargs):
+    sns.pairplot(df, **kwargs)
+
+    key, path = _get_key_and_makedirs(no_args_key=custom_key, base_path="../figs")
+    os.makedirs(path, exist_ok=True)
+    path_and_name = "{}/fig_pair_{}_{}.{}".format(
+        path, key,
+        postfix if postfix else "",
+        extension,
+    )
+    plt.savefig(path_and_name, bbox_inches='tight')
+    print("Saved at: {}".format(path_and_name))
+    plt.clf()
+    plt.close()
+
