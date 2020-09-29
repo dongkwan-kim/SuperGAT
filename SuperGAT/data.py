@@ -27,7 +27,7 @@ from ogb.nodeproppred import PygNodePropPredDataset
 from data_saint import MyGraphSAINTRandomWalkSampler, DisjointGraphSAINTRandomWalkSampler
 from data_sampler import MyNeighborSampler
 from data_syn import RandomPartitionGraph
-from data_transform_digitize import DigitizeY
+from data_transform import DigitizeY
 from data_utils import mask_init, mask_getitem, collate_and_pca, get_loader_and_dataset_kwargs
 from data_webkb4univ import WebKB4Univ
 from data_bg import GNNBenchmarkDataset
