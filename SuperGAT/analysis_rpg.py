@@ -199,7 +199,7 @@ def visualize_best_rpg_meta(degree_list, homophily_list, legend_list, custom_key
         [15.48, 0.26, 'Real-GAT-Any', '', 6, 10, 0, 0],
         [8.93, 0.83, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
         [5.97, 0.81, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
-        # VALUE!
+        [10.08, 0.32, 'Real-GAT-Any', '', 6, 10, 0, 0],
         [1.83, 0.16, 'Real-SuperGAT-SD', '', 6, 10, 0, 0],
         [7.68, 0.63, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
         [31.13, 0.85, 'Real-GAT-Any', '', 6, 10, 0, 0],
@@ -220,7 +220,7 @@ def visualize_best_rpg_meta(degree_list, homophily_list, legend_list, custom_key
         markers=["s", "s", "s", "s",
                  "^", "^", "^", "^"],
         palette=["#EF9A9A", "#BBDEFB", "#E1BEE7", "gray",
-                 "#D32F2F", "#1976D2", "#7B1FA2", "black"],  # red, blue, purple, black
+                 "#D32F2F", "#1976D2", "#7B1FA2", "#2F2F2F"],  # red, blue, purple, black
         custom_key="best_rpg_meta",
         extension="pdf",
     )
@@ -577,7 +577,7 @@ if __name__ == '__main__':
     legend_list = ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"]
     custom_key_list = ["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"]
 
-    MODE = "analyze_rpg_by_degree_and_homophily_part_by_part_first_diff"
+    MODE = "visualize_best_rpg_meta"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "visualize_best_rpg_meta":
