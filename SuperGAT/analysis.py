@@ -282,6 +282,13 @@ def get_dn_to_dg_and_h(targets):
             )
             dn_to_dg_and_h["ogbn-arxiv"] = degree_and_homophily
 
+        if "ogbn-arxiv-u" in targets:
+            degree_and_homophily = get_degree_and_homophily(
+                "PygNodePropPredDataset", "ogbn-arxiv", to_undirected=True,
+                data_root="~/graph-data", use_multiprocessing=True,
+            )
+            dn_to_dg_and_h["ogbn-arxiv-u"] = degree_and_homophily
+
         if "PPI" in targets:
             degree_and_homophily = get_degree_and_homophily("PPI", "PPI", data_root="~/graph-data")
             dn_to_dg_and_h["PPI"] = degree_and_homophily
@@ -693,7 +700,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "degree_and_homophily"
+    MODE = "degree_and_homophily_part"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":
@@ -825,6 +832,14 @@ if __name__ == '__main__':
             analysis_types=["density_dh"],
             # targets=None,
             # targets=["RPG"],
+            extension="pdf",
+        )
+
+    elif MODE == "degree_and_homophily_part":
+        analyze_degree_and_homophily(
+            analysis_types=["print"],
+            targets=["ogbn-arxiv-u", "ogbn-arxiv"],
+            per_dataset=True,
             extension="pdf",
         )
 
