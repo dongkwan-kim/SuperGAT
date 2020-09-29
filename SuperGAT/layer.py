@@ -369,6 +369,7 @@ class SuperGAT(MessagePassing):
             permuted = permuted.to(device)
             loss = criterion(att[permuted], label[permuted])
             loss_list.append(loss)
+            del permuted
 
         return sum(loss_list)
 
