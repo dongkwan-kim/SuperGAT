@@ -195,6 +195,8 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
     dataset_kwargs = {}
     if args.dataset_class == "ENSPlanetoid":
         dataset_kwargs["neg_sample_ratio"] = args.neg_sample_ratio
+    if args.dataset_name == "ogbn-arxiv":
+        dataset_kwargs["to_undirected"] = args.to_undirected
     if args.dataset_name == "ogbn-products":
         dataset_kwargs["size"] = args.data_sampling_size
         dataset_kwargs["num_hops"] = args.data_sampling_num_hops
