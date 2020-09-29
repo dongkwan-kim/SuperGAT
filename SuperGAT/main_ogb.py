@@ -25,7 +25,7 @@ from model import SuperGATNet, LargeSuperGATNet
 from model_baseline import LinkGNN, CGATNet
 from layer import SuperGAT
 from layer_cgat import CGATConv
-from utils import create_hash, cprint_multi_lines, blind_other_gpus
+from utils import create_hash, cprint_multi_lines, blind_other_gpus, garbage_collection_cuda
 
 
 def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _args):
@@ -158,15 +158,7 @@ def test_model(device, model, dataset_or_loader, criterion, evaluator, _args, va
         data = dataset[0]
         val_mask = dataset.val_mask
         test_mask = dataset.test_mask
-        print(data)
-        print(dataset.train_mask.size())
-        print(dataset.val_mask.size())
-        print(dataset.test_mask.size())
-
-        loader = _loader()
-        for batch_id, batch in enumerate(loader):
-            print(batch_id, batch)
-        exit()
+        raise NotImplementedError
 
     else:
         raise ValueError(f"Wrong name: {_args.dataset_name}")
@@ -257,6 +249,7 @@ def run(args, gpu_id=None, return_model=False, return_time_series=False):
                 _args=args, val_or_test="val", verbose=args.verbose,
                 run_link_prediction=(perf_task_for_val == "Link"),
             )
+            garbage_collection_cuda()
 
             if args.save_plot:
                 val_perf_list.append(val_perf)
@@ -353,14 +346,13 @@ if __name__ == '__main__':
     main_args = get_args(
         model_name="LargeGAT",
         dataset_class="PygNodePropPredDataset",
-        dataset_name="ogbn-products",  # ogbn-products, ogbn-arxiv
-        custom_key="EV13NSO8",  # NEO8, NEDPO8, EV13NSO8, EV3NSO8
+        dataset_name="ogbn-arxiv",  # ogbn-products, ogbn-arxiv
+        custom_key="NE",
     )
-    main_args.black_list = [0, 1, 2, 3]  # todo
     pprint_args(main_args)
 
     if len(main_args.black_list) == main_args.num_gpus_total:
-        alloc_gpu = None
+        alloc_gpu = [None]
         cprint("Use CPU", "yellow")
     else:
         alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
@@ -368,12 +360,12 @@ if __name__ == '__main__':
                                      black_list=main_args.black_list)
         if not alloc_gpu:
             alloc_gpu = [int(np.random.choice([g for g in range(main_args.num_gpus_total)
-                                               if g not in main_args.black_list], 1))][0]
+                                               if g not in main_args.black_list], 1))]
         cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
     # noinspection PyTypeChecker
     t0 = time.perf_counter()
-    many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu)
+    many_seeds_result = run_with_many_seeds(main_args, num_total_runs, gpu_id=alloc_gpu[0])
 
     pprint_args(main_args)
     summary_results(many_seeds_result)

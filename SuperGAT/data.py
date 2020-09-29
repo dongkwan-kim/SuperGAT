@@ -27,7 +27,7 @@ from ogb.nodeproppred import PygNodePropPredDataset
 from data_saint import MyGraphSAINTRandomWalkSampler, DisjointGraphSAINTRandomWalkSampler
 from data_sampler import MyNeighborSampler
 from data_syn import RandomPartitionGraph
-from data_transform_digitize import DigitizeY
+from data_transform import DigitizeY, ToUndirected
 from data_utils import mask_init, mask_getitem, collate_and_pca, get_loader_and_dataset_kwargs
 from data_webkb4univ import WebKB4Univ
 from data_bg import GNNBenchmarkDataset
@@ -751,6 +751,14 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
 
         if dataset_name == "ogbn-arxiv":
             dataset_kwargs, loader_kwargs = kwargs, {}
+            transform_to_undirected = False if ("to_undirected" not in dataset_kwargs) else kwargs["to_undirected"]
+            if transform_to_undirected:
+                dataset_kwargs["transform"] = ToUndirected()
+                del kwargs["to_undirected"]
+        elif dataset_name == "ogbn-proteins":
+            dataset_kwargs, loader_kwargs = kwargs, {}
+            from data_transform import ToSparseTensor
+            dataset_kwargs["pre_transform"] = ToSparseTensor()
         elif dataset_name == "ogbn-products":
             loader_kwargs, dataset_kwargs = get_loader_and_dataset_kwargs(**kwargs)
         else:
@@ -764,6 +772,8 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
 
         if dataset_name == "ogbn-arxiv":
             return dataset, None, None
+        elif dataset_name == "ogbn-proteins":
+            raise NotImplementedError
         elif dataset_name == "ogbn-products":
             raise NotImplementedError
 
@@ -848,6 +858,9 @@ def _test_data(dataset_class: str, dataset_name: str or None, root: str, *args, 
 
 
 if __name__ == '__main__':
+    _test_data("PygNodePropPredDataset", "ogbn-arxiv", '~/graph-data')
+    exit()
+
     _test_data("MyReddit", "MyReddit", '~/graph-data', batch_size=4096,
                sampler="GraphSAINTRandomWalkSampler",
                size=[5, 5], num_hops=2, neg_sample_ratio=0.5, num_version=2)
@@ -857,6 +870,7 @@ if __name__ == '__main__':
     exit()
     _test_data("PygNodePropPredDataset", "ogbn-products", '~/graph-data',
                size=[10, 5], num_hops=2)
+    _test_data("PygNodePropPredDataset", "ogbn-arxiv", '~/graph-data')
     exit()
 
     _test_data("MyCitationFull", "CoraFull", '~/graph-data')
@@ -875,8 +889,6 @@ if __name__ == '__main__':
     _test_data("WikiCS", "WikiCS", '~/graph-data', split=0)
     # _test_data("MyCitationFull", "Cora", '~/graph-data')
     # _test_data("MyCitationFull", "DBLP", '~/graph-data')
-
-    _test_data("PygNodePropPredDataset", "ogbn-arxiv", '~/graph-data')
 
     _test_data("Reddit", "Reddit", '~/graph-data')
     _test_data("ADPPI", "ADPPI", '~/graph-data')

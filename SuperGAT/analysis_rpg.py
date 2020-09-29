@@ -178,42 +178,67 @@ def visualize_best_rpg_meta(degree_list, homophily_list, legend_list, custom_key
         degree_list, homophily_list, legend_list, custom_key_list, model_list,
     )
     table = [[d, h, *nan_to_v(meta.values())] for (d, h), meta in best_rpg_meta.items()]
-    columns = ["Degree", "Homophily", "Model", "Second", "Abs. Gain (%p)", "Rel. Gain (%)",
+    columns = ["Avg. Degree", "Homophily", "Model", "Second", "Abs. Gain (%p)", "Rel. Gain (%)",
                "p-value (MX/SD)", "p-value (SuperGAT/GAT)"]
     df = pd.DataFrame(table, columns=columns)
 
     # Change Model with non-significance to Any.
-    df.loc[df["p-value (MX/SD)"] >= p_value_thres, "Model"] = "Any-SuperGAT"
-    df.loc[df["p-value (SuperGAT/GAT)"] >= p_value_thres, "Model"] = "Any-GAT"
+    df.loc[df["p-value (MX/SD)"] >= p_value_thres, "Model"] = "SuperGAT-Any"
+    df.loc[df["p-value (SuperGAT/GAT)"] >= p_value_thres, "Model"] = "GAT-Any"
+
+    # Add prefix
+    df["Model"] = "Syn-" + df["Model"]
 
     real_world_df = pd.DataFrame([
-        [1.83, 0.16, "Real-World", "", 10, 10, 10, 10],
+        [15.85, 0.21, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [2.78, 0.72, 'Real-GAT-Any', '', 6, 10, 0, 0],
+        [35.76, 0.81, 'Real-GAT-Any', '', 6, 10, 0, 0],
+        [3.9, 0.83, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [6.41, 0.59, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [5.45, 0.81, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [15.48, 0.26, 'Real-GAT-Any', '', 6, 10, 0, 0],
+        [8.93, 0.83, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [5.97, 0.81, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [10.08, 0.32, 'Real-GAT-Any', '', 6, 10, 0, 0],
+        [1.83, 0.16, 'Real-SuperGAT-SD', '', 6, 10, 0, 0],
+        [7.68, 0.63, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [31.13, 0.85, 'Real-GAT-Any', '', 6, 10, 0, 0],
+        [14.38, 0.91, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [28, 0.17, 'Real-SuperGAT-SD', '', 6, 10, 0, 0],
+        [4.5, 0.79, 'Real-SuperGAT-MX', '', 6, 10, 0, 0],
+        [26.4, 0.68, 'Real-SuperGAT-Any', '', 6, 10, 0, 0],
     ], columns=columns)
 
     df = df.append(real_world_df)
 
-    df["Degree (Log10)"] = np.log10(df["Degree"])
+    df["Avg. Degree (Log10)"] = np.log10(df["Avg. Degree"])
 
+    # https://matplotlib.org/3.1.0/gallery/color/named_colors.html
     kwargs = dict(
-        hue_order=["SuperGAT-MX", "SuperGAT-SD", "Any-SuperGAT", "Any-GAT", "Real-World"],
-        markers=["o", "o", "o", "o", "X"],
-        custom_key="best_rpg_meta", extension="png",
+        hue_and_style_order=["Syn-SuperGAT-MX", "Syn-SuperGAT-SD", "Syn-SuperGAT-Any", "Syn-GAT-Any",
+                             "Real-SuperGAT-MX", "Real-SuperGAT-SD", "Real-SuperGAT-Any", "Real-GAT-Any"],
+        markers=["s", "s", "s", "s",
+                 "^", "^", "^", "^"],
+        palette=["#EF9A9A", "#BBDEFB", "#E1BEE7", "gray",
+                 "#D32F2F", "#1976D2", "#7B1FA2", "#2F2F2F"],  # red, blue, purple, black
+        custom_key="best_rpg_meta",
+        extension="pdf",
     )
 
     plot_scatter_with_varying_options(
-        df, x="Degree (Log10)", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
+        df, x="Avg. Degree (Log10)", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
         **kwargs
     )
     plot_scatter_with_varying_options(
-        df, x="Degree (Log10)", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
+        df, x="Avg. Degree (Log10)", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
         **kwargs
     )
     plot_scatter_with_varying_options(
-        df, x="Degree", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
+        df, x="Avg. Degree", y="Homophily", hue_and_style="Model", size="Abs. Gain (%p)",
         **kwargs
     )
     plot_scatter_with_varying_options(
-        df, x="Degree", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
+        df, x="Avg. Degree", y="Homophily", hue_and_style="Model", size="Rel. Gain (%)",
         **kwargs
     )
 
@@ -249,6 +274,7 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
                                         is_test=False,
                                         plot_part_by_part=False,
                                         draw_plot=True,
+                                        draw_diff_between_first=False,
                                         extension="pdf"):
     def to_log10(v, eps=1e-5):
         return float(np.log10(v + eps))
@@ -408,31 +434,93 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
                  for (hp, legend), std_list in hp_and_legend_to_std_over_deg_list.items() if hp in hp_list}
             )
 
-        hp135_and_legend_to_mean_over_deg_list, hp135_and_legend_to_std_over_deg_list = filtered_by_hp([0.1, 0.3, 0.5])
-        hp7_and_legend_to_mean_over_deg_list, hp7_and_legend_to_std_over_deg_list = filtered_by_hp([0.7], num_deg=5)
-        hp9_and_legend_to_mean_over_deg_list, hp9_and_legend_to_std_over_deg_list = filtered_by_hp([0.9], num_deg=4)
+        def get_mean_diff(h_and_l_to_m_over_d_list, first_legend, x100=True):
+            h_and_l_to_mean_diff_over_d_list = dict()
+            for (hp, legend), mean_list in h_and_l_to_m_over_d_list.items():
+                if legend == first_legend:
+                    continue
+                mean_list_of_first = h_and_l_to_m_over_d_list[(hp, first_legend)]
+                mean_diff_list = (np.asarray(mean_list) - np.asarray(mean_list_of_first))
+                if x100:
+                    mean_diff_list = 100 * mean_diff_list
+                mean_diff_list = mean_diff_list.tolist()
+                h_and_l_to_mean_diff_over_d_list[(hp, legend)] = mean_diff_list
+            return h_and_l_to_mean_diff_over_d_list
+
+        if 0.1 in degree_list:
+            b1, b2, b3, b4 = [0.1, 0.3, 0.5], [0.7], [0.9], [0.7, 0.9]
+        else:
+            b1, b2, b3, b4 = [0.2, 0.4], [0.6], [0.8], [0.6, 0.8]
+
+        hp135_and_legend_to_mean_over_deg_list, hp135_and_legend_to_std_over_deg_list = filtered_by_hp(b1)
+        hp7_and_legend_to_mean_over_deg_list, hp7_and_legend_to_std_over_deg_list = filtered_by_hp(b2)
+        hp9_and_legend_to_mean_over_deg_list, hp9_and_legend_to_std_over_deg_list = filtered_by_hp(b3)
+        hp79_and_legend_to_mean_over_deg_list, hp79_and_legend_to_std_over_deg_list = filtered_by_hp(b4)
+
+        if draw_diff_between_first:
+            lf = legend_list[0]
+            hp135_and_legend_to_mean_over_deg_list = get_mean_diff(hp135_and_legend_to_mean_over_deg_list, lf)
+            hp7_and_legend_to_mean_over_deg_list = get_mean_diff(hp7_and_legend_to_mean_over_deg_list, lf)
+            hp79_and_legend_to_mean_over_deg_list = get_mean_diff(hp79_and_legend_to_mean_over_deg_list, lf)
+            hp9_and_legend_to_mean_over_deg_list = get_mean_diff(hp9_and_legend_to_mean_over_deg_list, lf)
+            hp135_and_legend_to_std_over_deg_list = None
+            hp7_and_legend_to_std_over_deg_list = None
+            hp79_and_legend_to_std_over_deg_list = None
+            hp9_and_legend_to_std_over_deg_list = None
+            legend_list = legend_list[1:]
+            y_lim = None
+            y_label = "Diff. of Test Acc. vs. GO (%p)"
+        else:
+            y_lim = None
+            y_label = "Test Accuracy",
+
+        degree_list = np.log10(degree_list).tolist()
+
+        palette = ["grey", "#1976D2", "#D32F2F"]
 
         plot_line_with_std(
             tuple_to_mean_list=hp135_and_legend_to_mean_over_deg_list,
             tuple_to_std_list=hp135_and_legend_to_std_over_deg_list,
-            x_label="Avg. Degree",
+            x_label="Avg. Degree (Log10)",
+            y_label=y_label,
+            name_label_list=["Homophily", "Model"],
+            x_list=degree_list,
+            hue="Model",
+            style="Model",
+            col="Homophily",
+            aspect=0.9,
+            hue_order=legend_list,
+            legend=False,
+            x_lim=(0, None),
+            y_lim=y_lim,
+            palette=palette,
+            custom_key=base_key + "_part135",
+            extension=extension,
+        )
+        plot_line_with_std(
+            tuple_to_mean_list=hp79_and_legend_to_mean_over_deg_list,
+            tuple_to_std_list=hp79_and_legend_to_std_over_deg_list,
+            x_label="Avg. Degree (Log10)",
             y_label="Test Accuracy",
             name_label_list=["Homophily", "Model"],
             x_list=degree_list,
             hue="Model",
             style="Model",
             col="Homophily",
-            aspect=0.75,
+            aspect=0.9,
             hue_order=legend_list,
-            legend=False,
+            legend="full",
             x_lim=(0, None),
-            custom_key=base_key + "_part135",
+            y_lim=y_lim,
+            use_ylabel=False,
+            palette=palette,
+            custom_key=base_key + "_part79",
             extension=extension,
         )
         plot_line_with_std(
             tuple_to_mean_list=hp7_and_legend_to_mean_over_deg_list,
             tuple_to_std_list=hp7_and_legend_to_std_over_deg_list,
-            x_label="Avg. Degree",
+            x_label="Avg. Degree (Log10)",
             y_label="Test Accuracy",
             name_label_list=["Homophily", "Model"],
             x_list=degree_list,
@@ -443,14 +531,16 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
             hue_order=legend_list,
             legend=False,
             x_lim=(0, None),
+            y_lim=y_lim,
             use_ylabel=False,
+            palette=palette,
             custom_key=base_key + "_part7",
             extension=extension,
         )
         plot_line_with_std(
             tuple_to_mean_list=hp9_and_legend_to_mean_over_deg_list,
             tuple_to_std_list=hp9_and_legend_to_std_over_deg_list,
-            x_label="Avg. Degree",
+            x_label="Avg. Degree (Log10)",
             y_label="Test Accuracy",
             name_label_list=["Homophily", "Model"],
             x_list=degree_list,
@@ -461,10 +551,36 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
             hue_order=legend_list,
             legend="full",
             x_lim=(0, None),
+            y_lim=y_lim,
             use_ylabel=False,
+            palette=palette,
             custom_key=base_key + "_part9",
             extension=extension,
         )
+
+
+def print_rpg_pivot_table_by_model(degree_list, homophily_list, legend_list, custom_key_list, model_list):
+    # (d, h, m) --> {mean_perf: -, std_perf: -, ...}
+    rpg_dict = load_or_get_best_rpg_all(degree_list, homophily_list, legend_list, custom_key_list, model_list)
+    columns = ["Avg. degree", "Homophily", "Model", "Mean Perf.", "Std Perf.", "Value"]
+    df_dict = {k: [] for k in columns}
+    for (d, h, m), dct in rpg_dict.items():
+        df_dict["Avg. degree"].append(d)
+        df_dict["Homophily"].append(h)
+        df_dict["Model"].append(m)
+        df_dict["Mean Perf."].append(dct["mean_perf"])
+        df_dict["Std Perf."].append(dct["std_perf"])
+        df_dict["Value"].append('{:.1f} $\pm$ {:.1f}'.format(
+            100 * dct["mean_perf"],
+            100 * dct["std_perf"],
+        ))
+    df = pd.DataFrame(df_dict, columns=columns)
+
+    for m in legend_list:
+        m_df = df[df["Model"] == m]
+        tab = m_df.pivot(index="Homophily", columns="Avg. degree", values="Value")
+        print(m)
+        print(tab.to_csv(sep="\t"))
 
 
 if __name__ == '__main__':
@@ -478,14 +594,14 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    degree_list = [1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 12.5, 15.0, 25.0, 40.0, 50.0, 75.0, 100.0]
+    degree_list = [1.0, 1.5, 2.5, 3.5, 5.0, 7.5, 10.0, 12.5, 15.0, 20.0, 25.0, 32.5, 40.0, 50.0, 75.0, 100.0]
     homophily_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 
     model_list = ["GCN", "GAT", "GAT", "GAT"]
     legend_list = ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"]
     custom_key_list = ["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"]
 
-    MODE = "visualize_best_rpg_meta"
+    MODE = "print_rpg_pivot_table_by_model"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "visualize_best_rpg_meta":
@@ -498,6 +614,9 @@ if __name__ == '__main__':
                 for _legend, _custom_key, _model in zip(legend_list, custom_key_list, model_list):
                     print_rpg_analysis(_degree, _hp, _legend, _custom_key, model=_model)
 
+    elif MODE == "print_rpg_pivot_table_by_model":
+        print_rpg_pivot_table_by_model(degree_list, homophily_list, legend_list, custom_key_list, model_list)
+
     elif MODE == "analyze_rpg_by_degree_and_homophily_part_by_part":
         analyze_rpg_by_degree_and_homophily(
             degree_list=[2.5, 5.0, 10.0, 25.0, 50.0, 75.0, 100.0],
@@ -509,6 +628,21 @@ if __name__ == '__main__':
             l2_lambda_list=[1e-7, 1e-5, 1e-3],
             num_total_runs=5,
             plot_part_by_part=True,
+            verbose=0,
+        )
+
+    elif MODE == "analyze_rpg_by_degree_and_homophily_part_by_part_first_diff":
+        analyze_rpg_by_degree_and_homophily(
+            degree_list=degree_list,
+            homophily_list=[0.2, 0.4, 0.6, 0.8],
+            legend_list=["GAT-GO", "GCN", "SuperGAT-SD", "SuperGAT-MX"],
+            model_list=["GAT", "GCN", "GAT", "GAT"],
+            custom_key_list=["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"],
+            att_lambda_list=[1e-2, 1e-1, 1e0, 1e1, 1e2, 1e-3, 1e-4, 1e-5],
+            l2_lambda_list=[1e-7, 1e-5, 1e-3],
+            num_total_runs=5,
+            plot_part_by_part=True,
+            draw_diff_between_first=True,  # IMPORTANT
             verbose=0,
         )
 

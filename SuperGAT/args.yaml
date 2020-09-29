@@ -1,5 +1,5 @@
 DEFAULT: &DEFAULT
-  black_list: [0, 1, 2]
+  black_list: [1, 2, 3]
   num_gpus_total: 4
   num_gpus_to_use: 1
   heads: 8
@@ -3297,3 +3297,130 @@ GAT-DBLP-EV13NSO8-ES: &GAT-DBLP-EV13NSO8-ES
   early_stop_threshold_loss: 0.00012070849209303589
   early_stop_threshold_perf: 0.0002865220615016606
   epochs: 485
+
+
+GAT-Flickr: &GAT-Flickr
+  <<: *GAT
+  lr: 0.01
+  out_heads: 1
+  task_type: Node_Transductive
+  val_interval: 1
+  num_hidden_features: 8
+  epochs: 500
+  to_undirected_at_neg: True
+
+GCN-Flickr-NE: &GCN-Flickr-NE
+  <<: *GAT-Flickr
+  model_name: LinkGCN
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.0012695744791137067
+
+SAGE-Flickr-NE: &SAGE-Flickr-NE
+  <<: *GAT-Flickr
+  model_name: LinkSAGE
+  num_hidden_features: 64
+  is_super_gat: False
+  is_link_gnn: False
+  l2_lambda: 0.00045643986296451744
+
+GCN-Flickr-NE-ES: &GCN-Flickr-NE-ES
+  <<: *GCN-Flickr-NE
+  use_early_stop: True
+  early_stop_patience: 478
+  early_stop_queue_length: 228
+  early_stop_threshold_loss: 0.039220148456748975
+  early_stop_threshold_perf: 0.09715670819880272
+  epochs: 481
+
+SAGE-Flickr-NE-ES: &SAGE-Flickr-NE-ES
+  <<: *SAGE-Flickr-NE
+  use_early_stop: True
+  early_stop_patience: 440
+  early_stop_queue_length: 126
+  early_stop_threshold_loss: 0.029537844399296947
+  early_stop_threshold_perf: 0.05418475402343452
+  epochs: 493
+
+GAT-Flickr-NE:  &GAT-Flickr-NE
+  <<: *GAT-Flickr
+  epochs: 500
+  is_super_gat: False
+
+GAT-Flickr-NEO8: &GAT-Flickr-NEO8
+  <<: *GAT-Flickr-NE
+  out_heads: 8
+  l2_lambda: 3.2963700617298472e-06
+
+GAT-Flickr-NEDP:
+  <<: *GAT-Flickr-NE
+  attention_type: "dot_product"
+
+GAT-Flickr-NEDPO8: &GAT-Flickr-NEDPO8
+  <<: *GAT-Flickr-NE
+  out_heads: 8
+  l2_lambda: 0.0972823735557556
+  attention_type: "dot_product"
+
+GAT-Flickr-NEO8-ES: &GAT-Flickr-NEO8-ES
+  <<: *GAT-Flickr-NEO8
+  use_early_stop: True
+  early_stop_patience: 420
+  early_stop_queue_length: 37
+  early_stop_threshold_loss: 4.641929268767428e-05
+  early_stop_threshold_perf: 0.00014861741595358506
+  epochs: 431
+
+GAT-Flickr-NEDPO8-ES: &GAT-Flickr-NEDPO8-ES
+  <<: *GAT-Flickr-NEDPO8
+  use_early_stop: True
+  early_stop_patience: 354
+  early_stop_queue_length: 404
+  early_stop_threshold_loss: 0.0005175395026559892
+  early_stop_threshold_perf: 1.2401019569452572e-05
+  epochs: 493
+
+GAT-Flickr-E: &GAT-Flickr-E
+  <<: *GAT-Flickr
+  epochs: 500
+  is_super_gat: True
+
+GAT-Flickr-EV3O8: &GAT-Flickr-EV3O8
+  <<: *GAT-Flickr-E
+  attention_type: "scaled_dot_product"
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.9
+  att_lambda: 3.6301747933237487
+  l2_lambda: 0.007766998073942978
+
+GAT-Flickr-EV3O8-ES: &GAT-Flickr-EV3O8-ES
+  <<: *GAT-Flickr-EV3O8
+  use_early_stop: True
+  early_stop_patience: 486
+  early_stop_queue_length: 448
+  early_stop_threshold_loss: 0.004380661487802699
+  early_stop_threshold_perf: 0.00036776895509678376
+  epochs: 497
+
+GAT-Flickr-EV13: &GAT-Flickr-EV13
+  <<: *GAT-Flickr-E
+  attention_type: "prob_mask_only"
+
+GAT-Flickr-EV13NSO8: &GAT-Flickr-EV13NSO8
+  <<: *GAT-Flickr-EV13
+  out_heads: 8
+  edge_sampling_ratio: 0.8
+  neg_sample_ratio: 0.3
+  att_lambda: 0.003666291296908838
+  l2_lambda: 1.3013724772345225e-08
+
+GAT-Flickr-EV13NSO8-ES: &GAT-Flickr-EV13NSO8-ES
+  <<: *GAT-Flickr-EV13NSO8
+  use_early_stop: True
+  early_stop_patience: 138
+  early_stop_queue_length: 490
+  early_stop_threshold_loss: 0.0018622459173959951
+  early_stop_threshold_perf: 2.8771958754187664e-05
+  epochs: 499

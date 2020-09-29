@@ -11,7 +11,7 @@ from torch_geometric.data import (Data, InMemoryDataset, download_url,
                                   extract_gz, extract_tar, extract_zip)
 from torch_geometric.data.makedirs import makedirs
 
-from data_transform_digitize import DigitizeY
+from data_transform import DigitizeY
 from data_utils import mask_init, mask_getitem, collate_and_pca
 
 
