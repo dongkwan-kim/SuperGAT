@@ -559,6 +559,30 @@ def analyze_rpg_by_degree_and_homophily(degree_list: List[float],
         )
 
 
+def print_rpg_pivot_table_by_model(degree_list, homophily_list, legend_list, custom_key_list, model_list):
+    # (d, h, m) --> {mean_perf: -, std_perf: -, ...}
+    rpg_dict = load_or_get_best_rpg_all(degree_list, homophily_list, legend_list, custom_key_list, model_list)
+    columns = ["Avg. degree", "Homophily", "Model", "Mean Perf.", "Std Perf.", "Value"]
+    df_dict = {k: [] for k in columns}
+    for (d, h, m), dct in rpg_dict.items():
+        df_dict["Avg. degree"].append(d)
+        df_dict["Homophily"].append(h)
+        df_dict["Model"].append(m)
+        df_dict["Mean Perf."].append(dct["mean_perf"])
+        df_dict["Std Perf."].append(dct["std_perf"])
+        df_dict["Value"].append('{:.1f} $\pm$ {:.1f}'.format(
+            100 * dct["mean_perf"],
+            100 * dct["std_perf"],
+        ))
+    df = pd.DataFrame(df_dict, columns=columns)
+
+    for m in legend_list:
+        m_df = df[df["Model"] == m]
+        tab = m_df.pivot(index="Homophily", columns="Avg. degree", values="Value")
+        print(m)
+        print(tab.to_csv(sep="\t"))
+
+
 if __name__ == '__main__':
 
     try:
@@ -577,7 +601,7 @@ if __name__ == '__main__':
     legend_list = ["GCN", "GAT-GO", "SuperGAT-SD", "SuperGAT-MX"]
     custom_key_list = ["NE-ES", "NE-ES", "EV3-ES", "EV13-ES"]
 
-    MODE = "visualize_best_rpg_meta"
+    MODE = "print_rpg_pivot_table_by_model"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "visualize_best_rpg_meta":
@@ -589,6 +613,9 @@ if __name__ == '__main__':
             for _hp in homophily_list:
                 for _legend, _custom_key, _model in zip(legend_list, custom_key_list, model_list):
                     print_rpg_analysis(_degree, _hp, _legend, _custom_key, model=_model)
+
+    elif MODE == "print_rpg_pivot_table_by_model":
+        print_rpg_pivot_table_by_model(degree_list, homophily_list, legend_list, custom_key_list, model_list)
 
     elif MODE == "analyze_rpg_by_degree_and_homophily_part_by_part":
         analyze_rpg_by_degree_and_homophily(
