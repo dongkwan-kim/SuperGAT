@@ -448,20 +448,24 @@ if __name__ == '__main__':
     num_total_runs = 7
 
     main_args = get_args(
-        model_name="GAT",  # GAT, CGAT, LargeGAT, GCN
-        dataset_class="WikiCS",  # ADPlanetoid, LinkPlanetoid, Planetoid, FullPlanetoid, RandomPartitionGraph
-        dataset_name="WikiCS",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
-        custom_key="NEO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
+        model_name="GAT",  # GAT, GCN
+        dataset_class="Planetoid",  # Planetoid, FullPlanetoid, RandomPartitionGraph
+        dataset_name="Cora",  # Cora, CiteSeer, PubMed, rpg-10-500-0.1-0.025
+        custom_key="EV13NSO8",  # NEO8, NEDPO8, EV13NSO8, EV9NSO8, EV1O8, EV2O8, -500, -Link, -ES, -ATT
     )
     pprint_args(main_args)
 
-    alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
-                                 num_gpus_to_use=main_args.num_gpus_to_use,
-                                 black_list=main_args.black_list)
-    if not alloc_gpu:
-        alloc_gpu = [int(np.random.choice([g for g in range(main_args.num_gpus_total)
-                                           if g not in main_args.black_list], 1))]
-    cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
+    if len(main_args.black_list) == main_args.num_gpus_total:
+        alloc_gpu = [None]
+        cprint("Use CPU", "yellow")
+    else:
+        alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
+                                     num_gpus_to_use=main_args.num_gpus_to_use,
+                                     black_list=main_args.black_list)
+        if not alloc_gpu:
+            alloc_gpu = [int(np.random.choice([g for g in range(main_args.num_gpus_total)
+                                               if g not in main_args.black_list], 1))]
+        cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
     # noinspection PyTypeChecker
     t0 = time.perf_counter()

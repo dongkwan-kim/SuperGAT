@@ -2299,8 +2299,8 @@ GAT-Computers-EV13NSO8-ES: &GAT-Computers-EV13NSO8-ES
   epochs: 470
 
 
-LargeGAT-ogbn-arxiv: &LargeGAT-ogbn-arxiv
-  <<: *LargeGAT
+GAT-ogbn-arxiv: &GAT-ogbn-arxiv
+  <<: *GAT
   task_type: Node_Transductive
   num_layers: 2
   val_interval: 1
@@ -2313,7 +2313,7 @@ LargeGAT-ogbn-arxiv: &LargeGAT-ogbn-arxiv
   to_undirected_at_neg: True
 
 SAGE-ogbn-arxiv-NE: &SAGE-ogbn-arxiv-NE
-  <<: *LargeGAT-ogbn-arxiv
+  <<: *GAT-ogbn-arxiv
   model_name: LinkSAGE
   num_hidden_features: 128
   is_super_gat: False
@@ -2321,7 +2321,7 @@ SAGE-ogbn-arxiv-NE: &SAGE-ogbn-arxiv-NE
   l2_lambda: 1.3564923851522799e-05
 
 GCN-ogbn-arxiv-NE: &GCN-ogbn-arxiv-NE
-  <<: *LargeGAT-ogbn-arxiv
+  <<: *GAT-ogbn-arxiv
   model_name: LinkGCN
   num_hidden_features: 128
   is_super_gat: False
@@ -2346,13 +2346,13 @@ GCN-ogbn-arxiv-NE-ES: &GCN-ogbn-arxiv-NE-ES
   early_stop_threshold_perf: 5.164698428236512e-05
   epochs: 785
 
-LargeGAT-ogbn-arxiv-NE:  &LargeGAT-ogbn-arxiv-NE
-  <<: *LargeGAT-ogbn-arxiv
+GAT-ogbn-arxiv-NE:  &GAT-ogbn-arxiv-NE
+  <<: *GAT-ogbn-arxiv
   is_super_gat: False
   l2_lambda: 9.965354570485831e-05
 
-LargeGAT-ogbn-arxiv-NE-ES: &LargeGAT-ogbn-arxiv-NE-ES
-  <<: *LargeGAT-ogbn-arxiv-NE
+GAT-ogbn-arxiv-NE-ES: &GAT-ogbn-arxiv-NE-ES
+  <<: *GAT-ogbn-arxiv-NE
   use_early_stop: True
   early_stop_patience: 517
   early_stop_queue_length: 380
@@ -2360,13 +2360,13 @@ LargeGAT-ogbn-arxiv-NE-ES: &LargeGAT-ogbn-arxiv-NE-ES
   early_stop_threshold_perf: 4.3204756920275984e-05
   epochs: 518
 
-LargeGAT-ogbn-arxiv-NEDP: &LargeGAT-ogbn-arxiv-NEDP
-  <<: *LargeGAT-ogbn-arxiv-NE
+GAT-ogbn-arxiv-NEDP: &GAT-ogbn-arxiv-NEDP
+  <<: *GAT-ogbn-arxiv-NE
   attention_type: "dot_product"
   l2_lambda: 1.1421029359775407e-05
 
-LargeGAT-ogbn-arxiv-NEDP-ES: &LargeGAT-ogbn-arxiv-NEDP-ES
-  <<: *LargeGAT-ogbn-arxiv-NEDP
+GAT-ogbn-arxiv-NEDP-ES: &GAT-ogbn-arxiv-NEDP-ES
+  <<: *GAT-ogbn-arxiv-NEDP
   use_early_stop: True
   early_stop_patience: 598
   early_stop_queue_length: 138
@@ -2374,13 +2374,13 @@ LargeGAT-ogbn-arxiv-NEDP-ES: &LargeGAT-ogbn-arxiv-NEDP-ES
   early_stop_threshold_perf: 0.051289011185508444
   epochs: 699
 
-LargeGAT-ogbn-arxiv-E: &LargeGAT-ogbn-arxiv-E
-  <<: *LargeGAT-ogbn-arxiv
+GAT-ogbn-arxiv-E: &GAT-ogbn-arxiv-E
+  <<: *GAT-ogbn-arxiv
   epochs: 700
   is_super_gat: True
 
-LargeGAT-ogbn-arxiv-EV3: &LargeGAT-ogbn-arxiv-EV3
-  <<: *LargeGAT-ogbn-arxiv-E
+GAT-ogbn-arxiv-EV3: &GAT-ogbn-arxiv-EV3
+  <<: *GAT-ogbn-arxiv-E
   attention_type: "scaled_dot_product"
   to_undirected_at_neg: True
   edge_sampling_ratio: 0.8
@@ -2388,8 +2388,8 @@ LargeGAT-ogbn-arxiv-EV3: &LargeGAT-ogbn-arxiv-EV3
   l2_lambda: 3.826731737808351e-08
   att_lambda: 0.0001522862025300892
 
-LargeGAT-ogbn-arxiv-EV3-ES: &LargeGAT-ogbn-arxiv-EV3-ES
-  <<: *LargeGAT-ogbn-arxiv-EV3
+GAT-ogbn-arxiv-EV3-ES: &GAT-ogbn-arxiv-EV3-ES
+  <<: *GAT-ogbn-arxiv-EV3
   use_early_stop: True
   early_stop_patience: 596
   early_stop_queue_length: 95
@@ -2397,20 +2397,20 @@ LargeGAT-ogbn-arxiv-EV3-ES: &LargeGAT-ogbn-arxiv-EV3-ES
   early_stop_threshold_perf: 0.0006417087606827856
   epochs: 597
 
-LargeGAT-ogbn-arxiv-EV13: &LargeGAT-ogbn-arxiv-EV13
-  <<: *LargeGAT-ogbn-arxiv-E
+GAT-ogbn-arxiv-EV13: &GAT-ogbn-arxiv-EV13
+  <<: *GAT-ogbn-arxiv-E
   attention_type: "prob_mask_only"
 
-LargeGAT-ogbn-arxiv-EV13NS: &LargeGAT-ogbn-arxiv-EV13NS
-  <<: *LargeGAT-ogbn-arxiv-EV13
+GAT-ogbn-arxiv-EV13NS: &GAT-ogbn-arxiv-EV13NS
+  <<: *GAT-ogbn-arxiv-EV13
   to_undirected_at_neg: True
   edge_sampling_ratio: 0.8
   neg_sample_ratio: 0.5
   l2_lambda: 1.5638316305288333e-06
   att_lambda: 0.015388211403041896
 
-LargeGAT-ogbn-arxiv-EV13NS-ES: &LargeGAT-ogbn-arxiv-EV13NS-ES
-  <<: *LargeGAT-ogbn-arxiv-EV13NS
+GAT-ogbn-arxiv-EV13NS-ES: &GAT-ogbn-arxiv-EV13NS-ES
+  <<: *GAT-ogbn-arxiv-EV13NS
   use_early_stop: True
   early_stop_patience: 184
   early_stop_queue_length: 693

@@ -13,7 +13,6 @@ import torch_geometric.nn.inits as tgi
 
 from layer import is_pretraining
 from layer_cgat import CGATConv
-from layer_gaan import GaANConv
 from data import getattr_d, get_dataset_or_loader
 
 
@@ -24,8 +23,6 @@ def _get_gn_cls(cls_name: str):
         return GCNConv
     elif cls_name == "LinkSAGE":
         return SAGEConv
-    elif cls_name == "LinkGAAN":
-        return GaANConv
     else:
         raise ValueError
 

@@ -346,10 +346,10 @@ if __name__ == '__main__':
     num_total_runs = 7
 
     main_args = get_args(
-        model_name="LargeGAT",
+        model_name="GAT",
         dataset_class="PygNodePropPredDataset",
         dataset_name="ogbn-arxiv",  # ogbn-products, ogbn-arxiv
-        custom_key="NE",
+        custom_key="EV13NS",
     )
     pprint_args(main_args)
 

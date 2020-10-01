@@ -41,6 +41,7 @@ Time for runs (s): 173.85422565042973
 
 Default setting is 7 runs with different random seeds. If you want to change this number, change `num_total_runs` in the main block of `SuperGAT/main.py`.
 
+For ogbn-arxiv, use `SuperGAT/main_ogb.py`.
 
 ### GPU Setting
 
@@ -60,24 +61,49 @@ python3 SuperGAT/main.py \
     --black-list 1 2 3
 ```
 
+### Model (`--model-name`)
+
+| Type                  | Model name              |
+|-----------------------|-------------------------|
+| GCN                   | GCN                     |
+| GraphSAGE             | SAGE                    |
+| GAT                   | GAT                     |
+| SuperGAT<sub>GO</sub> | GAT                     |
+| SuperGAT<sub>DP</sub> | GAT                     |
+| SuperGAT<sub>SD</sub> | GAT                     |
+| SuperGAT<sub>MX</sub> | GAT                     |
+
 
 ### Dataset (`--dataset-class`, `--dataset-name`)
 
-| Dataset class   | Dataset Name                  |
+| Dataset class   | Dataset name                  |
 |-----------------|-------------------------------|
 | Planetoid       | Cora                          |
 | Planetoid       | CiteSeer                      |
 | Planetoid       | PubMed                        |
 | PPI             | PPI                           |
+| WikiCS          | WikiCS                        |
+| WebKB4Univ      | WebKB4Univ                    |
+| MyAmazon        | Photo                         |
+| MyAmazon        | Computers                     |
+| PygNodePropPredDataset | ogbn-arxiv             |
+| MyCoauthor      | CS                            |
+| MyCoauthor      | Physics                       |
+| MyCitationFull  | Cora_ML                       |
+| MyCitationFull  | CoraFull                      |
+| MyCitationFull  | DBLP                          |
+| Crocodile       | Crocodile                     |
+| Chameleon       | Chameleon                     |
+| Flickr          | Flickr                        |
 
 ### Custom Key (`--custom-key`)
 
-| Type                   | Custom Key (excl. PubMed) | Custom Key (for PubMed) |
-|------------------------|---------------------------|-------------------------|
-| SuperGAT<sub>GO</sub> | EV1O8-ES                   | EV1-500-ES              |
-| SuperGAT<sub>DP</sub> | EV2O8-ES                   | EV2-500-ES              |
-| SuperGAT<sub>SD</sub> | EV3O8-ES                   | EV3-500-ES              |
-| SuperGAT<sub>MX</sub> | EV13NSO8-ES                | EV13NSO8-500-ES         |
+| Type                   | Custom key (General) | Custom key (for PubMed) | Custom key (for ogbn-arxiv) |
+|------------------------|----------------------|-------------------------|-----------------------------|
+| SuperGAT<sub>GO</sub> | EV1O8-ES              | EV1-500-ES              | -                           |
+| SuperGAT<sub>DP</sub> | EV2O8-ES              | EV2-500-ES              | -                           |
+| SuperGAT<sub>SD</sub> | EV3O8-ES              | EV3-500-ES              | EV3-ES                      |
+| SuperGAT<sub>MX</sub> | EV13NSO8-ES           | EV13NSO8-500-ES         | EV13NS-ES                   |
 
 
 ### Other Hyperparameters
