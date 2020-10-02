@@ -285,28 +285,6 @@ SAGE-PPI-NE-ES: &SAGE-PPI-NE-ES
   early_stop_threshold_loss: 0.0001
   early_stop_threshold_perf: 0.0001
 
-GAAN-PPI-NE: &GAAN-PPI-NE
-  <<: *GAT-PPI
-  model_name: LinkGAAN
-  epochs: 400
-  num_hidden_features: 64
-  key_and_query_channels: 8
-  value_channels: 8
-  projected_channels: 8
-  heads: 8
-  dropout: 0.1  # paper
-  is_super_gat: False
-  is_link_gnn: False
-  l2_lambda: 1e-07
-
-GAAN-PPI-NE-ES: &GAAN-PPI-NE-ES
-  <<: *GAAN-PPI-NE
-  use_early_stop: True
-  early_stop_patience:
-  early_stop_queue_length:
-  early_stop_threshold_loss:
-  early_stop_threshold_perf:
-
 GAT-PPI-NE:  &GAT-PPI-NE
   <<: *GAT-PPI
   epochs: 400

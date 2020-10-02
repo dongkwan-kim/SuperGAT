@@ -34,11 +34,6 @@ def _get_gn_kwargs(cls_name: str, args, **kwargs):
         return {}
     elif cls_name == "LinkSAGE":
         return {}
-    elif cls_name == "LinkGAAN":
-        return {"key_and_query_channels": args.key_and_query_channels,
-                "value_channels": args.value_channels,
-                "projected_channels": args.projected_channels,
-                "heads": args.heads}
     else:
         raise ValueError
 
@@ -49,8 +44,6 @@ def _get_last_features(cls_name: str, args):
     elif cls_name == "LinkGCN":
         return args.num_hidden_features
     elif cls_name == "LinkSAGE":
-        return args.num_hidden_features
-    elif cls_name == "LinkGAAN":
         return args.num_hidden_features
     else:
         raise ValueError
@@ -285,7 +278,7 @@ if __name__ == '__main__':
     from arguments import get_args
 
     main_args = get_args(
-        model_name="GAAN",
+        model_name="GCN",
         dataset_class="PPI",
         dataset_name="PPI",
         custom_key="NE",
