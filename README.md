@@ -1,9 +1,9 @@
 # SuperGAT
-Official implementation of Supervised Graph Attention Networks.
+Official implementation of Self-supervised Graph Attention Networks.
 
 ## Basics
 - The main train/test code is in `SuperGAT/main.py`.
-- If you want to see the SuperGAT layer in Pytorch Geometric `MessagePassing` grammar, refer to `SuperGAT/layer.py`.
+- If you want to see the SuperGAT layer in PyTorch Geometric `MessagePassing` grammar, refer to `SuperGAT/layer.py`.
 - If you want to see hyperparameter settings, refer to `SuperGAT/args.yaml` and `SuperGAT/arguments.py`.
 
 ## Installation
