@@ -58,7 +58,7 @@ class SuperGATNet(nn.Module):
             heads=args.heads, dropout=args.dropout, concat=True,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
             super_gat_criterion=args.super_gat_criterion,
-            neg_sample_ratio=args.neg_sample_ratio,
+            neg_sample_ratio=args.neg_sample_ratio, edge_sample_ratio=args.edge_sampling_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio, use_pretraining=args.use_pretraining,
             to_undirected_at_neg=args.to_undirected_at_neg, scaling_factor=args.scaling_factor,
         )
@@ -68,7 +68,7 @@ class SuperGATNet(nn.Module):
             heads=(args.out_heads or args.heads), dropout=args.dropout, concat=False,
             is_super_gat=args.is_super_gat, attention_type=args.attention_type,
             super_gat_criterion=args.super_gat_criterion,
-            neg_sample_ratio=args.neg_sample_ratio,
+            neg_sample_ratio=args.neg_sample_ratio, edge_sample_ratio=args.edge_sampling_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio, use_pretraining=args.use_pretraining,
             to_undirected_at_neg=args.to_undirected_at_neg, scaling_factor=args.scaling_factor,
         )
@@ -130,7 +130,7 @@ class LargeSuperGATNet(nn.Module):
             is_super_gat=args.is_super_gat,
             attention_type=args.attention_type,
             super_gat_criterion=args.super_gat_criterion,
-            neg_sample_ratio=args.neg_sample_ratio,
+            neg_sample_ratio=args.neg_sample_ratio, edge_sample_ratio=args.edge_sampling_ratio,
             pretraining_noise_ratio=args.pretraining_noise_ratio,
             use_pretraining=args.use_pretraining,
             to_undirected_at_neg=args.to_undirected_at_neg,

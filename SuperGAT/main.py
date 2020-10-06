@@ -108,7 +108,6 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
                 loss=loss,
                 model=model,
                 mixing_weight=_args.att_lambda,
-                edge_sampling_ratio=_args.edge_sampling_ratio,
                 criterion=_args.super_gat_criterion,
                 current_epoch=epoch,
                 pretraining_epoch=_args.total_pretraining_epoch,

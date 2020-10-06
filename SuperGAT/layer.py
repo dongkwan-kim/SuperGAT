@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 from sklearn.metrics import roc_auc_score, average_precision_score
 from termcolor import cprint
@@ -24,7 +26,8 @@ class SuperGAT(MessagePassing):
 
     def __init__(self, in_channels, out_channels, heads=1, concat=True, negative_slope=0.2, dropout=0, bias=True,
                  is_super_gat=True, attention_type="basic", super_gat_criterion=None,
-                 neg_sample_ratio=0.0, pretraining_noise_ratio=0.0, use_pretraining=False,
+                 neg_sample_ratio=0.0, edge_sample_ratio=1.0,
+                 pretraining_noise_ratio=0.0, use_pretraining=False,
                  to_undirected_at_neg=False, scaling_factor=None,
                  cache_label=False, cache_attention=False, **kwargs):
         super(SuperGAT, self).__init__(aggr='add', **kwargs)
@@ -39,6 +42,7 @@ class SuperGAT(MessagePassing):
         self.attention_type = attention_type
         self.super_gat_criterion = super_gat_criterion
         self.neg_sample_ratio = neg_sample_ratio
+        self.edge_sample_ratio = edge_sample_ratio
         self.pretraining_noise_ratio = pretraining_noise_ratio
         self.pretraining = None if not use_pretraining else True
         self.to_undirected_at_neg = to_undirected_at_neg
@@ -150,7 +154,9 @@ class SuperGAT(MessagePassing):
 
         if (self.is_super_gat and self.training) or (attention_edge_index is not None) or (neg_edge_index is not None):
 
-            num_neg_samples = int(self.neg_sample_ratio * edge_index.size(1))
+            device = next(self.parameters()).device
+            num_pos_samples = int(self.edge_sample_ratio * edge_index.size(1))
+            num_neg_samples = int(self.neg_sample_ratio * self.edge_sample_ratio * edge_index.size(1))
 
             if attention_edge_index is not None:
                 neg_edge_index = None
@@ -175,19 +181,24 @@ class SuperGAT(MessagePassing):
                     num_neg_samples=num_neg_samples,
                 )
 
+            if self.edge_sample_ratio < 1.0:
+                pos_indices = random.sample(range(edge_index.size(1)), num_pos_samples)
+                pos_indices = torch.tensor(pos_indices).long().to(device)
+                pos_edge_index = edge_index[:, pos_indices]
+            else:
+                pos_edge_index = edge_index
+
             att_with_negatives = self._get_attention_with_negatives(
                 x=x,
-                edge_index=edge_index,
+                edge_index=pos_edge_index,
                 neg_edge_index=neg_edge_index,
                 total_edge_index=attention_edge_index,
             )  # [E + neg_E, heads]
 
             # Labels
             if self.training and (self.cache["att_label"] is None or not self.cache_label):
-                device = next(self.parameters()).device
                 att_label = torch.zeros(att_with_negatives.size(0)).float().to(device)
-                att_label[:edge_index.size(1)] = 1.
-                self._update_cache("att_label", att_label)
+                att_label[:pos_edge_index.size(1)] = 1.
             elif self.training and self.cache["att_label"] is not None:
                 att_label = self.cache["att_label"]
             else:
@@ -233,21 +244,6 @@ class SuperGAT(MessagePassing):
         if self.bias is not None:
             aggr_out = aggr_out + self.bias
         return aggr_out
-
-    def _get_gated_attention(self, edge_index_i, x_i, x_j, size_i, normalize=True, with_negatives=False,
-                             **kwargs) -> torch.Tensor:
-        # [E, heads, F] * [E, heads, F] -> [E, heads]
-        logits = torch.einsum("ehf,ehf->eh", x_i, x_j)
-        if with_negatives:
-            return logits
-
-        # [E, heads, 2F] * [1, heads, 2F] -> [E, heads]
-        alpha = torch.einsum("ehf,xhf->eh", torch.cat([x_i, x_j], dim=-1), self.att_mh_1)
-        alpha = F.leaky_relu(alpha, self.negative_slope)
-        alpha = softmax(alpha, edge_index_i, size_i)
-
-        alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
-        return alpha
 
     def _get_attention(self, edge_index_i, x_i, x_j, size_i, normalize=True, with_negatives=False,
                        **kwargs) -> torch.Tensor:
@@ -348,34 +344,27 @@ class SuperGAT(MessagePassing):
         self.cache["num_updated"] += 1
 
     @staticmethod
-    def get_supervised_attention_loss(model, edge_sampling_ratio=1.0, criterion=None):
+    def get_supervised_attention_loss(model, criterion=None):
 
         loss_list = []
         cache_list = [(m, m.cache) for m in model.modules() if m.__class__.__name__ == SuperGAT.__name__]
 
-        device = next(model.parameters()).device
         criterion = nn.BCEWithLogitsLoss() if criterion is None else eval(criterion)
         for i, (module, cache) in enumerate(cache_list):
             # Attention (X)
             att = cache["att_with_negatives"]  # [E + neg_E, heads]
-            num_total_samples = att.size(0)
-            num_to_sample = int(num_total_samples * edge_sampling_ratio)
-
             # Labels (Y)
             label = cache["att_label"]  # [E + neg_E]
 
             att = att.mean(dim=-1)  # [E + neg_E]
-            permuted = torch.randperm(num_total_samples)[:num_to_sample]
-            permuted = permuted.to(device)
-            loss = criterion(att[permuted], label[permuted])
+            loss = criterion(att, label)
             loss_list.append(loss)
-            del permuted
 
         return sum(loss_list)
 
     @staticmethod
     def mix_supervised_attention_loss_with_pretraining(loss, model, mixing_weight,
-                                                       edge_sampling_ratio=1.0, criterion=None,
+                                                       criterion=None,
                                                        current_epoch=None, pretraining_epoch=None):
         if mixing_weight == 0:
             return loss
@@ -395,7 +384,6 @@ class SuperGAT(MessagePassing):
 
         loss = w1 * loss + w2 * SuperGAT.get_supervised_attention_loss(
             model=model,
-            edge_sampling_ratio=edge_sampling_ratio,
             criterion=criterion,
         )
         return loss
