@@ -1,5 +1,7 @@
+import csv
 import logging
 from collections import defaultdict, OrderedDict
+from copy import deepcopy
 from pprint import pprint
 from typing import List, Dict, Tuple
 from datetime import datetime
@@ -23,9 +25,11 @@ from layer import negative_sampling, SuperGAT
 
 import torch
 import torch.nn.functional as F
-from torch_geometric.utils import subgraph, softmax, remove_self_loops, add_self_loops, degree, to_dense_adj
+from torch_geometric.utils import subgraph, softmax, remove_self_loops, add_self_loops, degree, to_dense_adj, \
+    to_networkx, is_undirected, to_undirected
 import numpy as np
 import pandas as pd
+import networkx as nx
 from termcolor import cprint
 import coloredlogs
 
@@ -122,6 +126,123 @@ def get_homophily(edge_index, y, use_multiprocessing=False, verbose=True):
         )
         pool.close()
     return torch.as_tensor(h_list)
+
+
+def get_graph_property(graph_property_list, dataset_class, dataset_name, data_root, verbose=True, **kwargs):
+    _data_attr = get_dataset_or_loader(dataset_class, dataset_name, data_root, seed=42, **kwargs)
+    train_d, val_d, test_d = _data_attr
+
+    if dataset_name in ["PPI", "WebKB4Univ", "CLUSTER"]:
+        cum_sum = 0
+        y_list, edge_index_list = [], []
+        for _data in chain(train_d, val_d, test_d):
+            y_list.append(_data.y)
+            edge_index_list.append(_data.edge_index + cum_sum)
+            cum_sum += _data.y.size(0)
+        y = torch.cat(y_list, dim=0)
+        edge_index = torch.cat(edge_index_list, dim=1)
+
+    else:
+        data = train_d[0]
+        y, edge_index = data.y, data.edge_index
+        y_list, edge_index_list = [y], [edge_index]
+
+    # to_undirected
+    one_nxg = to_networkx(Data(edge_index=edge_index), to_undirected=is_undirected(edge_index))
+    nxg_list = [to_networkx(Data(edge_index=ei), to_undirected=is_undirected(edge_index)) for ei in edge_index_list]
+
+    ni_nxg_list = [deepcopy(nxg) for nxg in nxg_list]
+    for ni_nxg in ni_nxg_list:
+        ni_nxg.remove_nodes_from(list(nx.isolates(ni_nxg)))
+
+    gp_dict = {}
+    if graph_property_list is None or "diameter" in graph_property_list:
+        diameter_list = []
+        for ni_nxg in ni_nxg_list:
+            ni_nxg = ni_nxg.to_undirected()  # important for computing cc.
+            for cc in nx.connected_components(ni_nxg):
+                ni_nxg_cc = ni_nxg.subgraph(cc).copy()
+                diameter_list.append(nx.algorithms.distance_measures.diameter(ni_nxg_cc))
+        gp_dict["diameter_mean"] = float(np.mean(diameter_list))
+        gp_dict["diameter_std"] = float(np.std(diameter_list))
+        gp_dict["diameter_max"] = float(np.max(diameter_list))
+        gp_dict["diameter_min"] = float(np.min(diameter_list))
+        gp_dict["diameter_n"] = len(diameter_list)
+
+    if graph_property_list is None or "average_clustering_coefficient" in graph_property_list:
+        gp_dict["average_clustering_coefficient"] = nx.average_clustering(one_nxg)
+
+    if verbose:
+        print(f"{dataset_class} / {dataset_name} / {data_root}")
+        pprint(gp_dict)
+
+    if graph_property_list is None or "centrality" in graph_property_list:
+        dc = nx.degree_centrality(one_nxg)
+        gp_dict["degree_centrality_mean"] = float(np.mean(list(dc.values())))
+        gp_dict["degree_centrality_std"] = float(np.std(list(dc.values())))
+        cc = nx.closeness_centrality(one_nxg)
+        gp_dict["closeness_centrality_mean"] = float(np.mean(list(cc.values())))
+        gp_dict["closeness_centrality_std"] = float(np.std(list(cc.values())))
+
+    if graph_property_list is None or "assortativity" in graph_property_list:
+        gp_dict["degree_assortativity_coefficient"] = nx.degree_assortativity_coefficient(one_nxg)
+
+    if verbose:
+        print(f"{dataset_class} / {dataset_name} / {data_root}")
+        pprint(gp_dict)
+
+    return gp_dict
+
+
+def analyze_graph_property(filename=None, is_syn=False):
+    if not filename:
+        if is_syn:
+            filename = "../figs/degree_homophily/others_syn.tsv"
+        else:
+            filename = "../figs/degree_homophily/others.tsv"
+
+    fieldnames = [
+        "dataset",
+        "diameter_mean", "diameter_std", "diameter_max", "diameter_min", "diameter_n",
+        "average_clustering_coefficient",
+        "degree_centrality_mean", "degree_centrality_std",
+        "closeness_centrality_mean", "closeness_centrality_std",
+        "degree_assortativity_coefficient"
+    ]
+
+    if not is_syn:
+        dataset_class_and_name = [
+            ("Planetoid", "Cora"), ("Planetoid", "CiteSeer"), ("Planetoid", "PubMed"), ("PPI", "PPI"),
+            ("Chameleon", "Chameleon"), ("Crocodile", "Crocodile"),
+            ("WikiCS", "WikiCS"), ("WebKB4Univ", "WebKB4Univ"),
+            ("MyAmazon", "Photo"), ("MyAmazon", "Computers"),
+            ("MyCoauthor", "CS"), ("MyCoauthor", "Physics"),
+            ("MyCitationFull", "Cora_ML"), ("MyCitationFull", "CoraFull"), ("MyCitationFull", "DBLP"),
+            ("Flickr", "Flickr"),
+            ("PygNodePropPredDataset", "ogbn-arxiv"),
+        ]
+    else:
+        dataset_class_and_name = []
+        for adr in [0.002, 0.005, 0.01, 0.02, 0.025, 0.04, 0.1, 0.2]:
+            for dataset_name in tqdm(["rpg-10-500-{}-{}".format(r, adr)
+                                      for r in [0.1, 0.3, 0.5, 0.7, 0.9]]):
+                dataset_class_and_name.append(("RandomPartitionGraph", dataset_name))
+
+    with open(filename, 'w', newline='\n') as f:
+        wr = csv.DictWriter(f, delimiter="\t", fieldnames=fieldnames)
+
+        wr.writeheader()
+
+        for _class, _name in dataset_class_and_name:
+            if _name == "WikiCS":
+                kw = {"split": 0}
+            else:
+                kw = {}
+            try:
+                wr.writerow({"dataset": _name, **get_graph_property(None, _class, _name, "~/graph-data", **kw)})
+                f.flush()
+            except Exception as e:
+                print("Error in {} / {} / {}".format(_class, _name, e))
 
 
 def get_degree_and_homophily(dataset_class, dataset_name, data_root,
@@ -316,7 +437,7 @@ def get_dn_to_dg_and_h(targets):
 def get_default_targets():
     return [
         "WebKB4Univ",
-        "Crocodile", "Squirrel", "Chameleon",
+        "Crocodile", "Chameleon",  # "Squirrel",
         "MyCitationFull", "MyCoauthor", "MyAmazon",
         "Flickr", "WikiCS", "ogbn-arxiv",
         "PPI", "Planetoid",
@@ -700,7 +821,7 @@ if __name__ == '__main__':
     os.makedirs("../figs", exist_ok=True)
     os.makedirs("../logs", exist_ok=True)
 
-    MODE = "degree_and_homophily_part"
+    MODE = "analyze_graph_property"
     cprint("MODE: {}".format(MODE), "red")
 
     if MODE == "link_pred_perfs_for_multiple_models":
@@ -842,6 +963,9 @@ if __name__ == '__main__':
             per_dataset=True,
             extension="pdf",
         )
+
+    elif MODE == "analyze_graph_property":
+        analyze_graph_property()
 
     else:
         raise ValueError

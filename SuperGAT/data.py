@@ -752,7 +752,8 @@ def get_dataset_or_loader(dataset_class: str, dataset_name: str or None, root: s
         if dataset_name == "ogbn-arxiv":
             dataset_kwargs, loader_kwargs = kwargs, {}
             transform_to_undirected = False if ("to_undirected" not in dataset_kwargs) else kwargs["to_undirected"]
-            del dataset_kwargs["to_undirected"]
+            if "to_undirected" in dataset_kwargs:
+                del dataset_kwargs["to_undirected"]
             if transform_to_undirected:
                 dataset_kwargs["transform"] = ToUndirected()
         elif dataset_name == "ogbn-proteins":
