@@ -115,9 +115,6 @@ def train_model(device, model, dataset_or_loader, criterion, optimizer, epoch, _
         total_loss += loss.item() * num_samples
         total_num_samples += num_samples
 
-        if batch_id == 2:  # todo: for test
-            break
-
     return total_loss / total_num_samples
 
 

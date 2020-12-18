@@ -667,6 +667,7 @@ def get_attention_metric_for_single_model(model, data, device):
         # JSD
         jsd = 0.5 * (kld_agree_att + kld_att_agree)
         jsd_by_layer.append(jsd)
+        print("There's an error in jsd implementation. Don't use it.")
 
     entropy_agreement = get_entropy_tensor_by_iter(agreement_dist_hxn, is_prob_dist=True)  # [N]
     entropy_uniform = get_entropy_tensor_by_iter(uniform_att_dist_hxn, is_prob_dist=True)  # [N]
