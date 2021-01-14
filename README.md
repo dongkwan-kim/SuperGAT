@@ -1,5 +1,6 @@
 # SuperGAT
-Official implementation of Self-supervised Graph Attention Networks.
+Official implementation of Self-supervised Graph Attention Networks (SuperGAT).
+This model is presented at [How to Find Your Friendly Neighborhood: Graph Attention Design with Self-Supervision](https://openreview.net/forum?id=Wi5KUNlqWty), International Conference on Learning Representations (ICLR), 2021.
 
 ## Basics
 - The main train/test code is in `SuperGAT/main.py`.
