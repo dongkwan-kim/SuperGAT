@@ -45,11 +45,11 @@ For ogbn-arxiv, use `SuperGAT/main_ogb.py`.
 
 ### GPU Setting
 
-There are three arguments for GPU settings (`--num-gpus-total`, `--num-gpus-to-use`, `--black-list`).
+There are three arguments for GPU settings (`--num-gpus-total`, `--num-gpus-to-use`, `--gpu-deny-list`).
 Default values are from the author's machine, so we recommend you modify these values from `SuperGAT/args.yaml` or by the command line.
 - `--num-gpus-total` (default 4): The total number of GPUs in your machine.
 - `--num-gpus-to-use` (default 1): The number of GPUs you want to use.
-- `--black-list` (default: [1, 2, 3]): The ids of GPUs you want to not use.
+- `--gpu-deny-list` (default: [1, 2, 3]): The ids of GPUs you want to not use.
 
 If you have four GPUs and want to use the first (cuda:0),
 ```bash
@@ -58,7 +58,7 @@ python3 SuperGAT/main.py \
     --dataset-name Cora \
     --custom-key EV13NSO8-ES \
     --num-gpus-total 4 \
-    --black-list 1 2 3
+    --gpu-deny-list 1 2 3
 ```
 
 ### Model (`--model-name`)

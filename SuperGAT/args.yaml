@@ -1,5 +1,5 @@
 DEFAULT: &DEFAULT
-  black_list: [1, 2, 3]
+  gpu_deny_list: [1, 2, 3]
   num_gpus_total: 4
   num_gpus_to_use: 1
   heads: 8

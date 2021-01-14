@@ -582,7 +582,7 @@ def analyze_link_pred_perfs_for_multiple_models(name_and_kwargs: List[Tuple[str,
     result_list = []
     for _, kwargs in name_and_kwargs:
         args = get_args(**kwargs)
-        gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total) if g not in args.black_list], 1))][0]
+        gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total) if g not in args.gpu_deny_list], 1))][0]
         if args.verbose >= 1:
             pdebug_args(args, logger)
             cprint("Use GPU the ID of which is {}".format(gpu_id), "yellow")
@@ -739,7 +739,7 @@ def visualize_attention_metric_for_multiple_models(name_prefix_and_kwargs: List[
                     _data.uniform_att_dist = [_uad for _uad in _data.uniform_att_dist[0]]
                 data_list.append(_data)
 
-        gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total) if g not in args.black_list], 1))][0]
+        gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total) if g not in args.gpu_deny_list], 1))][0]
 
         if args.verbose >= 1:
             pprint_args(args)
@@ -789,7 +789,7 @@ def get_model_and_preds(data, **kwargs):
 
     _alloc_gpu = blind_other_gpus(num_gpus_total=_args.num_gpus_total,
                                   num_gpus_to_use=_args.num_gpus_to_use,
-                                  black_list=_args.black_list)
+                                  gpu_deny_list=_args.gpu_deny_list)
     if _alloc_gpu:
         cprint("Use GPU the ID of which is {}".format(_alloc_gpu), "yellow")
     _alloc_gpu_id = _alloc_gpu[0] if _alloc_gpu else 1

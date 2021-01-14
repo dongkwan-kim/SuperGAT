@@ -408,7 +408,7 @@ def run_with_many_seeds(args, num_seeds, gpu_id=None, **kwargs):
 
 def run_with_many_seeds_with_gpu(args, num_seeds, **kwargs):
     gpu_id = [int(np.random.choice([g for g in range(args.num_gpus_total)
-                                    if g not in args.black_list], 1))][0]
+                                    if g not in args.gpu_deny_list], 1))][0]
     if args.verbose >= 1:
         cprint("Use GPU the ID of which is {}".format(gpu_id), "yellow")
     return run_with_many_seeds(args, num_seeds, gpu_id=gpu_id, **kwargs)
@@ -454,16 +454,16 @@ if __name__ == '__main__':
     )
     pprint_args(main_args)
 
-    if len(main_args.black_list) == main_args.num_gpus_total:
+    if len(main_args.gpu_deny_list) == main_args.num_gpus_total:
         alloc_gpu = [None]
         cprint("Use CPU", "yellow")
     else:
         alloc_gpu = blind_other_gpus(num_gpus_total=main_args.num_gpus_total,
                                      num_gpus_to_use=main_args.num_gpus_to_use,
-                                     black_list=main_args.black_list)
+                                     gpu_deny_list=main_args.gpu_deny_list)
         if not alloc_gpu:
             alloc_gpu = [int(np.random.choice([g for g in range(main_args.num_gpus_total)
-                                               if g not in main_args.black_list], 1))]
+                                               if g not in main_args.gpu_deny_list], 1))]
         cprint("Use GPU the ID of which is {}".format(alloc_gpu), "yellow")
 
     # noinspection PyTypeChecker

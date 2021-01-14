@@ -227,14 +227,14 @@ def get_free_gpu_ids_safe(num_gpus_total: int, threshold=30) -> List[int]:
     return [int(g.split(":")[-1]) for g in free_gpu_names]
 
 
-def blind_other_gpus(num_gpus_total, num_gpus_to_use, is_safe=True, black_list=None, **kwargs):
+def blind_other_gpus(num_gpus_total, num_gpus_to_use, is_safe=True, gpu_deny_list=None, **kwargs):
     if is_safe:
         free_gpu_ids = get_free_gpu_ids_safe(num_gpus_total, **kwargs)
     else:
         free_gpu_ids = get_free_gpu_ids(num_gpus_total, **kwargs)
 
-    if black_list is not None:
-        free_gpu_ids = [g for g in free_gpu_ids if g not in black_list]
+    if gpu_deny_list is not None:
+        free_gpu_ids = [g for g in free_gpu_ids if g not in gpu_deny_list]
 
     if free_gpu_ids:
         gpu_ids_to_use = random.sample(free_gpu_ids, num_gpus_to_use)

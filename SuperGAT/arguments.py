@@ -20,7 +20,7 @@ def get_args(model_name, dataset_class, dataset_name, custom_key="", yaml_path=N
     parser.add_argument("--m", default="", type=str, help="Memo")
     parser.add_argument("--num-gpus-total", default=0, type=int)
     parser.add_argument("--num-gpus-to-use", default=0, type=int)
-    parser.add_argument("--black-list", default=None, type=int, nargs="+")
+    parser.add_argument("--gpu-deny-list", default=None, type=int, nargs="+")
     parser.add_argument("--checkpoint-dir", default="../checkpoints")
     parser.add_argument("--model-name", default=model_name)
     parser.add_argument("--task-type", default="", type=str)
