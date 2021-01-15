@@ -53,34 +53,16 @@ class SuperGAT(MessagePassing):
 
         if self.is_super_gat:
 
-            if self.attention_type == "gat_originated":
+            if self.attention_type == "gat_originated":  # GO
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
-            elif self.attention_type == "dot_product":
+            elif self.attention_type == "dot_product":  # DP
                 pass
 
-            elif self.attention_type == "scaled_dot_product":
+            elif self.attention_type == "scaled_dot_product":  # SD
                 self.scaling_factor = scaling_factor or np.sqrt(self.out_channels)
 
-            elif self.attention_type.endswith("mask"):
-                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
-                self.att_scaling = Parameter(torch.Tensor(heads))
-                self.att_bias = Parameter(torch.Tensor(heads))
-                self.att_scaling_2 = Parameter(torch.Tensor(heads))
-                self.att_bias_2 = Parameter(torch.Tensor(heads))
-
-            elif self.attention_type.endswith("mask_only"):
-                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
-
-            elif self.attention_type == "prob_mask_addition" \
-                    or self.attention_type == "prob_mask_scaled_addition":
-                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
-
-            elif self.attention_type.endswith("mask_scaling"):
-                self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
-                self.att_scaling = Parameter(torch.Tensor(heads))
-
-            elif self.attention_type == "gated":
+            elif self.attention_type.endswith("mask_only"):  # MX
                 self.att_mh_1 = Parameter(torch.Tensor(1, heads, 2 * out_channels))
 
             else:
@@ -256,9 +238,6 @@ class SuperGAT(MessagePassing):
         """
 
         # Compute attention coefficients.
-        if self.attention_type == "gated":
-            return self._get_gated_attention(edge_index_i, x_i, x_j, size_i, normalize, with_negatives, **kwargs)
-
         if self.attention_type == "basic" or self.attention_type.endswith("gat_originated"):
             # [E, heads, 2F] * [1, heads, 2F] -> [E, heads]
             alpha = torch.einsum("ehf,xhf->eh",
@@ -272,7 +251,7 @@ class SuperGAT(MessagePassing):
             # [E, heads, F] * [E, heads, F] -> [E, heads]
             alpha = torch.einsum("ehf,ehf->eh", x_i, x_j)
 
-        elif "mask" in self.attention_type:  # prob_mask, prob_mask_only, prob_mask_scaling
+        elif "mask" in self.attention_type:
 
             # [E, heads, F] * [E, heads, F] -> [E, heads]
             logits = torch.einsum("ehf,ehf->eh", x_i, x_j)
@@ -287,13 +266,7 @@ class SuperGAT(MessagePassing):
             alpha = torch.einsum("ehf,xhf->eh",
                                  torch.cat([x_i, x_j], dim=-1),
                                  self.att_mh_1)
-
-            if self.attention_type == "prob_mask_scaled_addition":
-                alpha = alpha + (logits / np.sqrt(self.out_channels))
-            elif self.attention_type == "prob_mask_addition":
-                alpha = alpha + logits
-            else:
-                alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
+            alpha = torch.einsum("eh,eh->eh", alpha, torch.sigmoid(logits))
 
         else:
             raise ValueError
