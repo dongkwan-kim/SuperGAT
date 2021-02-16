@@ -2,10 +2,13 @@
 Official implementation of Self-supervised Graph Attention Networks (SuperGAT).
 This model is presented at [How to Find Your Friendly Neighborhood: Graph Attention Design with Self-Supervision](https://openreview.net/forum?id=Wi5KUNlqWty), International Conference on Learning Representations (ICLR), 2021.
 
-## Basics
-- The main train/test code is in `SuperGAT/main.py`.
-- If you want to see the SuperGAT layer in PyTorch Geometric `MessagePassing` grammar, refer to `SuperGAT/layer.py`.
-- If you want to see hyperparameter settings, refer to `SuperGAT/args.yaml` and `SuperGAT/arguments.py`.
+## Notice
+
+[The documented SuperGATConv layer with an example](https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.SuperGATConv) has been merged to the PyTorch Geometric's main branch.
+
+This repository are based on `torch==1.4.0+cu100` and `torch-geometric==1.4.3`, which are somewhat outdated at this point (Feb 2021).
+If you are using recent PyTorch/CUDA/PyG, we would recommend using the PyG's.
+If you want to run codes in this repository, please follow [#installation](https://github.com/dongkwan-kim/SuperGAT#installation).
 
 ## Installation
 
@@ -14,8 +17,14 @@ This model is presented at [How to Find Your Friendly Neighborhood: Graph Attent
 bash install.sh ${CUDA, default is cu100}
 ```
 
-- If you have any trouble in installing PyTorch Geometric, please install PYG dependencies manually.
+- If you have any trouble installing PyTorch Geometric, please install PyG's dependencies manually.
+- Codes are tested with python `3.7.6` and `nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04` image.
 - PYG's [FAQ](https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html#frequently-asked-questions) might be helpful.
+
+## Basics
+- The main train/test code is in `SuperGAT/main.py`.
+- If you want to see the SuperGAT layer in PyTorch Geometric `MessagePassing` grammar, refer to `SuperGAT/layer.py`.
+- If you want to see hyperparameter settings, refer to `SuperGAT/args.yaml` and `SuperGAT/arguments.py`.
 
 ## Run
 
