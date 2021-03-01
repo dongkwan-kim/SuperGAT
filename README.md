@@ -6,7 +6,7 @@ This model is presented at [How to Find Your Friendly Neighborhood: Graph Attent
 
 [The documented SuperGATConv layer with an example](https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.SuperGATConv) has been merged to the PyTorch Geometric's main branch.
 
-This repository are based on `torch==1.4.0+cu100` and `torch-geometric==1.4.3`, which are somewhat outdated at this point (Feb 2021).
+This repository is based on `torch==1.4.0+cu100` and `torch-geometric==1.4.3`, which are somewhat outdated at this point (Feb 2021).
 If you are using recent PyTorch/CUDA/PyG, we would recommend using the PyG's.
 If you want to run codes in this repository, please follow [#installation](https://github.com/dongkwan-kim/SuperGAT#installation).
 
@@ -49,7 +49,7 @@ test_perf_at_best_val: [0.851, 0.844, 0.853, 0.849, 0.857, 0.848, 0.844]
 Time for runs (s): 173.85422565042973
 ```
 
-Default setting is 7 runs with different random seeds. If you want to change this number, change `num_total_runs` in the main block of `SuperGAT/main.py`.
+The default setting is 7 runs with different random seeds. If you want to change this number, change `num_total_runs` in the main block of `SuperGAT/main.py`.
 
 For ogbn-arxiv, use `SuperGAT/main_ogb.py`.
 
