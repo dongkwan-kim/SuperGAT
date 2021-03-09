@@ -845,7 +845,7 @@ if __name__ == '__main__':
         elif mode_type == "S1":
             p1, p2 = "EV1", "EV2"
         elif mode_type == "S2":
-            p1, p2 = "EV12NS", None
+            p1, p2 = "EV13NS", None
         else:
             raise ValueError("Wrong mode: {}".format(mode_type))
 
@@ -905,7 +905,7 @@ if __name__ == '__main__':
                                                        unit_width_per_name=unit_width, extension="pdf")
 
     elif MODE == "link_pred_perfs_for_multiple_models_synthetic":
-        k = "EV12NSO8"
+        k = "EV13NSO8"
         ck = "{}-ES-Link".format(k)
         main_kwargs["model_name"] = "GAT"
         main_kwargs["dataset_class"] = "LinkRandomPartitionGraph"
@@ -927,7 +927,7 @@ if __name__ == '__main__':
                 main_kwargs["dataset_name"] = "rpg-10-500-{}-{}".format(h, _d)
 
                 main_npx_and_kwargs = []
-                for npx, ck in zip(["SG", "GO", "DP"], ["EV12NSO8", "NEO8", "NEDPO8"]):
+                for npx, ck in zip(["SG", "GO", "DP"], ["EV13NSO8", "NEO8", "NEDPO8"]):
                     main_npx_and_kwargs.append((npx, {**main_kwargs, "custom_key": "{}-ES-ATT".format(ck)}))
                 pprint(main_npx_and_kwargs)
                 visualize_attention_metric_for_multiple_models(main_npx_and_kwargs,
