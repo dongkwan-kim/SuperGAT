@@ -30,7 +30,7 @@ class SuperGAT(MessagePassing):
                  pretraining_noise_ratio=0.0, use_pretraining=False,
                  to_undirected_at_neg=False, scaling_factor=None,
                  cache_label=False, cache_attention=False, **kwargs):
-        super(SuperGAT, self).__init__(aggr='add', **kwargs)
+        super(SuperGAT, self).__init__(aggr='add', node_dim=0, **kwargs)
 
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -273,7 +273,7 @@ class SuperGAT(MessagePassing):
 
         if normalize:
             alpha = F.leaky_relu(alpha, self.negative_slope)
-            alpha = softmax(alpha, edge_index_i, size_i)
+            alpha = softmax(alpha, edge_index_i, num_nodes=size_i)
 
         return alpha
 
