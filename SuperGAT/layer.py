@@ -126,11 +126,8 @@ class SuperGAT(MessagePassing):
             edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
 
         # [N, F0] * [F0, heads * F] = [N, heads * F]
-        if torch.is_tensor(x):
-            x = torch.matmul(x, self.weight)
-        else:
-            x = (None if x[0] is None else torch.matmul(x[0], self.weight),
-                 None if x[1] is None else torch.matmul(x[1], self.weight))
+        x = torch.matmul(x, self.weight)
+        x = x.view(-1, self.heads, self.out_channels)
 
         propagated = self.propagate(edge_index, size=size, x=x)
 
