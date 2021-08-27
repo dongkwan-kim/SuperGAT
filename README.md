@@ -10,6 +10,19 @@ This repository is based on `torch==1.4.0+cu100` and `torch-geometric==1.4.3`, w
 If you are using recent PyTorch/CUDA/PyG, we would recommend using the PyG's.
 If you want to run codes in this repository, please follow [#installation](https://github.com/dongkwan-kim/SuperGAT#installation).
 
+## BibTeX
+
+```
+@inproceedings{
+    kim2021how,
+    title={How to Find Your Friendly Neighborhood: Graph Attention Design with Self-Supervision},
+    author={Dongkwan Kim and Alice Oh},
+    booktitle={International Conference on Learning Representations},
+    year={2021},
+    url={https://openreview.net/forum?id=Wi5KUNlqWty}
+}
+```
+
 ## Installation
 
 ```bash
