@@ -2,11 +2,11 @@
 Official implementation of Self-supervised Graph Attention Networks (SuperGAT).
 This model is presented at [How to Find Your Friendly Neighborhood: Graph Attention Design with Self-Supervision](https://openreview.net/forum?id=Wi5KUNlqWty), International Conference on Learning Representations (ICLR), 2021.
 
-## Notice
+## Open Source & Maintenance
 
-[The documented SuperGATConv layer with an example](https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.SuperGATConv) has been merged to the PyTorch Geometric's main branch.
-
-This repository is based on `torch==1.4.0+cu100` and `torch-geometric==1.4.3`, which are somewhat outdated at this point (Feb 2021).
+- [The documented SuperGATConv layer with an example](https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.SuperGATConv) has been merged to the PyTorch Geometric's main branch.
+- [Tha RandomPartitionGraph](https://pytorch-geometric.readthedocs.io/en/latest/modules/datasets.html#torch_geometric.datasets.RandomPartitionGraphDataset) is now available at PyTorch Geometric.
+- This repository is based on `torch==1.4.0+cu100` and `torch-geometric==1.4.3`, which are somewhat outdated at this point (Feb 2021).
 If you are using recent PyTorch/CUDA/PyG, we would recommend using the PyG's.
 If you want to run codes in this repository, please follow [#installation](https://github.com/dongkwan-kim/SuperGAT#installation).
 
