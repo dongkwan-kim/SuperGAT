@@ -1,6 +1,3 @@
-# Copyright 2019 Sami Abu-El-Haija. All Rights Reserved.
-# Original code & data: https://github.com/samihaija/mixhop/blob/master/data/synthetic
-
 import pickle
 import random
 import os
@@ -142,6 +139,8 @@ def _unpickle(_path):
 
 
 def make_x(path, name, y_one_hot=None, save=False):
+    # Copyright 2019 Sami Abu-El-Haija. All Rights Reserved.
+    # Original code & data: https://github.com/samihaija/mixhop/blob/master/data/synthetic
     if y_one_hot is None:  # one-hot ndarray the shape of which is (N, C)
         y_path = os.path.join(path, "{}.ally.npy".format(name))  # e.g., ind.n5000-h{}-c10
         y_one_hot = np.load(y_path)
